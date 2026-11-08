@@ -1,0 +1,314 @@
+{
+ "held": {},
+ "issues": {
+  "MDE-0001": {
+   "number": 877,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/877"
+  },
+  "MDE-0002": {
+   "number": 872,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/872"
+  },
+  "MDE-0003": {
+   "number": 878,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/878"
+  },
+  "MDE-0004": {
+   "number": 873,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/873"
+  },
+  "MDE-0005": {
+   "number": 879,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/879"
+  },
+  "MDE-0006": {
+   "number": 880,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/880"
+  },
+  "MDE-0007": {
+   "number": 881,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/881"
+  },
+  "MDE-0008": {
+   "number": 882,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/882"
+  },
+  "MDE-0009": {
+   "number": 883,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/883"
+  },
+  "MDE-0010": {
+   "number": 884,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/884"
+  },
+  "MDE-0011": {
+   "number": 885,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/885"
+  },
+  "MDE-0012": {
+   "number": 886,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/886"
+  },
+  "MDE-0013": {
+   "number": 887,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/887"
+  },
+  "MDE-0014": {
+   "number": 888,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/888"
+  },
+  "MDE-0015": {
+   "number": 889,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/889"
+  },
+  "MDE-0016": {
+   "number": 890,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/890"
+  },
+  "MDE-0017": {
+   "number": 891,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/891"
+  },
+  "MDE-0018": {
+   "number": 892,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/892"
+  },
+  "MDE-0019": {
+   "number": 893,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/893"
+  },
+  "MDE-0020": {
+   "number": 894,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/894"
+  },
+  "MDE-0021": {
+   "number": 895,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/895"
+  },
+  "MDE-0022": {
+   "number": 896,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/896"
+  },
+  "MDE-0023": {
+   "number": 897,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/897"
+  },
+  "MDE-0024": {
+   "number": 898,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/898"
+  },
+  "MDE-0025": {
+   "number": 899,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/899"
+  },
+  "MDE-0026": {
+   "number": 900,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/900"
+  },
+  "MDE-0027": {
+   "number": 901,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/901"
+  },
+  "MDE-0028": {
+   "number": 902,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/902"
+  },
+  "MDE-0029": {
+   "number": 903,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/903"
+  },
+  "MDE-0030": {
+   "number": 904,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/904"
+  },
+  "MDE-0031": {
+   "number": 905,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/905"
+  },
+  "MDE-0032": {
+   "number": 906,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/906"
+  },
+  "MDE-0033": {
+   "number": 907,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/907"
+  },
+  "MDE-0034": {
+   "number": 908,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/908"
+  },
+  "MDE-0035": {
+   "number": 909,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/909"
+  },
+  "MDE-0036": {
+   "number": 910,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/910"
+  },
+  "MDE-0037": {
+   "number": 911,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/911"
+  },
+  "MDE-0038": {
+   "number": 912,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/912"
+  },
+  "MDE-0039": {
+   "number": 913,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/913"
+  },
+  "MDE-0040": {
+   "number": 914,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/914"
+  },
+  "MDE-0041": {
+   "number": 915,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/915"
+  },
+  "MDE-0042": {
+   "number": 916,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/916"
+  },
+  "MDE-0043": {
+   "number": 917,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/917"
+  },
+  "MDE-0044": {
+   "number": 918,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/918"
+  },
+  "MDE-0045": {
+   "number": 919,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/919"
+  },
+  "MDE-0046": {
+   "number": 920,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/920"
+  },
+  "MDE-0047": {
+   "number": 921,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/921"
+  },
+  "MDE-0048": {
+   "number": 922,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/922"
+  },
+  "MDE-0049": {
+   "number": 923,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/923"
+  },
+  "MDE-0050": {
+   "number": 924,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/924"
+  },
+  "MDE-0051": {
+   "number": 925,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/925"
+  },
+  "MDE-0052": {
+   "number": 926,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/926"
+  },
+  "MDE-0053": {
+   "number": 927,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/927"
+  },
+  "MDE-0054": {
+   "number": 928,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/928"
+  },
+  "MDE-0055": {
+   "number": 929,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/929"
+  },
+  "MDE-0056": {
+   "number": 930,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/930"
+  },
+  "MDE-0057": {
+   "number": 931,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/931"
+  },
+  "MDE-0058": {
+   "number": 932,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/932"
+  },
+  "MDE-0059": {
+   "number": 933,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/933"
+  },
+  "MDE-0060": {
+   "number": 934,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/934"
+  },
+  "MDE-0061": {
+   "number": 935,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/935"
+  },
+  "MDE-0062": {
+   "number": 936,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/936"
+  },
+  "MDE-0063": {
+   "number": 937,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/937"
+  },
+  "MDE-0064": {
+   "number": 938,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/938"
+  },
+  "MDE-0065": {
+   "number": 939,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/939"
+  },
+  "MDE-0066": {
+   "number": 940,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/940"
+  },
+  "MDE-0067": {
+   "number": 941,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/941"
+  },
+  "MDE-0068": {
+   "number": 942,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/942"
+  },
+  "MDE-0069": {
+   "number": 943,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/943"
+  },
+  "MDE-0070": {
+   "number": 944,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/944"
+  },
+  "MDE-0071": {
+   "number": 945,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/945"
+  },
+  "MDE-0072": {
+   "number": 946,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/946"
+  },
+  "MDE-0073": {
+   "number": 874,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/874"
+  },
+  "MDE-0074": {
+   "number": 875,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/875"
+  },
+  "MDE-0075": {
+   "number": 876,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/876"
+  },
+  "MDE-0076": {
+   "number": 947,
+   "url": "https://github.com/rknightion/meraki-dashboard-exporter/issues/947"
+  }
+ },
+ "prefix": "MDE",
+ "repo": "rknightion/meraki-dashboard-exporter",
+ "schema": 1,
+ "source_sha": "c425ac03c37eb8e7eb54e426b571367017975a9e",
+ "synthetic": []
+}
