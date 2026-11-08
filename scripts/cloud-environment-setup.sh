@@ -5,7 +5,6 @@
 
 set -euo pipefail
 
-readonly BACKLOG_VERSION="1.51.0"
 readonly JUST_VERSION="1.58.0"
 readonly PYTHON_VERSION="3.14.7"
 readonly UV_VERSION="0.12.9"
@@ -47,28 +46,11 @@ if [[ "${installed_just_version}" != "${JUST_VERSION}" ]]; then
         bash -s -- --tag "${JUST_VERSION}" --to "${USER_BIN}"
 fi
 
-if ! command -v npm >/dev/null 2>&1; then
-    echo "error: npm is required to install Backlog.md (both cloud images include it)." >&2
-    exit 1
-fi
-
-installed_backlog_version=""
-if command -v backlog >/dev/null 2>&1; then
-    installed_backlog_version="$(backlog --version 2>/dev/null || true)"
-fi
-
-if [[ "${installed_backlog_version}" != "${BACKLOG_VERSION}" ]]; then
-    echo "Installing Backlog.md ${BACKLOG_VERSION}..."
-    npm install --global --prefix "${HOME}/.local" "backlog.md@${BACKLOG_VERSION}"
-fi
-
 echo "Installing Python ${PYTHON_VERSION} and locked development dependencies..."
 uv python install "${PYTHON_VERSION}"
 uv sync --all-extras --locked --python "${PYTHON_VERSION}"
 
 # Fail during setup rather than leaving an agent with a partial environment.
-backlog --version
-backlog instructions overview >/dev/null
 uv run python --version
 just --version
 

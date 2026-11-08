@@ -80,38 +80,35 @@ Inspect the base interpreter with `/usr/local/bin/python`; runtime PATH selects 
 Recipes marked `[confirm]` push a multi-arch image to ghcr.io or prune the machine-wide buildx
 cache. Stop and ask; never pass `--yes` or `JUST_YES=1`. Run `just` with stdin from `/dev/null`.
 
-Commits are Conventional Commits: release-please and Renovate parse the subject. Cite the task ID.
+Commits are Conventional Commits: release-please and Renovate parse the subject. Cite the issue as `#N`.
 
-## Tracker
+## Tracking work
 
-Open work is `mde-NNNN` in `backlog/`. Historical `#NNN` citations are GitHub issues that were
-deleted, so `gh issue view <N>` 404s for them. `archive/github-issues-2026-08-14.json` holds every
-body and reply, redacted with stable placeholders; `archive/README.md` carries the mapping, the
-verification method and the jq recipes. Two ID spaces, no overlap.
+Work is tracked in this repository's GitHub issues; they are the only queue. Do not add a checklist
+file beside them.
 
-**The GitHub Issues tracker itself stays open, deliberately.** External contributors need a
-channel, and it is how sanitised real API responses arrive for device families nobody here owns.
-Every surviving issue is somebody else's: never close or delete one. That includes closing one by
-accident: a `Closes #NNN` / `Fixes #NNN` trailer on a commit pushed to `main` auto-closes it. Cite
-the number in prose instead. An issue arriving that way
-becomes an `mde-NNNN` task citing the number, and the board, not the issue, is where it is worked.
-
-- **`backlog/` is committed, so no real identifiers in tasks or docs.** No email addresses,
-  handles, usernames, org or account IDs, device serials, MACs, host names or credential values.
-  Write the shape, not the instance ("the live soak host", not its name). Aggregate counts,
-  timings and structural findings are fine. A tracker feels private, which is why this breaks by
-  accident.
-- `Parked` is a real status: attempted, blocked, and left with a concrete resume boundary. It is
-  not a synonym for To Do, and flattening it loses the most valuable thing a long autonomous run
-  produces.
-- Do not build on decisions, and do not use the MCP surface. Decisions are half-built upstream (no
-  edit, view or update, no supersede mechanism, no validation), so durable reference goes in docs
-  and tasks stay the unit. MCP is frozen upstream and costs 10-50k tokens of permanent context
-  against 1-2k for the CLI.
-- New tasks carry a self-contained description (mechanism, `file:line`, why), acceptance criteria
-  as `--ac` flags, one `area:*` label and a priority label. Priority and milestone express
-  ordering only; there are deliberately no calendar due-dates. Work discovered mid-run gets a task
-  labelled `needs-triage`, never a note in a summary nobody queries.
+- A pull request body says how it relates to an issue, on a line of its own: `Closes #N` with the
+  `Acceptance evidence` table from `.github/pull_request_template.md` (one row for each acceptance
+  criterion of that issue), `Refs #N` when it only relates to one, or `Task: none, <reason>`.
+- A pull request that changes `.github/workflows/` or `.github/actions/` carries no closing keyword:
+  write `Task: none, <reason>`, with `Refs #N` beside it if you like.
+- Contributors never need the project board or the tracker tooling; a maintainer handles both.
+- Issues and pull requests are public, so they carry no real identifiers: no email addresses,
+  handles, usernames, org or account ids, device serials, MACs, host names or credential values.
+  Write the shape, not the instance ("the live soak host", not its name).
+- **The issue tracker stays open, deliberately.** External contributors need a channel, and it is
+  how sanitised real API responses arrive for device families nobody here owns. Never close, edit
+  or delete an issue somebody else filed, and put no closing keyword in a commit message.
+- Older commits, docs and tests cite legacy board ids such as `MDE-0001`. `just issue <ID>` prints
+  the issue each one became; `.github/tracker/id-map.json` is the map. The board's documents are
+  under `.github/tracker/history/`.
+- Historical `#NNN` citations from before 2026-08-14 are GitHub issues that were deleted, so
+  `gh issue view <N>` may 404 for them. `archive/github-issues-2026-08-14.json` holds every body
+  and reply, redacted with stable placeholders; `archive/README.md` carries the mapping, the
+  verification method and the jq recipes.
+- New issues carry a self-contained description (mechanism, `file:line`, why), the acceptance
+  criteria as an `Acceptance criteria` list, one `area:*` label and a priority label. Work found
+  mid-run is filed as an issue labelled `needs-triage`, never left in a summary nobody reads.
 
 ## Review and architecture map
 
