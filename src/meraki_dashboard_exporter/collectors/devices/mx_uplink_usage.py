@@ -111,6 +111,10 @@ class MXUplinkUsageCollector(SubCollectorMixin):
         )
 
         if not rows:
+            # An empty list is a successful fetch (no appliance reported rows in
+            # the window), so close the gate here too. Returning without marking
+            # leaves the group ATTEMPTED and it is finalised as failed every time.
+            self.parent._mark_group_ran(EndpointGroupName.MX_UPLINK_USAGE)
             return
 
         # Resolve allowed network IDs for filter enforcement on org-wide responses.
