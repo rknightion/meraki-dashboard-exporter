@@ -667,40 +667,40 @@ class OrganizationInventory:
                 and org_id in self._device_availabilities
                 and not self._is_expired(cache_timestamp, self.TTL_AVAILABILITY)
             ):
-                return await self._maybe_filter_availabilities(
-                    org_id, self._device_availabilities[org_id], unfiltered=unfiltered
+                availabilities = self._device_availabilities[org_id]
+            else:
+                # Fetch from API
+                availabilities_result = await self._make_api_call(
+                    "getOrganizationDevicesAvailabilities",
+                    self.api.organizations.getOrganizationDevicesAvailabilities,
+                    org_id,
+                    total_pages="all",
+                )
+                availabilities_result = validate_response_format(
+                    availabilities_result,
+                    expected_type=list,
+                    operation="getOrganizationDevicesAvailabilities",
+                )
+                availabilities = cast(list[dict[str, Any]], availabilities_result)
+
+                # Update cache (full, unfiltered list — filter applies on read)
+                self._device_availabilities[org_id] = availabilities
+                self._availability_timestamps[org_id] = time.time()
+                self._cache_size.labels(org_id=org_id, cache_type="availabilities").set(
+                    len(availabilities)
                 )
 
-            # Fetch from API
-            availabilities_result = await self._make_api_call(
-                "getOrganizationDevicesAvailabilities",
-                self.api.organizations.getOrganizationDevicesAvailabilities,
-                org_id,
-                total_pages="all",
-            )
-            availabilities_result = validate_response_format(
-                availabilities_result,
-                expected_type=list,
-                operation="getOrganizationDevicesAvailabilities",
-            )
-            availabilities = cast(list[dict[str, Any]], availabilities_result)
+                logger.info(
+                    "Updated device availabilities cache",
+                    org_id=org_id,
+                    device_count=len(availabilities),
+                )
 
-            # Update cache (full, unfiltered list — filter applies on read)
-            self._device_availabilities[org_id] = availabilities
-            self._availability_timestamps[org_id] = time.time()
-            self._cache_size.labels(org_id=org_id, cache_type="availabilities").set(
-                len(availabilities)
-            )
-
-            logger.info(
-                "Updated device availabilities cache",
-                org_id=org_id,
-                device_count=len(availabilities),
-            )
-
-            return await self._maybe_filter_availabilities(
-                org_id, availabilities, unfiltered=unfiltered
-            )
+        # Filter after releasing the lock, as get_devices does: with a cold network
+        # cache the filter calls get_networks, which takes the same non-reentrant lock.
+        return await self._maybe_filter_availabilities(
+            org_id, availabilities, unfiltered=unfiltered
+        )
 
     async def _maybe_filter_availabilities(
         self,

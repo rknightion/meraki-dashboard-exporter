@@ -183,4 +183,3 @@ documents never drift apart.
 - [Getting Started](getting-started.md) — webhook setup instructions
 - [Configuration](config.md) — full list of scheduler and collector-timeout environment variables
 - [Security](security.md) — webhook shared-secret and endpoint authentication
-</content>

@@ -293,6 +293,11 @@ class TestMXHACollector:
         await collector.collect_redundancy("org1", "Test Org", {})
 
         mock_parent._set_metric.assert_not_called()
+        from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
+
+        # A successful empty fetch still closes the scheduler gate; otherwise the
+        # group is finalised as failed on every attempt.
+        mock_parent._mark_group_ran.assert_called_once_with(EndpointGroupName.MX_HA)
 
     async def test_network_filter_exclusion(
         self,

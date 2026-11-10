@@ -152,4 +152,3 @@ concurrency for large estates.
 - `meraki_exporter_collector_cadence_seconds{collector}` — live effective cadence per collector.
 - See [Data Freshness & Alerting Guidance](../data-freshness.md) for how to turn these into
   staleness alert rules.
-</content>

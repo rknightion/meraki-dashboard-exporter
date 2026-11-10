@@ -13,8 +13,8 @@ Keep every `rknightion/.github` reference in this repo on the same version; copy
 
 - `ci.yml`'s `ci-success` is the aggregate required check: `if: always()` plus an explicit
   `contains(needs.*.result, 'failure'|'cancelled')` over `[test, docker-build-test,
-  helm-lint-kubeconform]`. **A new job that should gate merges has to be added to that `needs:`
-  list**, or it runs and blocks nothing.
+  helm-lint-kubeconform, ac-evidence, privacy-sweep, backlog-freeze, zizmor]`. **A new job that
+  should gate merges has to be added to that `needs:` list**, or it runs and blocks nothing.
 - `scheduled-fleet-tests` and `on-demand-fleet-tests` are deliberately outside that list, so they
   never block a PR.
 - The repository ruleset separately requires actionlint, zizmor and dependency review. When you add

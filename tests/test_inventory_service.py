@@ -696,6 +696,36 @@ class TestOrganizationInventoryNetworkFilter:
         result = await inv.get_device_availabilities("ORG")
         assert [a["serial"] for a in result] == ["Q1"]
 
+    async def test_get_device_availabilities_with_cold_network_cache_does_not_deadlock(
+        self, mock_api, mock_settings
+    ) -> None:
+        """An active filter with no cached networks must not re-enter the inventory lock.
+
+        The availability fetch used to apply the filter while still holding the
+        (non-reentrant) lock; with a cold network cache the filter calls
+        ``get_networks``, which needs the same lock, and the call hung until the
+        collector timeout.
+        """
+        import asyncio
+
+        from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+        from meraki_dashboard_exporter.core.network_filter import NetworkFilter
+
+        mock_api.organizations.getOrganizationNetworks.return_value = [
+            {"id": "L_1", "name": "prod", "tags": []},
+            {"id": "L_2", "name": "lab", "tags": ["lab"]},
+        ]
+        mock_api.organizations.getOrganizationDevicesAvailabilities.return_value = [
+            {"serial": "Q1", "network": {"id": "L_1"}, "status": "online"},
+            {"serial": "Q2", "network": {"id": "L_2"}, "status": "online"},
+        ]
+        nf = NetworkFilter(NetworkFilterSettings(exclude_tags=["lab"]))
+        inv = OrganizationInventory(mock_api, mock_settings, network_filter=nf)
+        # Deliberately no get_networks() first: the network cache is cold.
+
+        result = await asyncio.wait_for(inv.get_device_availabilities("ORG"), timeout=2.0)
+        assert [a["serial"] for a in result] == ["Q1"]
+
 
 class TestOrganizationInventoryValidation:
     """Reject SDK responses with the exhausted-retry error shape before caching.

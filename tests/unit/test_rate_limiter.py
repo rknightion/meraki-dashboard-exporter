@@ -184,6 +184,18 @@ class TestAIMDBackoff:
             mono.return_value = t
             assert limiter.effective_rate_per_second() == pytest.approx(0.5)
 
+    def test_backoff_never_raises_rate_above_a_small_configured_budget(self) -> None:
+        """A configured budget below the 0.5 rps floor is never raised by a 429.
+
+        2 rps x 0.2 shared fraction is a valid 0.4 rps budget. The floor used to
+        lift the effective rate to 0.5 on the first throttle event, and recovery
+        only runs while effective < configured, so it never came back down.
+        """
+        limiter = OrgRateLimiter(_make_aimd_settings(backoff=0.5, rps=2.0, share=0.2))
+        assert limiter.configured_rate_per_second() == pytest.approx(0.4)
+        limiter.record_throttle_event("org", 1.0)
+        assert limiter.effective_rate_per_second() <= limiter.configured_rate_per_second()
+
 
 class TestAIMDRecovery:
     """Additive increase: +recovery_rps_per_minute per clean minute, capped at configured."""

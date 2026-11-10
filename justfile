@@ -348,7 +348,7 @@ image-inspect:
 # print the index digest to pin on both Dockerfile FROM lines
 [group('dev')]
 image-base-digest:
-    docker buildx imagetools inspect python:{{ py_version }}-slim-bookworm --format '{{{{println .Manifest.Digest}}'
+    docker buildx imagetools inspect python:{{ py_version }}-alpine3.23 --format '{{{{println .Manifest.Digest}}'
 
 # build the local exporter image required by the failure harness
 [group('dev')]

@@ -238,8 +238,9 @@ class OrgRateLimiter:
         """Feed a 429/Retry-After event into the AIMD budget controller (#617).
 
         Applies a multiplicative decrease (``effective ×= aimd_backoff_multiplier``),
-        floored at ``0.5 rps``, at most once per 30s cooldown window (so one 429
-        burst halves the budget once, not once per retry). No-op in fixed mode or
+        floored at ``0.5 rps`` (or the configured budget when that is lower), at
+        most once per 30s cooldown window (so one 429 burst halves the budget
+        once, not once per retry). No-op in fixed mode or
         when AIMD is disabled. Increments ``SCHEDULER_THROTTLE_BACKOFFS_TOTAL`` only
         when a decrease is actually applied.
 
@@ -266,7 +267,11 @@ class OrgRateLimiter:
 
         # Settle any pending recovery up to now, then multiplicatively decrease.
         current = self.effective_rate_per_second()
-        new_rate = max(self._AIMD_FLOOR_RPS, current * self._aimd_backoff_multiplier)
+        # The floor never exceeds the configured budget: a budget below 0.5 rps
+        # (a small shared fraction) must not be raised by a throttle event, since
+        # recovery only runs while effective < configured and would never undo it.
+        floor = min(self._AIMD_FLOOR_RPS, self._configured_rate_per_second)
+        new_rate = max(floor, current * self._aimd_backoff_multiplier)
         self._effective_rate = new_rate
         self._effective_updated_ts = now
         self._last_throttle_ts = now
