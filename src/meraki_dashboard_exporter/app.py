@@ -102,6 +102,25 @@ def _is_sensitive_ui_path(path: str) -> bool:
     return any(path == p or path.startswith(p + "/") for p in SENSITIVE_UI_PREFIXES)
 
 
+def _bearer_token_matches(auth_header: str, expected: str) -> bool:
+    """Return True when ``auth_header`` is ``Bearer <expected>``, compared in constant time.
+
+    The scheme is matched case-insensitively. The comparison is on bytes because
+    ``hmac.compare_digest`` refuses non-ASCII ``str`` input: Starlette decodes
+    header bytes as latin-1, so encoding back to latin-1 recovers the bytes the
+    client sent, and the configured token is compared as UTF-8. A credential
+    that cannot be encoded never matches.
+    """
+    scheme, _, provided = auth_header.partition(" ")
+    if scheme.lower() != "bearer":
+        return False
+    try:
+        provided_bytes = provided.encode("latin-1")
+    except UnicodeEncodeError:
+        return False
+    return hmac.compare_digest(provided_bytes, expected.encode("utf-8"))
+
+
 def ui_guard_decision(
     *,
     method: str,
@@ -146,8 +165,7 @@ def ui_guard_decision(
     # Token gate applies only to the sensitive PII/detail endpoints, not the
     # index landing page.
     if is_sensitive and api_token is not None:
-        scheme, _, provided = auth_header.partition(" ")
-        if scheme.lower() != "bearer" or not hmac.compare_digest(provided, api_token):
+        if not _bearer_token_matches(auth_header, api_token):
             return (401, "Invalid or missing API token")
     return None
 
@@ -489,8 +507,7 @@ class ExporterApp:
         if not expected.strip():
             raise HTTPException(status_code=401, detail="Invalid or missing API token")
         header = request.headers.get("authorization", "")
-        scheme, _, provided = header.partition(" ")
-        if scheme.lower() != "bearer" or not hmac.compare_digest(provided, expected):
+        if not _bearer_token_matches(header, expected):
             raise HTTPException(status_code=401, detail="Invalid or missing API token")
 
     def _format_uptime(self) -> str:
@@ -1094,13 +1111,10 @@ class ExporterApp:
             )
             if request.method == "POST" and request.url.path in CONTROL_POST_PATHS:
                 header = request.headers.get("authorization", "")
-                scheme, _, provided = header.partition(" ")
                 if (
                     not api_token
                     or not api_token.strip()
-                    or scheme.lower() != "bearer"
-                    or not provided.isascii()
-                    or not hmac.compare_digest(provided, api_token)
+                    or not _bearer_token_matches(header, api_token)
                 ):
                     return JSONResponse(
                         status_code=401,

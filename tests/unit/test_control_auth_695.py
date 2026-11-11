@@ -8,8 +8,10 @@ from typing import Any
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
+from starlette.requests import Request
 
 from meraki_dashboard_exporter.api.client import AsyncMerakiClient
 from meraki_dashboard_exporter.app import ExporterApp
@@ -250,3 +252,85 @@ def test_clients_page_disables_dns_clear_without_api_token(
     attributes = _control_attributes(response.text, "clear-cache-btn")
     assert "disabled" in attributes
     assert attributes["title"] == CONTROL_DISABLED_TOOLTIP
+
+
+def test_control_post_with_non_ascii_header_byte_is_401(
+    test_settings: Settings,
+    exporter_factory: Callable[[], ExporterApp],
+) -> None:
+    """A non-ASCII Authorization byte on a control POST is rejected before dispatch."""
+    test_settings.server.api_token = SecretStr("controltoken")  # pragma: allowlist secret
+    exporter = exporter_factory()
+    manager = _mock_manager(with_collector=True)
+    exporter.collector_manager = manager
+    client = TestClient(exporter.create_app(), raise_server_exceptions=False)
+
+    response = client.post(
+        "/api/collectors/trigger",
+        json={"collector": "DeviceCollector"},
+        headers={"Authorization": b"Bearer \xe9controltoken"},
+    )
+
+    assert response.status_code == 401
+    manager.get_collector_by_name.assert_not_called()
+
+
+def test_non_ascii_control_token_authenticates_as_utf8(
+    test_settings: Settings,
+    exporter_factory: Callable[[], ExporterApp],
+) -> None:
+    """A configured non-ASCII control token is accepted when sent as its UTF-8 bytes."""
+    token = "c\u00f6ntrol-t\u00f8ken"  # pragma: allowlist secret
+    test_settings.server.api_token = SecretStr(token)
+    exporter = exporter_factory()
+    manager = _mock_manager(with_collector=True)
+    exporter.collector_manager = manager
+    client = TestClient(exporter.create_app(), raise_server_exceptions=False)
+
+    response = client.post(
+        "/api/collectors/trigger",
+        json={"collector": "DeviceCollector"},
+        headers={"Authorization": b"Bearer " + token.encode("utf-8")},
+    )
+
+    assert response.status_code != 401
+    manager.get_collector_by_name.assert_called()
+
+
+@pytest.mark.parametrize(
+    "auth_header",
+    [b"Bearer \xe9controltoken", b"Bearer wrong", b"Basic controltoken", b""],
+    ids=["non-ascii", "wrong", "wrong-scheme", "missing"],
+)
+def test_check_api_token_rejects_bad_credentials_with_401(
+    test_settings: Settings,
+    exporter_factory: Callable[[], ExporterApp],
+    auth_header: bytes,
+) -> None:
+    """The route-level check raises 401, never TypeError, for any bad credential."""
+    test_settings.server.api_token = SecretStr("controltoken")  # pragma: allowlist secret
+    exporter = exporter_factory()
+    request = Request({
+        "type": "http",
+        "method": "POST",
+        "headers": [(b"authorization", auth_header)],
+    })
+
+    with pytest.raises(HTTPException) as excinfo:
+        exporter._check_api_token(request)
+
+    assert excinfo.value.status_code == 401
+
+
+def test_check_api_token_accepts_utf8_token(
+    test_settings: Settings,
+    exporter_factory: Callable[[], ExporterApp],
+) -> None:
+    """The route-level check accepts a non-ASCII token sent as its UTF-8 bytes."""
+    token = "c\u00f6ntrol-t\u00f8ken"  # pragma: allowlist secret
+    test_settings.server.api_token = SecretStr(token)
+    exporter = exporter_factory()
+    header = b"Bearer " + token.encode("utf-8")
+    request = Request({"type": "http", "method": "POST", "headers": [(b"authorization", header)]})
+
+    exporter._check_api_token(request)
