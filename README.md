@@ -338,7 +338,7 @@ uv run mypy .
 
 ## License
 
-MIT
+Apache-2.0. See [LICENSE](LICENSE).
 
 
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Frknightion%2Fmeraki-dashboard-exporter.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Frknightion%2Fmeraki-dashboard-exporter?ref=badge_large)
