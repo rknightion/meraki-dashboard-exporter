@@ -224,7 +224,7 @@ meraki_exporter_collector_success_timestamp_seconds{collector="AlertsCollector"}
 ### 1. Use Appropriate Queries
 ```promql
 # Good: Rate calculation over 5 minutes
-rate(meraki_org_usage_total_kb[5m])
+rate(meraki_org_usage_total_bytes[5m])
 
 # Good: Alert on missing data
 up{job="meraki"} == 0

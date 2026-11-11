@@ -347,21 +347,21 @@ class TestDeviceCollector(BaseCollectorTest):
         # First SSID - The Cubhouse
         metrics.assert_gauge_value(
             "meraki_mr_ssid_usage_total_bytes",
-            54878.025390625 * 1_000_000,
+            54878.025390625 * 1_048_576,
             org_id="123456",
             ssid="The Cubhouse",
         )
 
         metrics.assert_gauge_value(
             "meraki_mr_ssid_usage_downstream_bytes",
-            10818.2802734375 * 1_000_000,
+            10818.2802734375 * 1_048_576,
             org_id="123456",
             ssid="The Cubhouse",
         )
 
         metrics.assert_gauge_value(
             "meraki_mr_ssid_usage_upstream_bytes",
-            44059.7451171875 * 1_000_000,
+            44059.7451171875 * 1_048_576,
             org_id="123456",
             ssid="The Cubhouse",
         )
@@ -383,7 +383,7 @@ class TestDeviceCollector(BaseCollectorTest):
         # Second SSID - Cubhouse Video
         metrics.assert_gauge_value(
             "meraki_mr_ssid_usage_total_bytes",
-            42764.8857421875 * 1_000_000,
+            42764.8857421875 * 1_048_576,
             org_id="123456",
             ssid="Cubhouse Video",
         )
@@ -398,7 +398,7 @@ class TestDeviceCollector(BaseCollectorTest):
         # Third SSID - Cubhouse IOT
         metrics.assert_gauge_value(
             "meraki_mr_ssid_usage_total_bytes",
-            333.462890625 * 1_000_000,
+            333.462890625 * 1_048_576,
             org_id="123456",
             ssid="Cubhouse IOT",
         )

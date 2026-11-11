@@ -54,7 +54,7 @@ class TestTopUsageCollector:
         return TopUsageCollector(parent=parent)  # type: ignore[arg-type]
 
     async def test_collect_top_usage_bytes_conversion(self, mock_api_builder):
-        """kB-reported usage is converted to bytes (x1000) and labelled by id/name."""
+        """MB-reported usage is converted to bytes (x1,048,576, Meraki MB) and labelled by id/name."""
         org_id = "org1"
         org_name = "Org One"
 
@@ -91,7 +91,7 @@ class TestTopUsageCollector:
                     (("client_id", "client-a"), ("org_id", org_id)),
                 )
             ]
-            == 5000
+            == 5 * 1_048_576
         )
         assert (
             m[
@@ -100,11 +100,11 @@ class TestTopUsageCollector:
                     (("client_id", "client-b"), ("org_id", org_id)),
                 )
             ]
-            == 10000
+            == 10 * 1_048_576
         )
         assert (
             m[("_org_top_ssid_usage_total_bytes", (("org_id", org_id), ("ssid", "Corp-WiFi")))]
-            == 3000
+            == 3 * 1_048_576
         )
         assert (
             m[
@@ -113,7 +113,7 @@ class TestTopUsageCollector:
                     (("manufacturer", "Apple"), ("org_id", org_id)),
                 )
             ]
-            == 7000
+            == 7 * 1_048_576
         )
 
         # quantity=10 requested on every leaderboard endpoint.
@@ -129,6 +129,30 @@ class TestTopUsageCollector:
             ]
             == 10
         )
+
+    async def test_top_ssid_usage_uses_megabytes_like_mr_ssid_usage(self, mock_api_builder):
+        """A top-SSID usage.total of 3 is 3 * 1_048_576 bytes (#995).
+
+        It must stay equal to the MR SSID usage reading of the same field
+        (collectors/devices/mr/wireless.py, collect_ssid_usage).
+        """
+        org_id = "org-mb"
+        api = (
+            mock_api_builder
+            .with_custom_response("getOrganizationSummaryTopClientsByUsage", [])
+            .with_custom_response(
+                "getOrganizationSummaryTopSsidsByUsage", [{"name": "Corp", "usage": {"total": 3}}]
+            )
+            .with_custom_response("getOrganizationSummaryTopClientsManufacturersByUsage", [])
+            .build()
+        )
+        collector = self._collector(mock_api_builder)
+        collector.api = api
+
+        assert await collector.collect(org_id, "Org") is True
+
+        key = ("_org_top_ssid_usage_total_bytes", (("org_id", org_id), ("ssid", "Corp")))
+        assert collector.parent._metrics[key] == 3 * 1_048_576
 
     async def test_client_id_fallback_and_missing_id_skipped(self, mock_api_builder):
         """clientId is used when id is absent; an entry with neither is skipped."""
@@ -160,7 +184,7 @@ class TestTopUsageCollector:
                     (("client_id", "client-c"), ("org_id", org_id)),
                 )
             ]
-            == 2000
+            == 2 * 1_048_576
         )
         # Only one client series should exist (the id-less one was skipped).
         client_keys = [k for k in m if k[0] == "_org_top_client_usage_total_bytes"]

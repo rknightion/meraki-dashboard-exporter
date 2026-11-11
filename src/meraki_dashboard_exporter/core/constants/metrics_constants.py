@@ -28,7 +28,7 @@ class OrgMetricName(StrEnum):
     ORG_LICENSES = "meraki_org_licenses"
     ORG_LICENSES_EXPIRING = "meraki_org_licenses_expiring"
 
-    # Client and usage metrics (usage values emitted in bytes, decimal KB x1000)
+    # Client and usage metrics (usage values emitted in bytes, Meraki MB x1024**2)
     ORG_CLIENTS_COUNT = "meraki_org_clients_count"
     ORG_USAGE_TOTAL_BYTES = "meraki_org_usage_total_bytes"
     ORG_USAGE_DOWNSTREAM_BYTES = "meraki_org_usage_downstream_bytes"
@@ -41,7 +41,7 @@ class OrgMetricName(StrEnum):
     ORG_PACKETCAPTURES = "meraki_org_packetcaptures"
     ORG_PACKETCAPTURES_REMAINING = "meraki_org_packetcaptures_remaining"
 
-    # Application usage metrics (values emitted in bytes, decimal MB x1_000_000)
+    # Application usage metrics (values emitted in bytes, Meraki MB x1024**2)
     ORG_APPLICATION_USAGE_TOTAL_BYTES = "meraki_org_application_usage_total_bytes"
     ORG_APPLICATION_USAGE_DOWNSTREAM_BYTES = "meraki_org_application_usage_downstream_bytes"
     ORG_APPLICATION_USAGE_UPSTREAM_BYTES = "meraki_org_application_usage_upstream_bytes"
@@ -169,7 +169,7 @@ class MSMetricName(StrEnum):
     # Power supply / power module status (org-wide powerModules endpoint)
     MS_POWER_SUPPLY_STATUS = "meraki_ms_power_supply_status"
 
-    # Additional port metrics (usage emitted in bytes, decimal KB x1000)
+    # Additional port metrics (usage emitted in bytes, Meraki KB x1024)
     MS_PORT_USAGE_BYTES = "meraki_ms_port_usage_bytes"
     MS_PORT_CLIENT_COUNT = "meraki_ms_port_client_count"
 
@@ -263,7 +263,7 @@ class MRMetricName(StrEnum):
     MR_RADIO_CHANNEL_WIDTH_MHZ = "meraki_mr_radio_channel_width_mhz"
     MR_RADIO_POWER_DBM = "meraki_mr_radio_power_dbm"
 
-    # SSID usage metrics (values emitted in bytes, decimal MB x1_000_000)
+    # SSID usage metrics (values emitted in bytes, Meraki MB x1024**2)
     MR_SSID_USAGE_TOTAL_BYTES = "meraki_mr_ssid_usage_total_bytes"
     MR_SSID_USAGE_DOWNSTREAM_BYTES = "meraki_mr_ssid_usage_downstream_bytes"
     MR_SSID_USAGE_UPSTREAM_BYTES = "meraki_mr_ssid_usage_upstream_bytes"
@@ -326,7 +326,7 @@ class MXMetricName(StrEnum):
     MX_HA_ROLE = "meraki_mx_ha_role"
 
     # VPN history stats (org-wide vpn/stats endpoint; complements point-in-time vpn statuses)
-    # Usage emitted in bytes (decimal KB x1000); latency in seconds (ms / 1000)
+    # Usage emitted in bytes (Meraki KB x1024); latency in seconds (ms / 1000)
     MX_VPN_USAGE_SENT_BYTES = "meraki_mx_vpn_usage_sent_bytes"
     MX_VPN_USAGE_RECV_BYTES = "meraki_mx_vpn_usage_recv_bytes"
     MX_VPN_STATS_AVG_LATENCY_SECONDS = "meraki_mx_vpn_stats_avg_latency_seconds"
@@ -515,7 +515,7 @@ class ClientMetricName(StrEnum):
     CLIENT_INFO = "meraki_client_info"
 
     # Client usage metrics (gauges for point-in-time hourly measurements;
-    # values emitted in bytes, decimal KB x1000)
+    # values emitted in bytes, Meraki KB x1024)
     CLIENT_USAGE_SENT_BYTES = "meraki_client_usage_sent_bytes"
     CLIENT_USAGE_RECV_BYTES = "meraki_client_usage_recv_bytes"
     CLIENT_USAGE_TOTAL_BYTES = "meraki_client_usage_total_bytes"
@@ -527,7 +527,7 @@ class ClientMetricName(StrEnum):
     CLIENTS_PER_SSID_COUNT = "meraki_clients_per_ssid_count"
     CLIENTS_PER_VLAN_COUNT = "meraki_clients_per_vlan_count"
 
-    # Client application usage metrics (values emitted in bytes, decimal KB x1000)
+    # Client application usage metrics (values emitted in bytes, Meraki KB x1024)
     CLIENT_APPLICATION_USAGE_SENT_BYTES = "meraki_client_application_usage_sent_bytes"
     CLIENT_APPLICATION_USAGE_RECV_BYTES = "meraki_client_application_usage_recv_bytes"
     CLIENT_APPLICATION_USAGE_TOTAL_BYTES = "meraki_client_application_usage_total_bytes"

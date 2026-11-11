@@ -706,7 +706,7 @@ class TestMXVpnStatsCollector:
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """Usage sent/received bytes (converted from kilobytes ×1000) must be emitted per peer pair."""
+        """Usage sent/received bytes (converted from Meraki kilobytes ×1024) must be emitted per peer pair."""
         mock_api.appliance.getOrganizationApplianceVpnStats = MagicMock(
             return_value=[
                 {
@@ -732,7 +732,7 @@ class TestMXVpnStatsCollector:
         calls_by_metric = {c[0][0]: c[0] for c in mock_parent._set_metric.call_args_list}
 
         sent_call = calls_by_metric[vpn_collector._vpn_usage_sent_bytes]
-        assert sent_call[2] == pytest.approx(123400.0)
+        assert sent_call[2] == pytest.approx(123.4 * 1024)
         assert sent_call[1] == {
             "org_id": "org1",
             "network_id": "N_1",
@@ -740,7 +740,7 @@ class TestMXVpnStatsCollector:
         }
 
         recv_call = calls_by_metric[vpn_collector._vpn_usage_recv_bytes]
-        assert recv_call[2] == pytest.approx(567800.0)
+        assert recv_call[2] == pytest.approx(567.8 * 1024)
 
         # No latency samples -> latency metric must not be emitted.
         assert vpn_collector._vpn_stats_avg_latency_seconds not in calls_by_metric
@@ -875,7 +875,7 @@ class TestMXVpnStatsCollector:
             for c in mock_parent._set_metric.call_args_list
             if c[0][0] is vpn_collector._vpn_usage_sent_bytes
         }
-        assert sent_calls == {"N_2": pytest.approx(10000.0), "N_3": pytest.approx(30000.0)}
+        assert sent_calls == {"N_2": pytest.approx(10.0 * 1024), "N_3": pytest.approx(30.0 * 1024)}
 
         latency_calls = {
             c[0][1]["peer_network_id"]: c[0][2]

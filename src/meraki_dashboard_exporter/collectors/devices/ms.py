@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from ...core.api_facade import facade_for
 from ...core.async_utils import ManagedTaskGroup
 from ...core.constants import MSMetricName
+from ...core.constants.api_constants import MERAKI_KB_BYTES
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_device_labels, create_port_labels
 from ...core.logging import get_logger
@@ -113,7 +114,7 @@ class MSCollector(BaseDeviceCollector):
 
         self._switch_port_usage = self.parent._create_gauge(
             MSMetricName.MS_PORT_USAGE_BYTES,
-            "Switch port data usage in bytes (decimal KB x1000) over the last 1 hour",
+            "Switch port data usage in bytes (Meraki KB x1024) over the last 1 hour",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.NETWORK_ID,
@@ -1142,8 +1143,7 @@ class MSCollector(BaseDeviceCollector):
                         self.parent._set_metric(
                             self._switch_port_usage,
                             rx_labels,
-                            usage_counters["recv"]
-                            * 1000,  # decimal KB->bytes (D5: x1000, not KiB x1024)
+                            usage_counters["recv"] * MERAKI_KB_BYTES,  # Meraki KB is binary (#1032)
                             MSMetricName.MS_PORT_USAGE_BYTES.value,
                             ttl_seconds=usage_ttl,
                         )
@@ -1155,8 +1155,7 @@ class MSCollector(BaseDeviceCollector):
                         self.parent._set_metric(
                             self._switch_port_usage,
                             tx_labels,
-                            usage_counters["sent"]
-                            * 1000,  # decimal KB->bytes (D5: x1000, not KiB x1024)
+                            usage_counters["sent"] * MERAKI_KB_BYTES,  # Meraki KB is binary (#1032)
                             MSMetricName.MS_PORT_USAGE_BYTES.value,
                             ttl_seconds=usage_ttl,
                         )
@@ -1169,7 +1168,7 @@ class MSCollector(BaseDeviceCollector):
                             self._switch_port_usage,
                             total_labels,
                             usage_counters["total"]
-                            * 1000,  # decimal KB->bytes (D5: x1000, not KiB x1024)
+                            * MERAKI_KB_BYTES,  # Meraki KB is binary (#1032)
                             MSMetricName.MS_PORT_USAGE_BYTES.value,
                             ttl_seconds=usage_ttl,
                         )
@@ -1336,7 +1335,7 @@ class MSCollector(BaseDeviceCollector):
                     self.parent._set_metric(
                         self._switch_port_usage,
                         rx_labels,
-                        usage_counters["recv"] * 1000,  # decimal KB x1000
+                        usage_counters["recv"] * MERAKI_KB_BYTES,
                         MSMetricName.MS_PORT_USAGE_BYTES.value,
                         ttl_seconds=usage_ttl,
                     )
@@ -1348,7 +1347,7 @@ class MSCollector(BaseDeviceCollector):
                     self.parent._set_metric(
                         self._switch_port_usage,
                         tx_labels,
-                        usage_counters["sent"] * 1000,  # decimal KB x1000
+                        usage_counters["sent"] * MERAKI_KB_BYTES,
                         MSMetricName.MS_PORT_USAGE_BYTES.value,
                         ttl_seconds=usage_ttl,
                     )
@@ -1360,7 +1359,7 @@ class MSCollector(BaseDeviceCollector):
                     self.parent._set_metric(
                         self._switch_port_usage,
                         total_labels,
-                        usage_counters["total"] * 1000,  # decimal KB x1000
+                        usage_counters["total"] * MERAKI_KB_BYTES,
                         MSMetricName.MS_PORT_USAGE_BYTES.value,
                         ttl_seconds=usage_ttl,
                     )
@@ -1636,8 +1635,8 @@ class MSCollector(BaseDeviceCollector):
                         ttl_seconds=usage_ttl,
                     )
 
-                # Usage bytes over the window. Decimal KB -> bytes = *1000 (D5:
-                # Meraki dashboard data-volume KB is decimal, not KiB).
+                # Usage bytes over the window. Meraki KB is binary (checked against
+                # the dashboard on 2026-11-11, #1032).
                 if have_usage:
                     rx_labels = create_port_labels(
                         device_data, port, org_id=org_id, org_name=org_name, direction="rx"
@@ -1645,7 +1644,7 @@ class MSCollector(BaseDeviceCollector):
                     self.parent._set_metric(
                         self._switch_port_usage,
                         rx_labels,
-                        usage_down_kb * 1000,
+                        usage_down_kb * MERAKI_KB_BYTES,
                         MSMetricName.MS_PORT_USAGE_BYTES.value,
                         ttl_seconds=usage_ttl,
                     )
@@ -1655,7 +1654,7 @@ class MSCollector(BaseDeviceCollector):
                     self.parent._set_metric(
                         self._switch_port_usage,
                         tx_labels,
-                        usage_up_kb * 1000,
+                        usage_up_kb * MERAKI_KB_BYTES,
                         MSMetricName.MS_PORT_USAGE_BYTES.value,
                         ttl_seconds=usage_ttl,
                     )
@@ -1665,7 +1664,7 @@ class MSCollector(BaseDeviceCollector):
                     self.parent._set_metric(
                         self._switch_port_usage,
                         total_labels,
-                        usage_total_kb * 1000,
+                        usage_total_kb * MERAKI_KB_BYTES,
                         MSMetricName.MS_PORT_USAGE_BYTES.value,
                         ttl_seconds=usage_ttl,
                     )

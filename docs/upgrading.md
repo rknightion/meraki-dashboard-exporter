@@ -52,6 +52,33 @@ default to reach other pages through the Ingress, list those paths explicitly. `
 gates `/status`, `/config`, `/clients` and the cardinality pages, but `/` and `/metrics` stay open
 (see [Security](security.md#endpoint-exposure-threat-model)).
 
+### Organisation usage gauges were about 1000 times too small
+
+The organisation summary and overview endpoints report usage in megabytes, but six gauges converted
+it as kilobytes. These now read about 1050 times higher (the megabyte change below included), and
+match the Meraki dashboard:
+
+- `meraki_org_top_client_usage_total_bytes`, `meraki_org_top_ssid_usage_total_bytes` and
+  `meraki_org_top_manufacturer_usage_total_bytes`
+- `meraki_org_usage_total_bytes`, `meraki_org_usage_downstream_bytes` and
+  `meraki_org_usage_upstream_bytes`
+
+Rescale any dashboard, alert threshold or recorded history that used the old values.
+
+### Usage gauges use Meraki's binary kilobyte and megabyte
+
+Meraki reports usage in binary units: its kilobyte is 1024 bytes and its megabyte is 1024 kilobytes.
+The exporter converted with 1000 and 1,000,000, so every usage gauge in bytes read low against the
+dashboard. They now match it:
+
+- From kilobytes, 2.4% higher: `meraki_client_usage_*_bytes`, `meraki_client_application_usage_*_bytes`,
+  `meraki_ms_port_usage_bytes` and `meraki_mx_vpn_usage_*_bytes`.
+- From megabytes, 4.9% higher: `meraki_mr_ssid_usage_*_bytes`, `meraki_org_application_usage_*_bytes`,
+  and the six organisation gauges above.
+
+Thresholds set close to a boundary may need a small nudge. Rates (`*_bytes_per_second`) and device
+memory are unchanged.
+
 ## Changes at 1.1
 
 ### Configuration compatibility changes

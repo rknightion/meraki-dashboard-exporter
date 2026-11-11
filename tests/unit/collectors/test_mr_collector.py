@@ -310,10 +310,10 @@ class TestMRCollector:
         assert set(by_ssid) == {"Guest WiFi", "Corporate WiFi"}
         for _, labels, _ in by_ssid.values():
             assert set(labels) == {"org_id", "ssid"}
-        # Values are converted from MB (decimal) to bytes at the emit site
-        # (×1,000,000) per issue #531 APIDEV-03.
-        assert by_ssid["Guest WiFi"][2] == 1536.75 * 1_000_000
-        assert by_ssid["Corporate WiFi"][2] == 3072.0 * 1_000_000
+        # Values are converted from Meraki MB (1024 * 1024 bytes) to bytes at the emit site
+        # (×1,048,576) per issue #531 APIDEV-03.
+        assert by_ssid["Guest WiFi"][2] == 1536.75 * 1_048_576
+        assert by_ssid["Corporate WiFi"][2] == 3072.0 * 1_048_576
 
         # Client-count series carries the nested clients.counts.total value.
         client_calls = {

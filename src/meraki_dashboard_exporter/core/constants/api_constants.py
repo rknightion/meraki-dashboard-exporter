@@ -13,6 +13,12 @@ PortStateStr = Literal["enabled", "disabled", "connected", "disconnected"]
 RFBandStr = Literal["2.4Ghz", "5Ghz"]
 STPGuardStr = Literal["disabled", "root guard", "bpdu guard", "loop guard"]
 
+# Meraki usage units are binary: a usage "KB" is 1024 bytes and an "MB" is 1024 KB.
+# Checked on 2026-11-11 (#1032): per-client usage in KB / 1024**3 and top-client or
+# overview usage in MB / 1024**2 both equal the TB figure the dashboard shows.
+MERAKI_KB_BYTES: Final = 1024
+MERAKI_MB_BYTES: Final = 1024 * 1024
+
 
 class APIField(StrEnum):
     """Common API response field names."""

@@ -126,7 +126,7 @@ class TestClientsCollectorEnhanced(BaseCollectorTest):
 
         # Verify large values are handled
         metrics.assert_gauge_value(
-            "meraki_client_usage_total_bytes", 19999999998000, client_id="c2"
+            "meraki_client_usage_total_bytes", 19999999998 * 1024, client_id="c2"
         )
 
     async def test_collect_with_special_characters_in_names(

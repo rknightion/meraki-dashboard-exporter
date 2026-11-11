@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from ...core.api_facade import facade_for
 from ...core.async_utils import ManagedTaskGroup
+from ...core.constants.api_constants import MERAKI_KB_BYTES
 from ...core.constants.device_constants import ProductType
 from ...core.constants.metrics_constants import MXMetricName
 from ...core.domain_models import ApplianceVpnSiteToSite, ApplianceVpnStats
@@ -433,7 +434,7 @@ class MXVpnCollector(SubCollectorMixin):
                     self.parent._set_metric(
                         self._vpn_usage_sent_bytes,
                         labels,
-                        float(sent) * 1000,
+                        float(sent) * MERAKI_KB_BYTES,
                         MXMetricName.MX_VPN_USAGE_SENT_BYTES.value,
                         ttl_seconds=ttl_seconds,
                     )
@@ -444,7 +445,7 @@ class MXVpnCollector(SubCollectorMixin):
                     self.parent._set_metric(
                         self._vpn_usage_recv_bytes,
                         labels,
-                        float(received) * 1000,
+                        float(received) * MERAKI_KB_BYTES,
                         MXMetricName.MX_VPN_USAGE_RECV_BYTES.value,
                         ttl_seconds=ttl_seconds,
                     )

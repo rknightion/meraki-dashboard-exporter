@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from ....core.api_facade import facade_for
 from ....core.constants import MRMetricName
+from ....core.constants.api_constants import MERAKI_MB_BYTES
 from ....core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ....core.label_helpers import create_device_labels
 from ....core.logging import get_logger
@@ -341,12 +342,12 @@ class MRWirelessCollector:
                 if not ssid_name:
                     continue
 
-                # Get usage metrics. API values are MB (decimal); convert to
-                # bytes at the emit site (×1,000,000) per issue #531 APIDEV-03.
+                # Get usage metrics. API values are Meraki MB (binary, #1032);
+                # convert to bytes at the emit site per issue #531 APIDEV-03.
                 usage = ssid_data.get("usage", {})
-                total_bytes = usage.get("total", 0) * 1_000_000
-                downstream_bytes = usage.get("downstream", 0) * 1_000_000
-                upstream_bytes = usage.get("upstream", 0) * 1_000_000
+                total_bytes = usage.get("total", 0) * MERAKI_MB_BYTES
+                downstream_bytes = usage.get("downstream", 0) * MERAKI_MB_BYTES
+                upstream_bytes = usage.get("upstream", 0) * MERAKI_MB_BYTES
                 usage_percentage = usage.get("percentage", 0)
 
                 # Client count

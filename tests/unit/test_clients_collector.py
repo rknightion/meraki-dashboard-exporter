@@ -242,9 +242,9 @@ class TestClientsCollector(BaseCollectorTest):
         metrics.assert_gauge_value("meraki_client_status", 0, client_id="c2")
 
         # Verify usage metrics
-        metrics.assert_gauge_value("meraki_client_usage_sent_bytes", 1000000, client_id="c1")
-        metrics.assert_gauge_value("meraki_client_usage_recv_bytes", 2000000, client_id="c1")
-        metrics.assert_gauge_value("meraki_client_usage_total_bytes", 3000000, client_id="c1")
+        metrics.assert_gauge_value("meraki_client_usage_sent_bytes", 1000 * 1024, client_id="c1")
+        metrics.assert_gauge_value("meraki_client_usage_recv_bytes", 2000 * 1024, client_id="c1")
+        metrics.assert_gauge_value("meraki_client_usage_total_bytes", 3000 * 1024, client_id="c1")
 
     async def test_collect_aggregated_metrics(self, collector, mock_api_builder, metrics):
         """Test collection of aggregated metrics (capabilities, SSID, VLAN counts)."""
@@ -391,19 +391,19 @@ class TestClientsCollector(BaseCollectorTest):
         # Verify application usage metrics for client 1
         metrics.assert_gauge_value(
             "meraki_client_application_usage_sent_bytes",
-            2704000,
+            2704 * 1024,
             client_id="c1",
             type="google_https",
         )
         metrics.assert_gauge_value(
             "meraki_client_application_usage_recv_bytes",
-            7197000,
+            7197 * 1024,
             client_id="c1",
             type="google_https",
         )
         metrics.assert_gauge_value(
             "meraki_client_application_usage_total_bytes",
-            9901000,  # (2704 + 7197) * 1000
+            (2704 + 7197) * 1024,
             client_id="c1",
             type="google_https",
         )
@@ -411,7 +411,7 @@ class TestClientsCollector(BaseCollectorTest):
         # Verify sanitization of application names
         metrics.assert_gauge_value(
             "meraki_client_application_usage_sent_bytes",
-            929591000,
+            929591 * 1024,
             client_id="c1",
             type="non_web_tcp",
         )
@@ -419,13 +419,13 @@ class TestClientsCollector(BaseCollectorTest):
         # Verify client 2 metrics
         metrics.assert_gauge_value(
             "meraki_client_application_usage_sent_bytes",
-            168068000,
+            168068 * 1024,
             client_id="c2",
             type="udp",
         )
         metrics.assert_gauge_value(
             "meraki_client_application_usage_sent_bytes",
-            95770000,
+            95770 * 1024,
             client_id="c2",
             type="encrypted_tcp_ssl",
         )
@@ -725,8 +725,8 @@ class TestClientsCollector(BaseCollectorTest):
 
         # Network was processed (not dropped by a ValidationError).
         metrics.assert_gauge_value("meraki_client_status", 1, client_id="c1")
-        metrics.assert_gauge_value("meraki_client_usage_sent_bytes", 225600.0, client_id="c1")
-        metrics.assert_gauge_value("meraki_client_usage_recv_bytes", 852500.0, client_id="c1")
+        metrics.assert_gauge_value("meraki_client_usage_sent_bytes", 225.6 * 1024, client_id="c1")
+        metrics.assert_gauge_value("meraki_client_usage_recv_bytes", 852.5 * 1024, client_id="c1")
 
     async def test_signal_quality_respects_max_clients_and_rate_limiter(
         self, collector, mock_api_builder, metrics
@@ -911,11 +911,14 @@ class TestClientsCollector(BaseCollectorTest):
 
         # Verify some metrics were set
         metrics.assert_gauge_value(
-            "meraki_client_application_usage_sent_bytes", 200000, client_id="c0", type="test_app"
+            "meraki_client_application_usage_sent_bytes",
+            200 * 1024,
+            client_id="c0",
+            type="test_app",
         )
         metrics.assert_gauge_value(
             "meraki_client_application_usage_sent_bytes",
-            200000,
+            200 * 1024,
             client_id="c2499",
             type="test_app",
         )
@@ -974,10 +977,13 @@ class TestClientsCollector(BaseCollectorTest):
         )
 
         metrics.assert_gauge_value(
-            "meraki_client_application_usage_sent_bytes", 20000, client_id="c0", type="test_app"
+            "meraki_client_application_usage_sent_bytes", 20 * 1024, client_id="c0", type="test_app"
         )
         metrics.assert_gauge_value(
-            "meraki_client_application_usage_sent_bytes", 20000, client_id="c149", type="test_app"
+            "meraki_client_application_usage_sent_bytes",
+            20 * 1024,
+            client_id="c149",
+            type="test_app",
         )
 
     async def test_numeric_client_series_are_id_only(self, collector, mock_api_builder, metrics):
