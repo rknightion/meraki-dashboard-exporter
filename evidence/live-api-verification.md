@@ -1,7 +1,7 @@
 # Live-API verification — captured samples & what still needs live checks
 
-Captured 2026-07-02 against Rob's homelab: **org `1019781` ("Knight")**, single network
-**`L_676102894059020286` ("Mitchell Drive", productTypes: sensor, switch, wireless)**.
+Captured 2026-07-02 against Rob's homelab: **org `<org-id>` (the homelab org)**, single network
+**`L_000000000000000000` ("Example Network", productTypes: sensor, switch, wireless)**.
 Hardware in scope: MR56 APs, MS switches (MS120/MS220/MS250), 8× MT sensors, 2× MV
 licenses, SM licenses. Licensing model: **co-termination**. NOT present: MX, MG,
 Insight, subscription licensing.
@@ -13,12 +13,12 @@ Read-only calls only; this is Rob's production homelab.
 
 ## Sample 1 — channel utilization: THE SPEC IS WRONG (backs #512, cautions #271/#541)
 
-`GET /networks/L_676102894059020286/networkHealth/channelUtilization?timespan=600&resolution=600&perPage=100`
+`GET /networks/L_000000000000000000/networkHealth/channelUtilization?timespan=600&resolution=600&perPage=100`
 
 ```json
 [
   {
-    "serial": "Q3AB-VDGT-R59K",
+    "serial": "Q2XX-XXXX-XXXX",
     "model": "MR56",
     "tags": " recently-added ",
     "wifi0": [
@@ -45,7 +45,7 @@ names first; do not trust the spec.
 
 ## Sample 2 — licenses overview: co-term shape (backs #516)
 
-`GET /organizations/1019781/licenses/overview`
+`GET /organizations/<org-id>/licenses/overview`
 
 ```json
 {
@@ -63,20 +63,20 @@ org payload could NOT be verified here — #516 keeps its live-verification flag
 
 ## Sample 3 — firmware upgrade statuses (backs #526)
 
-`GET /organizations/1019781/firmware/upgrades` → 79 rows; statuses seen:
+`GET /organizations/<org-id>/firmware/upgrades` → 79 rows; statuses seen:
 `["Canceled", "Completed"]`. Note the single-L "Canceled" (spec prose says "Cancelled").
 No in-flight upgrade was available, so the `{scheduled, pending, started}` pending-set
 remains unverified — check during a real upgrade window.
 
 ## Sample 4 — power modules `network` property (backs #508)
 
-`GET /organizations/1019781/devices/powerModules/statuses/byDevice` (first row):
+`GET /organizations/<org-id>/devices/powerModules/statuses/byDevice` (first row):
 
 ```json
-{"mac": "cc:9c:3e:02:94:60", "name": "odin", "network": {"id": "L_676102894059020286"},
- "productType": "switch", "serial": "Q2MW-42Z2-JE5T", "tags": ["recently-added"],
+{"mac": "00:00:00:00:00:00", "name": "odin", "network": {"id": "L_000000000000000000"},
+ "productType": "switch", "serial": "Q2XX-XXXX-XXXX", "tags": ["recently-added"],
  "slots": [
-   {"number": 1, "serial": "Q2BS-PDPL-X9BK", "model": "PWR-MS320-640WAC", "status": "powering"},
+   {"number": 1, "serial": "Q2XX-XXXX-XXXX", "model": "PWR-MS320-640WAC", "status": "powering"},
    {"number": 2, "serial": null, "model": null, "status": "not connected"}]}
 ```
 
@@ -86,7 +86,7 @@ apidrift conformance rule (submodel-vs-bare-object → INFO), NOT to loosen the 
 
 ## Sample 5 — application-usage percentage scale (closes APIORG-10, no issue needed)
 
-`GET /organizations/1019781/summary/top/applications/categories/byUsage?quantity=10` →
+`GET /organizations/<org-id>/summary/top/applications/categories/byUsage?quantity=10` →
 10 rows; `percentage` values e.g. 99.30, 0.40, 0.23…; **sum ≈ 99.998** → confirmed
 0–100 scale, not 0–1. Code is correct; #531's HELP work should state "0-100".
 

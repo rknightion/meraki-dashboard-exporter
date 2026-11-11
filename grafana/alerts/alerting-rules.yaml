@@ -34,12 +34,12 @@
 # Or via the Grafana UI: Alerting > Alert rules > import, pointing at a Mimir/Cortex data source
 # provisioned as the rule evaluator.
 #
-# VERIFICATION NOTES (2026-07-03, live against Grafana Cloud, gcx context m7kni)
+# VERIFICATION NOTES (2026-07-03, live against Grafana Cloud, the maintainer's Grafana Cloud stack)
 # All metric names below were checked live with `gcx metrics query`. No renames were found versus
 # the chart — every metric name in the chart's `prometheusrule.yaml` still exists post-v1-rename.
 # Three alerts currently have ZERO live series for their trigger metric (not a naming problem —
 # the source code defines and increments/sets these; the triggering condition has simply never
-# occurred in the camden soak): MerakiCardinalityLimitReached (cardinality budget never hit),
+# occurred in the live soak): MerakiCardinalityLimitReached (cardinality budget never hit),
 # MerakiWirelessConnectionFailuresHigh (no failed wireless connections recorded), and
 # MerakiMTWaterDetected (no water event). Treat those three as syntax-verified but NOT
 # behaviourally exercised against real firing data.
@@ -146,7 +146,7 @@ groups:
 
       - alert: MerakiCardinalityLimitReached
         # NO LIVE DATA at verification time (2026-07-03) — cardinality.max_series_per_family has
-        # never been hit in the camden soak. Metric name confirmed correct against source
+        # never been hit in the live soak. Metric name confirmed correct against source
         # (core/metric_expiration.py); syntax-verified only, not exercised against a real firing.
         expr: increase(meraki_exporter_cardinality_limit_reached_total{job="meraki_dashboard"}[15m]) > 0
         for: 15m
@@ -218,7 +218,7 @@ groups:
     rules:
       - alert: MerakiWirelessConnectionFailuresHigh
         # NO LIVE DATA at verification time (2026-07-03) — zero failed wireless connections
-        # recorded in the camden soak. Metric name confirmed correct against source
+        # recorded in the live soak. Metric name confirmed correct against source
         # (collectors/network_health.py NetworkHealthMetricName.MR_SSID_FAILED_CONNECTIONS_COUNT);
         # syntax-verified only.
         expr: sum by (network_id) (meraki_mr_ssid_failed_connections_count{job="meraki_dashboard"}) > 20
@@ -245,7 +245,7 @@ groups:
             {{ $labels.org_id }} are within their 30-day expiry window.
 
       - alert: MerakiMTWaterDetected
-        # NO LIVE DATA at verification time (2026-07-03) — no water event in the camden soak.
+        # NO LIVE DATA at verification time (2026-07-03) — no water event in the live soak.
         # Metric name confirmed correct against source
         # (core/constants/metrics_constants.py MT_WATER_DETECTED); syntax-verified only.
         expr: meraki_mt_water_detected{job="meraki_dashboard"} == 1

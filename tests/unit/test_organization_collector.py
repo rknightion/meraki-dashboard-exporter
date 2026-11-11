@@ -91,8 +91,8 @@ class TestOrganizationCollector(BaseCollectorTest):
             "items": [
                 {
                     "captureId": "676102894059307468",
-                    "network": {"id": "L_676102894059017611", "name": "Mitchell Drive"},
-                    "devices": [{"name": "LoungeAP", "serial": "Q3AB-VDGT-R59K"}],
+                    "network": {"id": "L_000000000000000000", "name": "Example Network"},
+                    "devices": [{"name": "LoungeAP", "serial": "Q2XX-XXXX-XXXX"}],
                     "status": "completed",
                     "startTs": "2025-07-21T17:56:12Z",
                     "duration": 60,
@@ -100,8 +100,8 @@ class TestOrganizationCollector(BaseCollectorTest):
                 },
                 {
                     "captureId": "676102894059307406",
-                    "network": {"id": "L_676102894059017611", "name": "Mitchell Drive"},
-                    "devices": [{"name": "LoungeAP", "serial": "Q3AB-VDGT-R59K"}],
+                    "network": {"id": "L_000000000000000000", "name": "Example Network"},
+                    "devices": [{"name": "LoungeAP", "serial": "Q2XX-XXXX-XXXX"}],
                     "status": "completed",
                     "startTs": "2025-07-21T17:03:23Z",
                     "duration": 60,
@@ -109,7 +109,7 @@ class TestOrganizationCollector(BaseCollectorTest):
                 },
                 {
                     "captureId": "676102894059307405",
-                    "network": {"id": "L_676102894059017611", "name": "Mitchell Drive"},
+                    "network": {"id": "L_000000000000000000", "name": "Example Network"},
                     "devices": [{"name": "OfficeAP", "serial": "Q3AB-QLZS-GCWH"}],
                     "status": "completed",
                     "startTs": "2025-07-21T17:03:13Z",

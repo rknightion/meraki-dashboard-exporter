@@ -24,7 +24,7 @@ root.
 ## Query traps
 
 - **The `datasource` DatasourceVariable's `current.value` must be the datasource UID**
-  (`grafanacloud-prom`) with `regex: ""`. The datasource *name* is `grafanacloud-robknight-prom`,
+  (`grafanacloud-prom`) with `regex: ""`. The datasource *name* is `grafanacloud-<stack>-prom`,
   so a name-shaped regex filters out every option and the variable comes up empty.
 - **Filter `job="meraki_dashboard"` on every panel query and every `label_values`.** In a soak or
   multi-instance setup the same series is also written under the OTLP-bridge jobs

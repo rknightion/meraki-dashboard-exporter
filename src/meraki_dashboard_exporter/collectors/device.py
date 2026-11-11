@@ -92,7 +92,7 @@ class DeviceCollector(MetricCollector):
         EndpointGroup(
             name=EndpointGroupName.MR_CONNECTION_STATS,
             # floor 1800 == the fetcher's timespan=1800 (non-overlapping windows).
-            # #331 verdict (live-verified 2026-07-03, org 1019781): KEEP — the
+            # #331 verdict (live-verified 2026-07-03, org <org-id>): KEEP — the
             # per-device getNetworkWirelessDevicesConnectionStats returns per-serial
             # rows (AP-level assoc/auth/dhcp/dns/success attribution) that the
             # network-aggregate getNetworkWirelessConnectionStats (a single dict)
@@ -225,7 +225,7 @@ class DeviceCollector(MetricCollector):
             # ("'timespan' must be larger than or equal to 1800.0"), and the
             # fetcher passes timespan=1800, so a shorter floor just re-fetches an
             # overlapping 30-min window. live-verified 2026-07-03 (MX100,
-            # org 669910444571368738; #630) — was 900.
+            # org <demo-org-id>; #630) — was 900.
             priority=3,
             floor_seconds=1800,
             cost_fn=lambda s: float(s.physical_mx_count),
