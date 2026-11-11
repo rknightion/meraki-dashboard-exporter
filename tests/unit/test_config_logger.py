@@ -380,8 +380,12 @@ class TestRedactUrlUserinfoOnlyMasksAuthority:
                 "socks5h://***@proxy.example:1080",
             ),
             ("git+ssh://" + "user:pw-sentinel@host.example/r", "git+ssh://***@host.example/r"),
+            (
+                "see http://" + "user:pw-sentinel@a.example and https://b.example/x@y",
+                "see http://***@a.example and https://b.example/x@y",
+            ),
         ],
-        ids=["user-password", "username-only", "digit-scheme", "plus-scheme"],
+        ids=["user-password", "username-only", "digit-scheme", "plus-scheme", "embedded"],
     )
     def test_authority_userinfo_masked(self, value: str, expected: str) -> None:
         """A credential in the URL authority is masked."""
@@ -414,6 +418,12 @@ class TestEnvDumpUrlSettings:
             "MERAKI_EXPORTER_API__REQUESTS_PROXY", "tokensentinel" + "@proxy.example:3128"
         )
         assert masked == "***@proxy.example:3128"
+
+    def test_url_inside_safe_key_value_masked(self) -> None:
+        """A URL credential embedded in a safe key's value (for example JSON) is masked."""
+        value = '{"a": "http://' + 'user:pw-sentinel@h.example"}'
+        masked = mask_sensitive_value("MERAKI_EXPORTER_OTEL__RESOURCE_ATTRIBUTES", value)
+        assert masked == '{"a": "http://***@h.example"}'
 
     def test_non_url_safe_key_keeps_colon_at_value(self) -> None:
         """A safe, non-URL key whose value has ``:`` before ``@`` is not masked."""

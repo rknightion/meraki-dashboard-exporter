@@ -90,6 +90,8 @@ USERINFO_MASK = "***"
 
 # RFC 3986 scheme: a letter, then letters, digits, "+", "-" or ".".
 _SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*")
+# A scheme, then an authority up to its last "@" (greedy, never past a delimiter).
+_AUTHORITY_USERINFO = re.compile(r"(?<![A-Za-z0-9+.-])([A-Za-z][A-Za-z0-9+.-]*://)[^/?#\s\"']*@")
 
 
 def redact_url_setting(value: str) -> str:
@@ -113,22 +115,15 @@ def redact_url_setting(value: str) -> str:
 
 
 def redact_url_userinfo(value: str) -> str:
-    """Mask the userinfo of a URL authority inside a string that is not a URL setting.
+    """Mask URL-authority userinfo anywhere inside a string that is not a URL setting.
 
-    Only a value of the form ``scheme://userinfo@host...`` is changed, where the
-    ``@`` comes before the first ``/``, ``?`` or ``#`` after the scheme. Anything
-    else, such as a filter name holding ``@`` or a URL with ``@`` only in its path
-    or query, is returned as is.
+    Every ``scheme://userinfo@host`` in the value loses its userinfo, where the
+    ``@`` comes before the first ``/``, ``?``, ``#``, quote or whitespace after the
+    scheme; this also covers a URL embedded in a longer value such as JSON.
+    Anything else, such as a filter name holding ``@`` or a URL with ``@`` only in
+    its path or query, is returned as is.
     """
-    scheme_end = value.find("://")
-    if scheme_end <= 0 or not _SCHEME.fullmatch(value[:scheme_end]):
-        return value
-    rest = value[scheme_end + 3 :]
-    authority_end = min((i for i in (rest.find(c) for c in "/?#") if i != -1), default=len(rest))
-    at = rest.rfind("@", 0, authority_end)
-    if at == -1:
-        return value
-    return f"{value[: scheme_end + 3]}{USERINFO_MASK}{rest[at:]}"
+    return _AUTHORITY_USERINFO.sub(rf"\1{USERINFO_MASK}@", value)
 
 
 #: Dotted settings paths whose values are URLs. Their values go through

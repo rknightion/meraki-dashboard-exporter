@@ -109,3 +109,80 @@ def test_invalid_api_key_is_not_echoed_in_the_error() -> None:
         Settings(meraki={"api_key": short_key})
 
     assert short_key not in str(excinfo.value)
+
+
+def test_tracing_init_log_omits_endpoint_credentials() -> None:
+    """The tracing init log shows the endpoint without its credentials."""
+    from unittest.mock import patch
+
+    from meraki_dashboard_exporter.core.otel_tracing import TracingConfig
+
+    settings = Settings(
+        meraki={"api_key": KEY}, otel={"enabled": True, "endpoint": _url("otlp.example:4317")}
+    )
+    config = TracingConfig(settings)
+    base = "meraki_dashboard_exporter.core.otel_tracing"
+    with (
+        patch(f"{base}.TracerProvider"),
+        patch(f"{base}.OTLPSpanExporter") as exporter,
+        patch(f"{base}.BatchSpanProcessor"),
+        patch(f"{base}.trace.set_tracer_provider"),
+        patch(f"{base}.set_global_textmap"),
+        patch.object(config, "_instrument_libraries"),
+        capture_logs() as logs,
+    ):
+        config.setup_tracing()
+
+    init = [e for e in logs if e["event"] == "OpenTelemetry tracing initialized"]
+    assert init, logs
+    assert init[0]["endpoint"] == "https://***@otlp.example:4317"
+    assert SENTINEL not in repr(logs)
+    # The exporter itself still receives the real endpoint.
+    assert exporter.call_args.kwargs["endpoint"] == _url("otlp.example:4317")
+
+
+@pytest.mark.usefixtures("force_debug_log_capture")
+async def test_api_client_creation_log_omits_base_url_credentials() -> None:
+    """The API client creation log shows the base URL without its credentials."""
+    from unittest.mock import MagicMock, patch
+
+    from meraki_dashboard_exporter.api.client import AsyncMerakiClient
+
+    settings = Settings(
+        meraki=MerakiSettings(
+            api_key=SecretStr(KEY),
+            api_base_url=_url("meraki-proxy.example/api/v1"),
+            allow_custom_api_base_url=True,
+        )
+    )
+    client = AsyncMerakiClient(settings)
+    with (
+        patch.object(client, "_create_api_client", return_value=MagicMock()),
+        capture_logs() as logs,
+    ):
+        await client._get_api_client()
+
+    created = [e for e in logs if e["event"] == "Creating new Meraki Dashboard API client"]
+    assert created, logs
+    assert created[0]["base_url"] == "https://***@meraki-proxy.example/api/v1"
+    assert SENTINEL not in repr(logs)
+
+
+def test_settings_summary_omits_url_credentials() -> None:
+    """Settings.to_summary, documented as safe for logging, masks URL settings."""
+    settings = Settings(
+        meraki=MerakiSettings(
+            api_key=SecretStr(KEY),
+            api_base_url=_url("meraki-proxy.example/api/v1"),
+            allow_custom_api_base_url=True,
+        ),
+        api={"requests_proxy": "tokensentinel" + "@proxy.example:3128"},
+        otel={"endpoint": _url("otlp.example:4317")},
+    )
+    summary = settings.to_summary()
+
+    assert summary["meraki"]["api_base_url"] == "https://***@meraki-proxy.example/api/v1"
+    assert summary["api"]["requests_proxy"] == "***@proxy.example:3128"
+    assert summary["otel"]["endpoint"] == "https://***@otlp.example:4317"
+    assert SENTINEL not in repr(summary)
+    assert "tokensentinel" not in repr(summary)

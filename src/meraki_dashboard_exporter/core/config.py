@@ -43,8 +43,9 @@ class Settings(BaseSettings):
         case_sensitive=False,
         env_nested_delimiter="__",  # Allow MERAKI_EXPORTER_API__TIMEOUT
         extra="ignore",
-        # A rejected value is never echoed in the error, so a mistyped API key or a
-        # credentialed URL cannot reach stderr or the logs (#1030).
+        # str() and repr() of a validation error never echo the rejected value, so a
+        # mistyped API key or a credentialed URL printed from one cannot reach stderr
+        # or the logs (#1030). errors() and json() still carry it: never log those.
         hide_input_in_errors=True,
     )
 
@@ -186,18 +187,23 @@ class Settings(BaseSettings):
             Configuration summary without sensitive data.
 
         """
+        from .config_logger import redact_url_setting  # noqa: PLC0415 (import cycle)
+
+        api = self.api.model_dump()
+        if api.get("requests_proxy"):
+            api["requests_proxy"] = redact_url_setting(api["requests_proxy"])
         return {
             "meraki": {
                 "org_id": self.meraki.org_id,
-                "api_base_url": self.meraki.api_base_url,
+                "api_base_url": redact_url_setting(self.meraki.api_base_url),
             },
             "logging": self.logging.model_dump(),
-            "api": self.api.model_dump(),
+            "api": api,
             "scheduler": self.scheduler.model_dump(),
             "server": self.server.model_dump(),
             "otel": {
                 "enabled": self.otel.enabled,
-                "endpoint": self.otel.endpoint,
+                "endpoint": redact_url_setting(self.otel.endpoint) if self.otel.endpoint else None,
                 "service_name": self.otel.service_name,
             },
             "monitoring": self.monitoring.model_dump(),
