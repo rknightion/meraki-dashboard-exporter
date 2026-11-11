@@ -29,12 +29,10 @@ logger = get_logger(__name__)
 # Bounded top-N requested from each leaderboard endpoint.
 _TOP_N = 10
 
-# ⚠ Phase-6 live verification: the summary-top usage fields are reported in
-# decimal kilobytes (matching getOrganizationClientsOverview, converted ×1000 in
-# client_overview.py). We follow that established codebase convention so the
-# *_total_bytes gauges carry base SI units, but the exact unit + the `usage`/`id`
-# field names must be confirmed against the live API before Phase 6 closes.
-_USAGE_KB_TO_BYTES = 1000
+# The summary top endpoints report usage in megabytes (spec, and confirmed against
+# the dashboard on 2026-11-11, #995), the same unit collectors/devices/mr/wireless.py
+# reads from getOrganizationSummaryTopSsidsByUsage.
+_USAGE_MB_TO_BYTES = 1_000_000
 
 
 class TopUsageCollector(BaseOrganizationCollector):
@@ -99,11 +97,9 @@ class TopUsageCollector(BaseOrganizationCollector):
 
     @staticmethod
     def _usage_total_bytes(entry: dict[str, Any]) -> float:
-        """Extract an entry's total usage and convert to base-unit bytes.
+        """Extract an entry's total usage (megabytes) and convert to bytes.
 
-        ⚠ The ``usage`` container and its ``total`` key need live verification
-        (Phase 6); handled leniently so an unexpected shape yields 0 rather than
-        raising.
+        Handled leniently so an unexpected shape yields 0 rather than raising.
         """
         usage = entry.get("usage")
         total: Any = 0
@@ -114,7 +110,7 @@ class TopUsageCollector(BaseOrganizationCollector):
             total = usage
         if not isinstance(total, (int, float)) or isinstance(total, bool):
             return 0.0
-        return float(total) * _USAGE_KB_TO_BYTES
+        return float(total) * _USAGE_MB_TO_BYTES
 
     @with_error_handling(
         operation="Collect org top usage metrics",

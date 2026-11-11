@@ -52,6 +52,18 @@ default to reach other pages through the Ingress, list those paths explicitly. `
 gates `/status`, `/config`, `/clients` and the cardinality pages, but `/` and `/metrics` stay open
 (see [Security](security.md#endpoint-exposure-threat-model)).
 
+### Organisation usage gauges were about 1000 times too small
+
+The organisation summary and overview endpoints report usage in megabytes, but six gauges converted
+it as kilobytes. These now read about 1000 times higher, and match the Meraki dashboard:
+
+- `meraki_org_top_client_usage_total_bytes`, `meraki_org_top_ssid_usage_total_bytes` and
+  `meraki_org_top_manufacturer_usage_total_bytes`
+- `meraki_org_usage_total_bytes`, `meraki_org_usage_downstream_bytes` and
+  `meraki_org_usage_upstream_bytes`
+
+Rescale any dashboard, alert threshold or recorded history that used the old values.
+
 ## Changes at 1.1
 
 ### Configuration compatibility changes

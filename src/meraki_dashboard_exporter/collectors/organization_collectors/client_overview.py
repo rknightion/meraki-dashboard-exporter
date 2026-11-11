@@ -115,18 +115,23 @@ class ClientOverviewCollector(BaseOrganizationCollector):
                 counts = client_overview.get("counts", {})
                 total_clients = counts.get("total", 0)
 
-                # Extract usage data. The API returns decimal KB; convert to
-                # bytes (×1000) at the emit site so the gauges (renamed
-                # meraki_org_usage_*_bytes, issue #531) carry base-unit values.
+                # Extract usage data. The API reports megabytes (confirmed against
+                # the dashboard on 2026-11-11, #1031); convert to bytes so the
+                # meraki_org_usage_*_bytes gauges carry base-unit values.
                 usage = client_overview.get("usage", {})
                 overall_usage = usage.get("overall", {})
 
-                total_kb = overall_usage.get("total", 0) * 1000
-                downstream_kb = overall_usage.get("downstream", 0) * 1000
-                upstream_kb = overall_usage.get("upstream", 0) * 1000
+                total_bytes = overall_usage.get("total", 0) * 1_000_000
+                downstream_bytes = overall_usage.get("downstream", 0) * 1_000_000
+                upstream_bytes = overall_usage.get("upstream", 0) * 1_000_000
 
                 # Check if all values are zero (likely an API issue)
-                if total_clients == 0 and total_kb == 0 and downstream_kb == 0 and upstream_kb == 0:
+                if (
+                    total_clients == 0
+                    and total_bytes == 0
+                    and downstream_bytes == 0
+                    and upstream_bytes == 0
+                ):
                     cached = self._last_non_zero_values.get(org_id)
                     cached_at = self._last_non_zero_timestamp.get(org_id)
                     replay_count = self._consecutive_zero_replays.get(org_id, 0)
@@ -145,16 +150,16 @@ class ClientOverviewCollector(BaseOrganizationCollector):
                         )
 
                         total_clients = cached.get("total_clients", 0)
-                        total_kb = cached.get("total_kb", 0)
-                        downstream_kb = cached.get("downstream_kb", 0)
-                        upstream_kb = cached.get("upstream_kb", 0)
+                        total_bytes = cached.get("total_bytes", 0)
+                        downstream_bytes = cached.get("downstream_bytes", 0)
+                        upstream_bytes = cached.get("upstream_bytes", 0)
                         self._consecutive_zero_replays[org_id] = replay_count + 1
 
                         logger.info(
                             "Using cached non-zero values",
                             org_id=org_id,
                             total_clients=total_clients,
-                            total_kb=total_kb,
+                            total_bytes=total_bytes,
                         )
                     else:
                         # Replay budget or cache age exceeded (or no cache at all) - trust
@@ -172,9 +177,9 @@ class ClientOverviewCollector(BaseOrganizationCollector):
                     # Update cache with non-zero values
                     self._last_non_zero_values[org_id] = {
                         "total_clients": total_clients,
-                        "total_kb": total_kb,
-                        "downstream_kb": downstream_kb,
-                        "upstream_kb": upstream_kb,
+                        "total_bytes": total_bytes,
+                        "downstream_bytes": downstream_bytes,
+                        "upstream_bytes": upstream_bytes,
                     }
                     self._last_non_zero_timestamp[org_id] = time.time()
                     self._consecutive_zero_replays[org_id] = 0
@@ -183,9 +188,9 @@ class ClientOverviewCollector(BaseOrganizationCollector):
                     "Client overview metrics",
                     org_id=org_id,
                     total_clients=total_clients,
-                    total_kb=total_kb,
-                    downstream_kb=downstream_kb,
-                    upstream_kb=upstream_kb,
+                    total_bytes=total_bytes,
+                    downstream_bytes=downstream_bytes,
+                    upstream_bytes=upstream_bytes,
                 )
 
                 # Create org labels using helper
@@ -203,21 +208,21 @@ class ClientOverviewCollector(BaseOrganizationCollector):
                 self._set_metric_value(
                     "_usage_total_kb",
                     org_labels,
-                    total_kb,
+                    total_bytes,
                     ttl_seconds=ttl,
                 )
 
                 self._set_metric_value(
                     "_usage_downstream_kb",
                     org_labels,
-                    downstream_kb,
+                    downstream_bytes,
                     ttl_seconds=ttl,
                 )
 
                 self._set_metric_value(
                     "_usage_upstream_kb",
                     org_labels,
-                    upstream_kb,
+                    upstream_bytes,
                     ttl_seconds=ttl,
                 )
 
