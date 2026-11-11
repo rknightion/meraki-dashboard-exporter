@@ -273,3 +273,44 @@ class TestLogStartupSummary:
         collectors = self._enabled_collectors(test_settings)
 
         assert "networkhealth" not in collectors
+
+
+class TestUrlUserinfoInStartupLog:
+    """Credentials embedded in a URL setting never reach the startup log."""
+
+    _PASSWORD = "otlp-pass-sentinel"  # pragma: allowlist secret
+
+    def _url(self, host: str) -> str:
+        # Built from parts so the privacy sweep does not read the test URL as a credential.
+        return "https://" + "otlpuser:" + self._PASSWORD + "@" + host
+
+    def test_mask_keeps_safe_url_but_redacts_userinfo(self) -> None:
+        """A known-safe URL key keeps scheme, host and port and loses the userinfo."""
+        masked = mask_sensitive_value(
+            "MERAKI_EXPORTER_OTEL__ENDPOINT", self._url("otlp.example:4317")
+        )
+        assert masked == "https://***@otlp.example:4317"
+
+    def test_startup_summary_omits_otlp_endpoint_password(
+        self,
+        test_settings: Settings,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Neither the env dump nor the configuration summary prints endpoint credentials."""
+        for key in (
+            "MERAKI_EXPORTER_OTEL__ENDPOINT",
+            "MERAKI_EXPORTER_OTEL__LOGS__ENDPOINT",
+            "MERAKI_EXPORTER_OTEL__METRICS__ENDPOINT",
+        ):
+            monkeypatch.setenv(key, self._url("otlp.example:4317"))
+        test_settings.otel.enabled = True
+        test_settings.otel.endpoint = self._url("otlp.example:4317")
+
+        log_startup_summary(test_settings)
+
+        out = capsys.readouterr().out
+        assert "MERAKI_EXPORTER_OTEL__LOGS__ENDPOINT" in out
+        assert "otlp.example:4317" in out
+        assert self._PASSWORD not in out
+        assert "otlpuser" not in out

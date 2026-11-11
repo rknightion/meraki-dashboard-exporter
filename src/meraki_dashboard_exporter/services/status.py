@@ -10,11 +10,11 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urlsplit, urlunsplit
 
 from prometheus_client import REGISTRY
 from prometheus_client.registry import CollectorRegistry
 
+from ..core.config_logger import redact_url_userinfo_tree
 from ..core.constants.metrics_constants import NetworkMetricName
 from ..core.org_health import OrgHealth
 
@@ -269,37 +269,6 @@ def build_webhook_status(
     )
 
 
-_USERINFO_MASK = "***"
-
-
-def _redact_url_userinfo(value: str) -> str:
-    """Replace the ``user:password`` part of a URL string with ``***``.
-
-    Scheme, host, port, path and query are kept so the view still shows where
-    the URL points. A string that is not a URL with userinfo is returned as is;
-    one that looks like it carries userinfo but does not parse is masked whole.
-    """
-    try:
-        parts = urlsplit(value)
-    except ValueError:
-        return _USERINFO_MASK if "@" in value else value
-    if not parts.scheme or "@" not in parts.netloc:
-        return value
-    host = parts.netloc.rpartition("@")[2]
-    return urlunsplit(parts._replace(netloc=f"{_USERINFO_MASK}@{host}"))
-
-
-def _redact_tree(node: Any) -> Any:
-    """Apply :func:`_redact_url_userinfo` to every string in a dumped config tree."""
-    if isinstance(node, str):
-        return _redact_url_userinfo(node)
-    if isinstance(node, dict):
-        return {key: _redact_tree(item) for key, item in node.items()}
-    if isinstance(node, list):
-        return [_redact_tree(item) for item in node]
-    return node
-
-
 def build_effective_config(settings: Settings) -> dict[str, Any]:
     """Build a redacted, JSON-safe view of the effective configuration (#312).
 
@@ -312,7 +281,7 @@ def build_effective_config(settings: Settings) -> dict[str, Any]:
     masking. Never build this dict from raw attribute access, which would bypass
     both.
     """
-    redacted: dict[str, Any] = _redact_tree(settings.model_dump(mode="json"))
+    redacted: dict[str, Any] = redact_url_userinfo_tree(settings.model_dump(mode="json"))
     return redacted
 
 
