@@ -559,6 +559,20 @@ class TestWebhookHandlerMalformedInput:
         assert webhook_handler.validate_secret(5) is False
         assert webhook_handler.validate_secret(["test_secret_123"]) is False
 
+    def test_unencodable_secret_is_an_authentication_rejection(
+        self, webhook_handler: WebhookHandler, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A secret holding a lone surrogate (valid JSON escape) is a wrong secret, not a crash."""
+        fake_logger = MagicMock()
+        monkeypatch.setattr(webhook_handler_module, "logger", fake_logger)
+
+        result = webhook_handler.process_webhook({"sharedSecret": "\ud800"})
+
+        assert result.outcome is WebhookOutcome.REJECTED
+        assert result.failure_reason is WebhookFailureReason.AUTHENTICATION
+        assert webhook_handler.get_status()["validation_failures"] == 1
+        fake_logger.exception.assert_not_called()
+
 
 class _StubApplier:
     """Records apply_webhook_device_state calls; returns a fixed verdict (#614)."""

@@ -221,6 +221,20 @@ def enforce_webhook_security(*, enabled: bool, require_secret: bool, allow_insec
         )
 
 
+def _utf8_or_none(value: str) -> bytes | None:
+    """Return ``value`` as UTF-8, or None when it holds a lone surrogate.
+
+    A JSON string escape can encode a lone surrogate (code point U+D800 to
+    U+DFFF), which decodes to a ``str`` that strict UTF-8 cannot encode. Such a
+    secret can never match, so the caller treats None as a wrong secret instead
+    of raising.
+    """
+    try:
+        return value.encode("utf-8")
+    except UnicodeEncodeError:
+        return None
+
+
 class WebhookHandler:
     """Handler for processing Meraki webhook events with metrics tracking.
 
@@ -414,9 +428,8 @@ class WebhookHandler:
         # A plain `!=` compare leaks the length of the matching prefix via timing,
         # letting an attacker recover the secret byte-by-byte.
         expected_secret = self.settings.webhooks.shared_secret.get_secret_value()
-        if not isinstance(payload_secret, str) or not hmac.compare_digest(
-            payload_secret.encode("utf-8"), expected_secret.encode("utf-8")
-        ):
+        provided = _utf8_or_none(payload_secret) if isinstance(payload_secret, str) else None
+        if provided is None or not hmac.compare_digest(provided, expected_secret.encode("utf-8")):
             logger.warning("Invalid shared secret in webhook payload")
             self.record_validation_failure("secret_mismatch")
             return False
