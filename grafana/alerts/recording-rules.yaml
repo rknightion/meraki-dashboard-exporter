@@ -25,7 +25,7 @@
 # (or the Prometheus Operator `PrometheusRule` CR pattern, if this project ever ships one for
 # recording rules) is the only path. Not deployed as part of this task — see the brief.
 #
-# VERIFICATION NOTES (2026-07-03, live against Grafana Cloud, gcx context m7kni)
+# VERIFICATION NOTES (2026-07-03, live against Grafana Cloud, the maintainer's Grafana Cloud stack)
 # Every expr below was run live via `gcx metrics query` before being committed here and returned
 # real, sane values (see the brief for sample output) — nothing here is speculative.
 
@@ -34,8 +34,8 @@ groups:
     rules:
       # Fleet online ratio per org — turns a flat list of meraki_device_up{...}==0/1 series into
       # one number per org you can put on a stat panel or gate an alert threshold on, instead of
-      # eyeballing a wall of per-device gauges. Verified live: org 1019781 (Knight/homelab) =
-      # 0.947, org 669910444571368738 (DevNet) = 0 at capture time — DevNet reading 0 reflects the
+      # eyeballing a wall of per-device gauges. Verified live: org <org-id> (the homelab org) =
+      # 0.947, org <demo-org-id> (the DevNet demo org) = 0 at capture time — DevNet reading 0 reflects the
       # DevNet shard's live device state at verification time, not a query problem; re-check
       # before wiring an alert threshold off this rule.
       - record: meraki:device_up:ratio

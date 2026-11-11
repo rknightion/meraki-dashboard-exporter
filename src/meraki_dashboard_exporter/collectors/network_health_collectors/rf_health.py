@@ -10,7 +10,7 @@ therefore org-scoped: the coordinator calls :meth:`collect_org` once per org,
 gated on the ``nh_channel_utilization`` endpoint group, rather than invoking a
 per-network ``collect`` in the fan-out bundle.
 
-LIVE-VERIFIED 2026-07-03 (org 1019781, MR56; #630). The ``byBand`` response
+LIVE-VERIFIED 2026-07-03 (org <org-id>, MR56; #630). The ``byBand`` response
 shape is confirmed on the wire:
 - ``band`` is the numeric-GHz string: ``"2.4"`` and ``"5"`` observed live; a
   6GHz (WiFi-6E) radio therefore reports ``"6"`` (no 6E hardware in the test
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 # `band` string values on the wire (numeric GHz). "2.4"/"5" live-verified
-# 2026-07-03 (org 1019781, MR56); "6" is the WiFi-6E value (#630).
+# 2026-07-03 (org <org-id>, MR56); "6" is the WiFi-6E value (#630).
 _BAND_2_4 = "2.4"
 _BAND_5 = "5"
 _BAND_6 = "6"

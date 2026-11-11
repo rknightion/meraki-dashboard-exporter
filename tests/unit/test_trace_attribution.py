@@ -74,11 +74,11 @@ class TestPositionalAttributeExtraction:
             async def run(self, org_id: str, org_name: str) -> str:
                 return "ok"
 
-        await Fake().run("1019781", "Knight")
+        await Fake().run("123456", "Example Org")
 
         span = _one(span_capture, "process.organization")
-        assert span.attributes["org.id"] == "1019781"
-        assert span.attributes["org.name"] == "Knight"
+        assert span.attributes["org.id"] == "123456"
+        assert span.attributes["org.name"] == "Example Org"
         assert span.attributes["class"] == "Fake"
 
     async def test_keyword_args_still_extracted(self, span_capture: InMemorySpanExporter) -> None:

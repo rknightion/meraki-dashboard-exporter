@@ -1002,7 +1002,7 @@
         "spec": {
           "allowCustomValue": true,
           "current": {
-            "text": "grafanacloud-robknight-logs",
+            "text": "grafanacloud-logs",
             "value": "grafanacloud-logs"
           },
           "hide": "dontHide",

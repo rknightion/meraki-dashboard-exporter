@@ -181,7 +181,7 @@
 - OK: pagination clean (main mandate); validate_response_format on all 40; nested schemas verified; unit conversions otherwise correct; product-type/network filtering per law.
 - apidrift: mature+CI-wired; automates shape-drift/deprecation for __meraki_op__-annotated models; does NOT cover pagination/param-bounds/units/aggregation semantics. Recommendation: annotate more device-side models.
 
-## LIVE-API VERIFICATION RESULTS (main thread, org 1019781 "Knight", net L_676102894059020286)
+## LIVE-API VERIFICATION RESULTS (main thread, org <org-id>, net L_000000000000000000)
 - **APIORG-01 REVISED P0→P1**: LIVE returns utilization/wifi/non_wifi + start_ts/end_ts — SPEC IS WRONG (utilizationTotal/... names don't exist on the wire for this legacy endpoint). Code's "utilization"/"wifi" reads are CORRECT; real bugs: (1) code reads "nonWifi" but live is "non_wifi" → all utilization_type="non_wifi" series silently 0 (VERIFIED); (2) _latest_bucket sorts by endTime→endTs but live is end_ts → sort inert (benign now: single bucket at timespan=600). Fix: non_wifi key + add end_ts sort key + fix test fixtures to live shape + document spec-vs-live discrepancy (apidrift caveat).
 - APIORG-10 RESOLVED: live percentage is 0-100 (sums ≈100) — code correct; just add "0-100" to HELP.
 - APIORG-02: Rob's org is CO-TERM (status OK + licensedDeviceCounts) — subscription case not live-verifiable here; structural fix stands, keep verify note.

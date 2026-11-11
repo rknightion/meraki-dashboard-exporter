@@ -215,7 +215,7 @@
         <div style="display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--color-border-default);border-top:0;background:var(--color-bg-surface);margin-top:10px">
           <div style="padding:10px 14px;border-right:1px solid var(--color-border-default);display:flex;flex-direction:column"><div style="font-family:var(--font-family-mono);font-size:var(--font-size-2xs);font-weight:500;letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--color-fg-muted);min-height:30px">Version</div><div style="font-family:var(--font-family-mono);font-size:var(--font-size-md);color:var(--color-fg-default);margin-top:2px">0.31.0</div></div>
           <div style="padding:10px 14px;border-right:1px solid var(--color-border-default);display:flex;flex-direction:column"><div style="font-family:var(--font-family-mono);font-size:var(--font-size-2xs);font-weight:500;letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--color-fg-muted);min-height:30px">Scheduling</div><div style="font-size:var(--font-size-sm);color:var(--color-fg-soft);margin-top:2px">adaptive per-collector cadence - see <a href="#">status</a> or the polling diagnostics above for each collector's solved interval</div></div>
-          <sc-if value="{{ showOrgId }}"><div style="padding:10px 14px;display:flex;flex-direction:column"><div style="font-family:var(--font-family-mono);font-size:var(--font-size-2xs);font-weight:500;letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--color-fg-muted);min-height:30px">Organization ID</div><div style="font-family:var(--font-family-mono);font-size:var(--font-size-md);color:var(--color-fg-default);margin-top:2px">828099381482770483</div></div></sc-if>
+          <sc-if value="{{ showOrgId }}"><div style="padding:10px 14px;display:flex;flex-direction:column"><div style="font-family:var(--font-family-mono);font-size:var(--font-size-2xs);font-weight:500;letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--color-fg-muted);min-height:30px">Organization ID</div><div style="font-family:var(--font-family-mono);font-size:var(--font-size-md);color:var(--color-fg-default);margin-top:2px"><org-id></div></div></sc-if>
         </div>
       </div>
 
@@ -576,7 +576,7 @@
                 </tr>
               </thead>
               <tbody style="font-family:var(--font-family-mono);font-size:var(--font-size-sm);font-variant-numeric:tabular-nums">
-                <tr style="height:32px" style-hover="background:color-mix(in oklab, var(--color-bg-accent) 4%, var(--color-bg-surface))"><td style="padding:0 14px;color:var(--color-fg-default)">828099381482770483</td><td style="padding:0 14px;text-align:right;color:var(--color-fg-soft)">7</td></tr>
+                <tr style="height:32px" style-hover="background:color-mix(in oklab, var(--color-bg-accent) 4%, var(--color-bg-surface))"><td style="padding:0 14px;color:var(--color-fg-default)"><org-id></td><td style="padding:0 14px;text-align:right;color:var(--color-fg-soft)">7</td></tr>
               </tbody>
             </table>
           </div>
@@ -671,7 +671,7 @@
               </tr>
             </thead>
             <tbody style="font-size:var(--font-size-sm);font-variant-numeric:tabular-nums">
-              <tr style="height:34px" style-hover="background:color-mix(in oklab, var(--color-bg-accent) 4%, var(--color-bg-surface))"><td style="padding:0 12px;color:var(--color-fg-default)">Knight Networks <span style="font-family:var(--font-family-mono);font-size:var(--font-size-xs);color:var(--color-fg-muted)">828099381482770483</span></td><td style="padding:0 12px;text-align:right;font-family:var(--font-family-mono);color:var(--color-fg-muted)">0</td><td style="padding:0 12px;font-family:var(--font-family-mono);font-size:var(--font-size-xs);font-weight:600;color:var(--color-status-ok)">■ NO</td><td style="padding:0 12px;text-align:right;font-family:var(--font-family-mono);color:var(--color-fg-faint)">-</td></tr>
+              <tr style="height:34px" style-hover="background:color-mix(in oklab, var(--color-bg-accent) 4%, var(--color-bg-surface))"><td style="padding:0 12px;color:var(--color-fg-default)">Example Org <span style="font-family:var(--font-family-mono);font-size:var(--font-size-xs);color:var(--color-fg-muted)"><org-id></span></td><td style="padding:0 12px;text-align:right;font-family:var(--font-family-mono);color:var(--color-fg-muted)">0</td><td style="padding:0 12px;font-family:var(--font-family-mono);font-size:var(--font-size-xs);font-weight:600;color:var(--color-status-ok)">■ NO</td><td style="padding:0 12px;text-align:right;font-family:var(--font-family-mono);color:var(--color-fg-faint)">-</td></tr>
             </tbody>
           </table>
         </div>

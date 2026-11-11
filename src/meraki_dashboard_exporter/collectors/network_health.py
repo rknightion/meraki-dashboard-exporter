@@ -71,7 +71,7 @@ class NetworkHealthCollector(MetricCollector):
     # failed-connections / latency / air-marshal 3600s). Channel-utilization is
     # the org-wide #271 rewrite, costed as two paginated org endpoints.
     #
-    # #630 (live-verified 2026-07-03, org 1019781): each windowed group's floor
+    # #630 (live-verified 2026-07-03, org <org-id>): each windowed group's floor
     # equals the timespan its fetcher passes (connection-stats 1800; failed-conn
     # / latency / air-marshal 3600), so successive polls read non-overlapping
     # windows — polling faster would just re-aggregate an overlapping window. The

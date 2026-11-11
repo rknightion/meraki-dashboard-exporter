@@ -288,7 +288,7 @@ class TestMSCollector:
 
         # Mock device lookup
         device_lookup = {
-            "Q2MW-42Z2-JE5T": {"name": "Switch 1", "model": "MS250"},
+            "Q2XX-XXXX-XXXX": {"name": "Switch 1", "model": "MS250"},
             "Q2BX-Q43Y-RR5C": {"name": "Switch 2", "model": "MS250"},
             "Q2HP-F6VX-M24J": {"name": "Switch 3", "model": "MS350"},
             "Q2HP-K4VW-87YT": {"name": "Switch 4", "model": "MS350"},
@@ -299,7 +299,7 @@ class TestMSCollector:
             "net1": {
                 "rstpEnabled": True,
                 "stpBridgePriority": [
-                    {"switches": ["Q2MW-42Z2-JE5T"], "stpPriority": 8192},
+                    {"switches": ["Q2XX-XXXX-XXXX"], "stpPriority": 8192},
                     {"switches": ["Q2BX-Q43Y-RR5C"], "stpPriority": 32768},
                 ],
             },
@@ -346,7 +346,7 @@ class TestMSCollector:
         assert (
             REGISTRY.get_sample_value(
                 "meraki_ms_stp_priority",
-                {**net1_labels, "serial": "Q2MW-42Z2-JE5T"},
+                {**net1_labels, "serial": "Q2XX-XXXX-XXXX"},
             )
             == 8192.0
         )

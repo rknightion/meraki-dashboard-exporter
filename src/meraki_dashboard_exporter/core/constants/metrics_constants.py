@@ -464,7 +464,7 @@ class NetworkHealthMetricName(StrEnum):
 
     # Channel utilization metrics. The 6GHz series were added in #630: the
     # byBand response carries a numeric-GHz band string ("2.4"/"5"/"6",
-    # live-verified 2026-07-03 org 1019781), so WiFi-6E APs report a band == "6"
+    # live-verified 2026-07-03 org <org-id>), so WiFi-6E APs report a band == "6"
     # row that must be emitted rather than dropped.
     AP_CHANNEL_UTILIZATION_2_4GHZ_PERCENT = "meraki_ap_channel_utilization_2_4ghz_percent"
     AP_CHANNEL_UTILIZATION_5GHZ_PERCENT = "meraki_ap_channel_utilization_5ghz_percent"

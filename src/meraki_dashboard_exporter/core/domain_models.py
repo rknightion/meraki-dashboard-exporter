@@ -952,7 +952,7 @@ class CameraAnalyticsZone(BaseModel):
 
     Source: ``getDeviceCameraAnalyticsZones``.
 
-    LIVE-VERIFIED 2026-07-03 (MV12W, org 669910444571368738; #630): the zone key
+    LIVE-VERIFIED 2026-07-03 (MV12W, org <demo-org-id>; #630): the zone key
     on the wire is ``zoneId`` (e.g. ``{"zoneId": "0", "label": "Full Frame"}``),
     NOT ``id`` as the earlier spec-derived assumption held (F-024) — the vendored
     OpenAPI schema for this endpoint is empty, so that "verified against spec"
