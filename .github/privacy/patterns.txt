@@ -1,0 +1,8 @@
+# Repository-local privacy sweep patterns (not written by the vend sync).
+# The portable subset has no space or quote, so each rule matches a run of word characters.
+
+# A Meraki organisation id of seven or more digits after org / org_id / organization_id and : or =.
+org[a-z_-]*:[0-9]{7,}
+org[a-z_-]*=[0-9]{7,}
+# A Meraki network id (L_ followed by a long number).
+L_[1-9][0-9]{14,}
