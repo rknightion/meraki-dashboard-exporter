@@ -53,6 +53,7 @@ from prometheus_client import Gauge as PromGauge
 from prometheus_client.core import REGISTRY
 
 from ..__version__ import get_version
+from .config_logger import redact_url_setting
 from .constants.metrics_constants import CollectorMetricName
 from .logging import get_logger
 from .metrics import LabelName
@@ -436,7 +437,11 @@ class OTelMetricsBridge:
                 )
             logger.info(
                 "OTel metrics bridge initialized",
-                endpoint=self.settings.otel.metrics_endpoint,
+                endpoint=(
+                    redact_url_setting(self.settings.otel.metrics_endpoint)
+                    if self.settings.otel.metrics_endpoint
+                    else None
+                ),
                 include=self._include,
                 export_interval_seconds=self._interval,
             )

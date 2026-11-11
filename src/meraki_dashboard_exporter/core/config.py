@@ -43,6 +43,9 @@ class Settings(BaseSettings):
         case_sensitive=False,
         env_nested_delimiter="__",  # Allow MERAKI_EXPORTER_API__TIMEOUT
         extra="ignore",
+        # A rejected value is never echoed in the error, so a mistyped API key or a
+        # credentialed URL cannot reach stderr or the logs (#1030).
+        hide_input_in_errors=True,
     )
 
     # Nested configuration models

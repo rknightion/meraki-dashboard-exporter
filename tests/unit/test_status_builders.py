@@ -169,6 +169,27 @@ class TestBuildEffectiveConfig:
             build_effective_config(settings)["api"]["requests_proxy"] == "http://proxy.example:3128"
         )
 
+    def test_username_only_proxy_credential_redacted(self) -> None:
+        """A username-only proxy credential is masked up to its last ``@`` (#1030)."""
+        settings = _settings(
+            api=APISettings(requests_proxy="tokensentinel" + "@proxy.example:3128")
+        )
+        config = build_effective_config(settings)
+
+        assert "tokensentinel" not in repr(config)
+        assert config["api"]["requests_proxy"] == "***@proxy.example:3128"
+
+    def test_non_url_settings_with_at_sign_unchanged(self) -> None:
+        """A filter name or a non-URL string holding ``@`` is shown as configured (#1030)."""
+        settings = _settings(
+            network_filter=NetworkFilterSettings(
+                include_names=["Site: HQ@Lon", "https://host.example/p?email=a@b.example"]
+            )
+        )
+        names = build_effective_config(settings)["network_filter"]["include_names"]
+
+        assert names == ["Site: HQ@Lon", "https://host.example/p?email=a@b.example"]
+
     def test_scheme_less_proxy_credentials_redacted(self) -> None:
         """A proxy typed without a scheme still loses its credentials in the view."""
         settings = _settings(

@@ -1145,8 +1145,10 @@ class MerakiSettings(BaseModel):
             raise ValueError("api_base_url must not be empty")
         parsed = urlparse(url)
         if parsed.scheme != "https" or not parsed.netloc:
+            from .config_logger import redact_url_setting  # noqa: PLC0415 (import cycle)
+
             raise ValueError(
-                f"Invalid api_base_url {url!r}: must be a well-formed HTTPS URL "
+                f"Invalid api_base_url {redact_url_setting(url)!r}: must be a well-formed HTTPS URL "
                 "(e.g. https://api.meraki.com/api/v1)"
             )
         return url
@@ -1162,9 +1164,11 @@ class MerakiSettings(BaseModel):
                 "api_base_url is not a recognised Meraki regional URL; set "
                 "meraki.allow_custom_api_base_url=true to opt in to a custom HTTPS origin"
             )
+        from .config_logger import redact_url_setting  # noqa: PLC0415 (import cycle)
+
         logger.warning(
             "Using explicitly allowed custom Meraki API base URL",
-            api_base_url=self.api_base_url,
+            api_base_url=redact_url_setting(self.api_base_url),
             known_regions=sorted(KNOWN_REGION_BASE_URLS),
         )
         return self

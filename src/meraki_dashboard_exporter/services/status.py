@@ -281,7 +281,7 @@ def build_effective_config(settings: Settings) -> dict[str, Any]:
     masking. Never build this dict from raw attribute access, which would bypass
     both.
     """
-    redacted: dict[str, Any] = redact_url_userinfo_tree(settings.model_dump(mode="json"))
+    redacted: dict[str, Any] = redact_url_userinfo_tree(settings.model_dump(mode="json"), "")
     return redacted
 
 
