@@ -108,17 +108,20 @@ def _bearer_token_matches(auth_header: str, expected: str) -> bool:
     The scheme is matched case-insensitively. The comparison is on bytes because
     ``hmac.compare_digest`` refuses non-ASCII ``str`` input: Starlette decodes
     header bytes as latin-1, so encoding back to latin-1 recovers the bytes the
-    client sent, and the configured token is compared as UTF-8. A credential
-    that cannot be encoded never matches.
+    client sent. The configured token is compared as UTF-8 with
+    ``surrogateescape``, so undecodable bytes from the environment round-trip to
+    the bytes the operator set. A value on either side that cannot be encoded
+    never matches.
     """
     scheme, _, provided = auth_header.partition(" ")
     if scheme.lower() != "bearer":
         return False
     try:
         provided_bytes = provided.encode("latin-1")
+        expected_bytes = expected.encode("utf-8", "surrogateescape")
     except UnicodeEncodeError:
         return False
-    return hmac.compare_digest(provided_bytes, expected.encode("utf-8"))
+    return hmac.compare_digest(provided_bytes, expected_bytes)
 
 
 def ui_guard_decision(

@@ -221,16 +221,18 @@ def enforce_webhook_security(*, enabled: bool, require_secret: bool, allow_insec
         )
 
 
-def _utf8_or_none(value: str) -> bytes | None:
-    """Return ``value`` as UTF-8, or None when it holds a lone surrogate.
+def _utf8_or_none(value: str, errors: str = "strict") -> bytes | None:
+    """Return ``value`` as UTF-8, or None when it cannot be encoded.
 
     A JSON string escape can encode a lone surrogate (code point U+D800 to
-    U+DFFF), which decodes to a ``str`` that strict UTF-8 cannot encode. Such a
-    secret can never match, so the caller treats None as a wrong secret instead
-    of raising.
+    U+DFFF), which decodes to a ``str`` that strict UTF-8 cannot encode. The
+    configured secret is encoded with ``surrogateescape`` so undecodable bytes
+    from the environment round-trip to the bytes the operator set. A value that
+    still cannot be encoded can never match, so callers treat None as a wrong
+    secret instead of raising.
     """
     try:
-        return value.encode("utf-8")
+        return value.encode("utf-8", errors)
     except UnicodeEncodeError:
         return None
 
@@ -429,7 +431,8 @@ class WebhookHandler:
         # letting an attacker recover the secret byte-by-byte.
         expected_secret = self.settings.webhooks.shared_secret.get_secret_value()
         provided = _utf8_or_none(payload_secret) if isinstance(payload_secret, str) else None
-        if provided is None or not hmac.compare_digest(provided, expected_secret.encode("utf-8")):
+        expected = _utf8_or_none(expected_secret, "surrogateescape")
+        if provided is None or expected is None or not hmac.compare_digest(provided, expected):
             logger.warning("Invalid shared secret in webhook payload")
             self.record_validation_failure("secret_mismatch")
             return False

@@ -18,6 +18,7 @@ from meraki_dashboard_exporter.app import ExporterApp
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import MerakiSettings
 from meraki_dashboard_exporter.services.client_store import ClientPageSnapshot
+from tests.helpers.raw_asgi import raw_request_status
 
 CONTROL_DISABLED_TOOLTIP = "Configure server.api_token to enable manual controls."
 
@@ -263,15 +264,20 @@ def test_control_post_with_non_ascii_header_byte_is_401(
     exporter = exporter_factory()
     manager = _mock_manager(with_collector=True)
     exporter.collector_manager = manager
-    client = TestClient(exporter.create_app(), raise_server_exceptions=False)
+    headers = [
+        (b"authorization", b"Bearer \xe9controltoken"),
+        (b"content-type", b"application/json"),
+    ]
 
-    response = client.post(
+    status = raw_request_status(
+        exporter.create_app(),
+        "POST",
         "/api/collectors/trigger",
-        json={"collector": "DeviceCollector"},
-        headers={"Authorization": b"Bearer \xe9controltoken"},
+        headers,
+        body=b'{"collector": "DeviceCollector"}',
     )
 
-    assert response.status_code == 401
+    assert status == 401
     manager.get_collector_by_name.assert_not_called()
 
 
@@ -332,5 +338,65 @@ def test_check_api_token_accepts_utf8_token(
     exporter = exporter_factory()
     header = b"Bearer " + token.encode("utf-8")
     request = Request({"type": "http", "method": "POST", "headers": [(b"authorization", header)]})
+
+    exporter._check_api_token(request)
+
+
+@pytest.mark.parametrize("token", ["control\udcff", "control\ud800"], ids=["env-byte", "surrogate"])
+def test_control_post_with_surrogate_token_is_401_not_500(
+    test_settings: Settings,
+    exporter_factory: Callable[[], ExporterApp],
+    token: str,
+) -> None:
+    """A configured token holding surrogates rejects a wrong credential with 401."""
+    test_settings.server.api_token = SecretStr(token)
+    exporter = exporter_factory()
+    manager = _mock_manager(with_collector=True)
+    exporter.collector_manager = manager
+    client = TestClient(exporter.create_app(), raise_server_exceptions=False)
+
+    response = client.post(
+        "/api/collectors/trigger",
+        json={"collector": "DeviceCollector"},
+        headers={"Authorization": "Bearer control"},
+    )
+
+    assert response.status_code == 401
+    manager.get_collector_by_name.assert_not_called()
+
+
+@pytest.mark.parametrize("token", ["control\udcff", "control\ud800"], ids=["env-byte", "surrogate"])
+def test_check_api_token_with_surrogate_token_raises_401(
+    test_settings: Settings,
+    exporter_factory: Callable[[], ExporterApp],
+    token: str,
+) -> None:
+    """The route-level check answers 401, never UnicodeEncodeError, for a surrogate token."""
+    test_settings.server.api_token = SecretStr(token)
+    exporter = exporter_factory()
+    request = Request({
+        "type": "http",
+        "method": "POST",
+        "headers": [(b"authorization", b"Bearer control")],
+    })
+
+    with pytest.raises(HTTPException) as excinfo:
+        exporter._check_api_token(request)
+
+    assert excinfo.value.status_code == 401
+
+
+def test_check_api_token_env_byte_token_matches_raw_bytes(
+    test_settings: Settings,
+    exporter_factory: Callable[[], ExporterApp],
+) -> None:
+    """A token decoded from invalid UTF-8 env bytes matches those bytes in the header."""
+    test_settings.server.api_token = SecretStr("control\udcff")
+    exporter = exporter_factory()
+    request = Request({
+        "type": "http",
+        "method": "POST",
+        "headers": [(b"authorization", b"Bearer control\xff")],
+    })
 
     exporter._check_api_token(request)

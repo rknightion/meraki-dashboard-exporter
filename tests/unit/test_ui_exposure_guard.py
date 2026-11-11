@@ -9,6 +9,7 @@ from pydantic import SecretStr
 from meraki_dashboard_exporter.app import ExporterApp, ui_guard_decision
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import APISettings, MerakiSettings, ServerSettings
+from tests.helpers.raw_asgi import raw_request_status
 
 RAW_KEY = "supersecret_api_key_at_least_30_characters_long"
 
@@ -196,11 +197,9 @@ class TestNonAsciiBearer:
     def test_sensitive_get_with_non_ascii_header_byte_is_401(self, path: str) -> None:
         """An Authorization header carrying byte 0xE9 gets 401 on the real app."""
         exporter = ExporterApp(_settings(api_token="secrettoken"))
-        client = TestClient(exporter.create_app(), raise_server_exceptions=False)
+        headers = [(b"authorization", b"Bearer \xe9secrettoken")]
 
-        resp = client.get(path, headers={"Authorization": b"Bearer \xe9secrettoken"})
-
-        assert resp.status_code == 401
+        assert raw_request_status(exporter.create_app(), "GET", path, headers) == 401
 
     def test_non_ascii_configured_token_accepted_as_utf8(self) -> None:
         """A configured token with a non-ASCII character matches its UTF-8 bytes."""
@@ -212,6 +211,32 @@ class TestNonAsciiBearer:
         assert ok.status_code == 200
         wrong = client.get("/status", headers={"Authorization": "Bearer secret-token"})
         assert wrong.status_code == 401
+
+
+class TestSurrogateConfiguredToken:
+    """A configured token holding surrogates (undecodable env bytes) never crashes the gate."""
+
+    def test_decision_with_unencodable_token_rejects(self) -> None:
+        """A token no byte string can encode answers 401 instead of raising."""
+        assert ui_guard_decision(
+            method="GET",
+            path="/status",
+            ui_enabled=True,
+            api_token="tok\ud800",
+            auth_header="Bearer tok",
+        ) == (401, "Invalid or missing API token")
+
+    def test_env_byte_token_matches_the_raw_bytes(self) -> None:
+        """A token decoded from invalid UTF-8 env bytes matches those bytes on the wire."""
+        token = "tok\udcff"  # what os.environ yields for the bytes b"tok\xff"
+        app = ExporterApp(_settings(api_token=token)).create_app()
+
+        assert (
+            raw_request_status(app, "GET", "/status", [(b"authorization", b"Bearer tok\xff")])
+            == 200
+        )
+        assert raw_request_status(app, "GET", "/status", [(b"authorization", b"Bearer tok")]) == 401
+        assert raw_request_status(app, "GET", "/status", []) == 401
 
 
 class TestConfigEndpoint:

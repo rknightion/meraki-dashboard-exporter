@@ -573,6 +573,37 @@ class TestWebhookHandlerMalformedInput:
         assert webhook_handler.get_status()["validation_failures"] == 1
         fake_logger.exception.assert_not_called()
 
+    @pytest.mark.parametrize(
+        "configured",
+        ["test_secret_\udcff", "test_secret_\ud800"],
+        ids=["undecodable-env-byte", "lone-surrogate"],
+    )
+    @pytest.mark.parametrize(
+        "provided", ["test_secret_", "test_secret_\udcff", "test_secret_\ud800", "\u00ff"]
+    )
+    def test_configured_secret_with_surrogates_never_raises(
+        self,
+        settings_with_secret: Settings,
+        monkeypatch: pytest.MonkeyPatch,
+        configured: str,
+        provided: str,
+    ) -> None:
+        """A configured secret holding surrogates rejects every delivery without a crash.
+
+        Undecodable bytes in an environment variable reach the process as surrogates.
+        No JSON string encodes to those bytes, so nothing can match: fail closed with 401.
+        """
+        fake_logger = MagicMock()
+        monkeypatch.setattr(webhook_handler_module, "logger", fake_logger)
+        settings_with_secret.webhooks.shared_secret = SecretStr(configured)
+        handler = WebhookHandler(settings_with_secret)
+
+        result = handler.process_webhook({"sharedSecret": provided})
+
+        assert result.outcome is WebhookOutcome.REJECTED
+        assert result.failure_reason is WebhookFailureReason.AUTHENTICATION
+        fake_logger.exception.assert_not_called()
+
 
 class _StubApplier:
     """Records apply_webhook_device_state calls; returns a fixed verdict (#614)."""
