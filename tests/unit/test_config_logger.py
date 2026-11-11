@@ -14,6 +14,7 @@ from meraki_dashboard_exporter.core.config_logger import (
     get_env_vars,
     log_startup_summary,
     mask_sensitive_value,
+    redact_url_userinfo,
 )
 from meraki_dashboard_exporter.core.config_models import MerakiSettings
 
@@ -314,3 +315,36 @@ class TestUrlUserinfoInStartupLog:
         assert "otlp.example:4317" in out
         assert self._PASSWORD not in out
         assert "otlpuser" not in out
+
+
+class TestRedactUrlUserinfoFailsClosed:
+    """Anything before the last ``@`` that could be a credential is masked, parsed or not."""
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            # Scheme-less: urlsplit reads "user" as the scheme and the password as the path.
+            ("user:" + "pw-sentinel@proxy.example:3128", "***@proxy.example:3128"),
+            # A raw "#", "/" or "?" in the password moves the rest out of the netloc.
+            ("http://" + "user:pw#sentinel@proxy.example:3128", "http://***@proxy.example:3128"),
+            ("http://" + "user:pw/sentinel@proxy.example:3128", "http://***@proxy.example:3128"),
+            ("http://" + "user:pw?sentinel@proxy.example:3128", "http://***@proxy.example:3128"),
+            # A raw "@" in the password: everything up to the last "@" goes.
+            ("http://" + "user:pw@sentinel@proxy.example:3128", "http://***@proxy.example:3128"),
+            # Username-only userinfo is often a token.
+            ("https://" + "tokensentinel@collector.example", "https://***@collector.example"),
+        ],
+        ids=["scheme-less", "hash", "slash", "query", "at-sign", "username-only"],
+    )
+    def test_credentials_masked(self, value: str, expected: str) -> None:
+        """Malformed and well-formed credentialed values both lose the credential."""
+        assert redact_url_userinfo(value) == expected
+
+    @pytest.mark.parametrize(
+        "value",
+        ["http://proxy.example:3128", "alerts@example.com", "plain-text", ""],
+        ids=["url", "email", "text", "empty"],
+    )
+    def test_values_without_credentials_unchanged(self, value: str) -> None:
+        """A URL with no userinfo, or an address with no colon before the @, is kept."""
+        assert redact_url_userinfo(value) == value

@@ -168,3 +168,13 @@ class TestBuildEffectiveConfig:
         assert (
             build_effective_config(settings)["api"]["requests_proxy"] == "http://proxy.example:3128"
         )
+
+    def test_scheme_less_proxy_credentials_redacted(self) -> None:
+        """A proxy typed without a scheme still loses its credentials in the view."""
+        settings = _settings(
+            api=APISettings(requests_proxy="proxyuser:" + "proxypass@proxy.example:3128")
+        )
+        config = build_effective_config(settings)
+
+        assert "proxypass" not in repr(config)
+        assert config["api"]["requests_proxy"] == "***@proxy.example:3128"

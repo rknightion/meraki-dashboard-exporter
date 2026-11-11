@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import os
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
 
 import structlog
 
@@ -90,22 +89,27 @@ USERINFO_MASK = "***"
 
 
 def redact_url_userinfo(value: str) -> str:
-    """Replace the ``user:password`` part of a URL string with ``***``.
+    """Mask everything that could be a credential before the last ``@`` of a value.
 
     Shared by the startup log and the ``/config`` view, because URL settings are
-    plain strings that ``SecretStr`` masking never reaches. Scheme, host, port,
-    path and query are kept so the output still shows where the URL points. A
-    string that is not a URL with userinfo is returned as is; one that looks like
-    it carries userinfo but does not parse is masked whole.
+    plain strings that ``SecretStr`` masking never reaches. The rule works on the
+    raw text, not on a URL parse, so it fails closed for values a parser splits
+    elsewhere: a proxy typed without a scheme, or a password holding a raw ``#``,
+    ``/``, ``?`` or ``@``. When the value has a ``scheme://`` prefix, everything
+    between it and the last ``@`` becomes ``***``; without one, everything before
+    the last ``@`` does when it contains a ``:``. The scheme and whatever follows
+    the last ``@`` (host, port, path) are kept. A value with no ``@``, or an
+    address-shaped value with no ``:`` before its ``@``, is returned as is.
     """
-    try:
-        parts = urlsplit(value)
-    except ValueError:
-        return USERINFO_MASK if "@" in value else value
-    if not parts.scheme or "@" not in parts.netloc:
+    at = value.rfind("@")
+    if at == -1:
         return value
-    host = parts.netloc.rpartition("@")[2]
-    return urlunsplit(parts._replace(netloc=f"{USERINFO_MASK}@{host}"))
+    scheme_end = value.find("://")
+    if 0 <= scheme_end < at:
+        return f"{value[: scheme_end + 3]}{USERINFO_MASK}{value[at:]}"
+    if ":" in value[:at]:
+        return f"{USERINFO_MASK}{value[at:]}"
+    return value
 
 
 def redact_url_userinfo_tree(node: Any) -> Any:
