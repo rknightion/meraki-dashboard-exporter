@@ -8,7 +8,7 @@ from pydantic import SecretStr
 
 from meraki_dashboard_exporter.app import ExporterApp, ui_guard_decision
 from meraki_dashboard_exporter.core.config import Settings
-from meraki_dashboard_exporter.core.config_models import MerakiSettings, ServerSettings
+from meraki_dashboard_exporter.core.config_models import APISettings, MerakiSettings, ServerSettings
 
 RAW_KEY = "supersecret_api_key_at_least_30_characters_long"
 
@@ -230,6 +230,20 @@ class TestConfigEndpoint:
         assert RAW_KEY not in resp.text
         # Non-secret resolved config is present.
         assert data["meraki"]["org_id"] == "123456"
+
+    def test_config_redacts_proxy_credentials(self) -> None:
+        """A credentialed proxy URL shows its host but neither its username nor password."""
+        settings = _settings()
+        settings.api = APISettings(requests_proxy="http://" + "u:proxypass" + "@proxy.example:3128")
+        exporter = ExporterApp(settings)
+        client = TestClient(exporter.create_app(), raise_server_exceptions=True)
+
+        resp = client.get("/config")
+
+        assert resp.status_code == 200
+        assert "u:p" not in resp.text
+        assert "proxypass" not in resp.text
+        assert "proxy.example:3128" in resp.text
 
     def test_config_token_gated(self) -> None:
         """Config token gated."""
