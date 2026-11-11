@@ -5,6 +5,23 @@ description: Review Meraki Dashboard Exporter releases, including new collectors
 
 # Changelog
 
+## [2.3.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.3.0...v2.3.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* harden logging, webhook input, token checks and config views ([#1029](https://github.com/rknightion/meraki-dashboard-exporter/issues/1029)) ([0ea396c](https://github.com/rknightion/meraki-dashboard-exporter/commit/0ea396c9b9d82170173ba280c86868f489ac6766))
+* mask URL credentials by setting, and keep rejected values out of errors ([#1035](https://github.com/rknightion/meraki-dashboard-exporter/issues/1035)) ([5fdc843](https://github.com/rknightion/meraki-dashboard-exporter/commit/5fdc843d6d916717c6509ccc8745f959678ec45f))
+* MX empty-response gates, AIMD floor and inventory lock re-entry ([#955](https://github.com/rknightion/meraki-dashboard-exporter/issues/955)) ([c3c134f](https://github.com/rknightion/meraki-dashboard-exporter/commit/c3c134f70273ee7aefc00c3055728f1db0d77bd3))
+* read Meraki usage units as the dashboard does ([#1033](https://github.com/rknightion/meraki-dashboard-exporter/issues/1033)) ([7b3e218](https://github.com/rknightion/meraki-dashboard-exporter/commit/7b3e2182a1795198431501c5d079585d8c536e7c))
+* **renovate:** use managerFilePatterns for the justfile regex managers ([82dd722](https://github.com/rknightion/meraki-dashboard-exporter/commit/82dd7222e6733f9ab0115716b14038b5e309a863))
+
+
+### Documentation
+
+* replace real identifiers with placeholders ([#1028](https://github.com/rknightion/meraki-dashboard-exporter/issues/1028)) ([0700637](https://github.com/rknightion/meraki-dashboard-exporter/commit/07006374322839afc8d845182c78853ad13a931a))
+* state the Apache-2.0 licence in the README ([#1027](https://github.com/rknightion/meraki-dashboard-exporter/issues/1027)) ([0cd22d7](https://github.com/rknightion/meraki-dashboard-exporter/commit/0cd22d7fa8109ec26fc9e75a26ed9ec5672d509b))
+
 ## [2.3.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.2.3...v2.3.0) (2026-10-28)
 
 
