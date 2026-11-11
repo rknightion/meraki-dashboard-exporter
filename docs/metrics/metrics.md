@@ -255,7 +255,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_ms_port_status` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `port_id`, `link_speed`, `duplex` | Switch port status (1 = connected, 0 = disconnected) |  |
 | `meraki_ms_port_stp_state` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `port_id`, `state` | Switch port STP state (1 = currently active for this state) |  |
 | `meraki_ms_port_traffic_bytes_per_second` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `port_id`, `direction` | Switch port traffic rate in bytes per second (averaged over 1 hour) |  |
-| `meraki_ms_port_usage_bytes` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `port_id`, `direction` | Switch port data usage in bytes (decimal KB x1000) over the last 1 hour |  |
+| `meraki_ms_port_usage_bytes` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `port_id`, `direction` | Switch port data usage in bytes (Meraki KB x1024) over the last 1 hour |  |
 | `meraki_ms_port_warning_active` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `port_id`, `warning_type` | Active switch port warnings (1 = currently active for this warning_type) |  |
 | `meraki_ms_ports_active` | gauge | `org_id` | Number of active switch ports |  |
 | `meraki_ms_ports_by_link_speed` | gauge | `org_id`, `media`, `link_speed` | Number of active switch ports by link speed |  |

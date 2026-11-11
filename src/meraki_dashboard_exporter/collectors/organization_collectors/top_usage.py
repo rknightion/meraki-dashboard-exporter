@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 
 from ...core.api_facade import facade_for
+from ...core.constants.api_constants import MERAKI_MB_BYTES
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
@@ -29,10 +30,10 @@ logger = get_logger(__name__)
 # Bounded top-N requested from each leaderboard endpoint.
 _TOP_N = 10
 
-# The summary top endpoints report usage in megabytes (spec, and confirmed against
-# the dashboard on 2026-11-11, #995), the same unit collectors/devices/mr/wireless.py
-# reads from getOrganizationSummaryTopSsidsByUsage.
-_USAGE_MB_TO_BYTES = 1_000_000
+# The summary top endpoints report usage in Meraki megabytes (spec, and confirmed
+# against the dashboard on 2026-11-11, #995), the same unit
+# collectors/devices/mr/wireless.py reads from getOrganizationSummaryTopSsidsByUsage.
+_USAGE_MB_TO_BYTES = MERAKI_MB_BYTES
 
 
 class TopUsageCollector(BaseOrganizationCollector):

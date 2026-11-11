@@ -1368,18 +1368,18 @@ class TestMSCollector:
             "port_id": "1",
         }
 
-        # Usage bytes: sum of interval decimal KB * 1000 (D5: not KiB x1024).
+        # Usage bytes: sum of interval Meraki KB * 1024 (binary: 1 KB = 1024 bytes).
         assert (
             REGISTRY.get_sample_value("meraki_ms_port_usage_bytes", {**base, "direction": "total"})
-            == 300 * 1000
+            == 300 * 1024
         )
         assert (
             REGISTRY.get_sample_value("meraki_ms_port_usage_bytes", {**base, "direction": "tx"})
-            == 100 * 1000
+            == 100 * 1024
         )
         assert (
             REGISTRY.get_sample_value("meraki_ms_port_usage_bytes", {**base, "direction": "rx"})
-            == 200 * 1000
+            == 200 * 1024
         )
 
         # Traffic rate: averaged bandwidth kbps * 1000 / 8. up=(3+5)/2=4, down=(5+7)/2=6.

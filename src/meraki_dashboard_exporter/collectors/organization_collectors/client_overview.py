@@ -6,6 +6,7 @@ import time
 from typing import TYPE_CHECKING, Any, cast
 
 from ...core.api_facade import facade_for
+from ...core.constants.api_constants import MERAKI_MB_BYTES
 from ...core.error_handling import ErrorCategory, categorize_error, validate_response_format
 from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
@@ -121,9 +122,9 @@ class ClientOverviewCollector(BaseOrganizationCollector):
                 usage = client_overview.get("usage", {})
                 overall_usage = usage.get("overall", {})
 
-                total_bytes = overall_usage.get("total", 0) * 1_000_000
-                downstream_bytes = overall_usage.get("downstream", 0) * 1_000_000
-                upstream_bytes = overall_usage.get("upstream", 0) * 1_000_000
+                total_bytes = overall_usage.get("total", 0) * MERAKI_MB_BYTES
+                downstream_bytes = overall_usage.get("downstream", 0) * MERAKI_MB_BYTES
+                upstream_bytes = overall_usage.get("upstream", 0) * MERAKI_MB_BYTES
 
                 # Check if all values are zero (likely an API issue)
                 if (

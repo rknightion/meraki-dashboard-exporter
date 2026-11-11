@@ -11,6 +11,7 @@ from ..core.api_helpers import create_api_helper
 from ..core.async_utils import ManagedTaskGroup
 from ..core.collector import MetricCollector
 from ..core.constants import DeviceMetricName, NetworkMetricName, OrgMetricName
+from ..core.constants.api_constants import MERAKI_MB_BYTES
 from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.error_handling import (
     CollectorError,
@@ -1438,12 +1439,12 @@ class OrganizationCollector(MetricCollector):
             category = category_data.get("category", "Unknown")
             sanitized_category = self._sanitize_category_name(category)
 
-            # API values are in MB; convert to bytes (x1,000,000) so the gauges
+            # API values are in Meraki MB; convert to bytes (x MERAKI_MB_BYTES) so the gauges
             # (renamed meraki_org_application_usage_*_bytes, issue #531) carry
             # base-unit values.
-            total_mb = category_data.get("total", 0) * 1_000_000
-            downstream_mb = category_data.get("downstream", 0) * 1_000_000
-            upstream_mb = category_data.get("upstream", 0) * 1_000_000
+            total_mb = category_data.get("total", 0) * MERAKI_MB_BYTES
+            downstream_mb = category_data.get("downstream", 0) * MERAKI_MB_BYTES
+            upstream_mb = category_data.get("upstream", 0) * MERAKI_MB_BYTES
             percentage = category_data.get("percentage", 0)
 
             # Set metrics

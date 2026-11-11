@@ -101,7 +101,7 @@ meraki_ms_port_traffic_bytes_per_second gauge
   help: Switch port traffic rate in bytes per second (averaged over 1 hour)
   labels: device_type,direction,model,network_id,org_id,port_id,serial
 meraki_ms_port_usage_bytes gauge
-  help: Switch port data usage in bytes (decimal KB x1000) over the last 1 hour
+  help: Switch port data usage in bytes (Meraki KB x1024) over the last 1 hour
   labels: device_type,direction,model,network_id,org_id,port_id,serial
 meraki_ms_port_warning_active gauge
   help: Active switch port warnings (1 = currently active for this warning_type)

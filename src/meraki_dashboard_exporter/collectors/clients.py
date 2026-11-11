@@ -17,6 +17,7 @@ from ..core.api_models import NetworkClient
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
 from ..core.constants import ClientMetricName
+from ..core.constants.api_constants import MERAKI_KB_BYTES
 from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.error_handling import (
     ErrorCategory,
@@ -1205,25 +1206,25 @@ class ClientsCollector(MetricCollector):
                 recv_kb = client.usage.get("recv", 0)
                 total_kb = client.usage.get("total", 0)
 
-                # Set gauge values (API returns decimal KB; convert to bytes, ×1000)
+                # Set gauge values (API returns Meraki KB; convert to bytes, x1024)
                 self._set_metric(
                     self.client_usage_sent,
                     labels,
-                    float(sent_kb) * 1000,
+                    float(sent_kb) * MERAKI_KB_BYTES,
                     ClientMetricName.CLIENT_USAGE_SENT_BYTES.value,
                     ttl_seconds=ttl,
                 )
                 self._set_metric(
                     self.client_usage_recv,
                     labels,
-                    float(recv_kb) * 1000,
+                    float(recv_kb) * MERAKI_KB_BYTES,
                     ClientMetricName.CLIENT_USAGE_RECV_BYTES.value,
                     ttl_seconds=ttl,
                 )
                 self._set_metric(
                     self.client_usage_total,
                     labels,
-                    float(total_kb) * 1000,
+                    float(total_kb) * MERAKI_KB_BYTES,
                     ClientMetricName.CLIENT_USAGE_TOTAL_BYTES.value,
                     ttl_seconds=ttl,
                 )
@@ -1467,25 +1468,25 @@ class ClientsCollector(MetricCollector):
                             type=sanitized_app,
                         )
 
-                        # Set metrics (API returns decimal KB; convert to bytes, ×1000)
+                        # Set metrics (API returns Meraki KB; convert to bytes, x1024)
                         self._set_metric(
                             self.client_app_usage_sent,
                             labels,
-                            float(sent_kb) * 1000,
+                            float(sent_kb) * MERAKI_KB_BYTES,
                             ClientMetricName.CLIENT_APPLICATION_USAGE_SENT_BYTES.value,
                             ttl_seconds=ttl,
                         )
                         self._set_metric(
                             self.client_app_usage_recv,
                             labels,
-                            float(received_kb) * 1000,
+                            float(received_kb) * MERAKI_KB_BYTES,
                             ClientMetricName.CLIENT_APPLICATION_USAGE_RECV_BYTES.value,
                             ttl_seconds=ttl,
                         )
                         self._set_metric(
                             self.client_app_usage_total,
                             labels,
-                            float(total_kb) * 1000,
+                            float(total_kb) * MERAKI_KB_BYTES,
                             ClientMetricName.CLIENT_APPLICATION_USAGE_TOTAL_BYTES.value,
                             ttl_seconds=ttl,
                         )

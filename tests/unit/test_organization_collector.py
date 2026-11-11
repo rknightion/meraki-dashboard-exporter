@@ -368,14 +368,14 @@ class TestOrganizationCollector(BaseCollectorTest):
         # Verify application usage metrics for "Other" category
         metrics.assert_gauge_value(
             OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_BYTES,
-            579131547202.1103,
+            579131.5472021103 * 1_048_576,
             org_id="111",
             category="other",
         )
 
         metrics.assert_gauge_value(
             OrgMetricName.ORG_APPLICATION_USAGE_DOWNSTREAM_BYTES,
-            364303215503.6926,
+            364303.2155036926 * 1_048_576,
             org_id="111",
             category="other",
         )
@@ -390,7 +390,7 @@ class TestOrganizationCollector(BaseCollectorTest):
         # Verify VoIP & video conferencing category (tests sanitization)
         metrics.assert_gauge_value(
             OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_BYTES,
-            2367426.872253418,
+            2.367426872253418 * 1_048_576,
             org_id="111",
             category="voip_and_video_conferencing",
         )
@@ -398,7 +398,7 @@ class TestOrganizationCollector(BaseCollectorTest):
         # Verify upstream metric
         metrics.assert_gauge_value(
             OrgMetricName.ORG_APPLICATION_USAGE_UPSTREAM_BYTES,
-            500000.0,
+            0.5 * 1_048_576,
             org_id="111",
             category="voip_and_video_conferencing",
         )
@@ -406,7 +406,7 @@ class TestOrganizationCollector(BaseCollectorTest):
         # Verify Software & anti-virus updates (tests sanitization)
         metrics.assert_gauge_value(
             OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_BYTES,
-            33518364.906311035,
+            33.518364906311035 * 1_048_576,
             org_id="111",
             category="software_and_anti_virus_updates",
         )
@@ -477,7 +477,7 @@ class TestOrganizationCollector(BaseCollectorTest):
             metrics.assert_metric_not_set(metric_name, org_id=org_id, category="stale")
         metrics.assert_gauge_value(
             OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_BYTES,
-            20_000_000,
+            20 * 1_048_576,
             org_id=org_id,
             category="retained",
         )
