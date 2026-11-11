@@ -15,6 +15,7 @@ from prometheus_client import Counter
 
 from ..core.api_facade import MerakiApiFacade
 from ..core.async_utils import shutdown_executor
+from ..core.config_logger import redact_url_setting
 from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
@@ -213,7 +214,7 @@ class AsyncMerakiClient:
                 if self._api is None:
                     logger.debug(
                         "Creating new Meraki Dashboard API client",
-                        base_url=self.settings.meraki.api_base_url,
+                        base_url=redact_url_setting(self.settings.meraki.api_base_url),
                         timeout=self.settings.api.timeout,
                         max_retries=self.settings.api.max_retries,
                     )

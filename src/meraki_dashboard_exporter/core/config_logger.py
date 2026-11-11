@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Any
 
 import structlog
@@ -87,39 +88,71 @@ _SENSITIVE_KEY_SUBSTRINGS: frozenset[str] = frozenset({
 
 USERINFO_MASK = "***"
 
+# RFC 3986 scheme: a letter, then letters, digits, "+", "-" or ".".
+_SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*")
+# A scheme, then an authority up to its last "@" (greedy, never past a delimiter).
+_AUTHORITY_USERINFO = re.compile(r"(?<![A-Za-z0-9+.-])([A-Za-z][A-Za-z0-9+.-]*://)[^/?#\s\"']*@")
 
-def redact_url_userinfo(value: str) -> str:
-    """Mask everything that could be a credential before the last ``@`` of a value.
 
-    Shared by the startup log and the ``/config`` view, because URL settings are
-    plain strings that ``SecretStr`` masking never reaches. The rule works on the
-    raw text, not on a URL parse, so it fails closed for values a parser splits
-    elsewhere: a proxy typed without a scheme, or a password holding a raw ``#``,
-    ``/``, ``?`` or ``@``. When the value has a ``scheme://`` prefix, everything
-    between it and the last ``@`` becomes ``***``; without one, everything before
-    the last ``@`` does when it contains a ``:``. The scheme and whatever follows
-    the last ``@`` (host, port, path) are kept. A value with no ``@``, or an
-    address-shaped value with no ``:`` before its ``@``, is returned as is.
+def redact_url_setting(value: str) -> str:
+    """Mask everything that could be a credential in a value known to be a URL setting.
+
+    URL settings are plain strings that ``SecretStr`` masking never reaches. The
+    rule works on the raw text, not on a URL parse, so it fails closed for values a
+    parser splits elsewhere: a proxy typed without a scheme, a username-only token,
+    or a password holding a raw ``#``, ``/``, ``?``, ``@`` or ``://``. Everything
+    before the last ``@`` becomes ``***``, keeping a leading ``scheme://`` when the
+    value starts with one. Whatever follows the last ``@`` (host, port, path) is
+    kept, and a value with no ``@`` is returned as is.
     """
     at = value.rfind("@")
     if at == -1:
         return value
     scheme_end = value.find("://")
-    if 0 <= scheme_end < at:
+    if 0 <= scheme_end < at and _SCHEME.fullmatch(value[:scheme_end]):
         return f"{value[: scheme_end + 3]}{USERINFO_MASK}{value[at:]}"
-    if ":" in value[:at]:
-        return f"{USERINFO_MASK}{value[at:]}"
-    return value
+    return f"{USERINFO_MASK}{value[at:]}"
 
 
-def redact_url_userinfo_tree(node: Any) -> Any:
-    """Apply :func:`redact_url_userinfo` to every string in a dumped config tree."""
+def redact_url_userinfo(value: str) -> str:
+    """Mask URL-authority userinfo anywhere inside a string that is not a URL setting.
+
+    Every ``scheme://userinfo@host`` in the value loses its userinfo, where the
+    ``@`` comes before the first ``/``, ``?``, ``#``, quote or whitespace after the
+    scheme; this also covers a URL embedded in a longer value such as JSON.
+    Anything else, such as a filter name holding ``@`` or a URL with ``@`` only in
+    its path or query, is returned as is.
+    """
+    return _AUTHORITY_USERINFO.sub(rf"\1{USERINFO_MASK}@", value)
+
+
+#: Dotted settings paths whose values are URLs. Their values go through
+#: :func:`redact_url_setting`; every other string goes through
+#: :func:`redact_url_userinfo`.
+URL_SETTING_PATHS: tuple[str, ...] = (
+    "api.requests_proxy",
+    "meraki.api_base_url",
+    "otel.endpoint",
+    "otel.logs.endpoint",
+    "otel.metrics.endpoint",
+)
+
+_URL_ENV_KEY_SUFFIXES: tuple[str, ...] = ("_url", "_endpoint", "endpoint", "_proxy")
+
+
+def redact_url_userinfo_tree(node: Any, path: str = "") -> Any:
+    """Mask URL credentials in a dumped config tree, by each value's settings path."""
     if isinstance(node, str):
+        if path in URL_SETTING_PATHS:
+            return redact_url_setting(node)
         return redact_url_userinfo(node)
     if isinstance(node, dict):
-        return {key: redact_url_userinfo_tree(item) for key, item in node.items()}
+        return {
+            key: redact_url_userinfo_tree(item, f"{path}.{key}" if path else str(key))
+            for key, item in node.items()
+        }
     if isinstance(node, list):
-        return [redact_url_userinfo_tree(item) for item in node]
+        return [redact_url_userinfo_tree(item, path) for item in node]
     return node
 
 
@@ -162,9 +195,12 @@ def mask_sensitive_value(key: str, value: Any) -> Any:
     if any(token in field for token in _SENSITIVE_KEY_SUBSTRINGS):
         return REDACTED
 
+    # URL settings are shown with any credential masked (#1030).
+    if field.endswith(_URL_ENV_KEY_SUFFIXES) and isinstance(value, str):
+        return redact_url_setting(value)
+
     # Redact-by-default: only surface values whose key is explicitly known-safe.
     if any(token in field for token in _SAFE_KEY_SUBSTRINGS):
-        # Safe keys include "endpoint" and "url", whose values can embed credentials.
         return redact_url_userinfo(value) if isinstance(value, str) else value
 
     return REDACTED
@@ -245,7 +281,7 @@ def log_startup_summary(
     log_method("-" * 80)
     log_method("Configuration Summary:")
 
-    log_method("  API Base URL", value=redact_url_userinfo(settings.meraki.api_base_url))
+    log_method("  API Base URL", value=redact_url_setting(settings.meraki.api_base_url))
     log_method("  API Timeout", value=f"{settings.api.timeout}s")
     log_method("  API Max Retries", value=settings.api.max_retries)
     log_method("  API Concurrency Limit", value=settings.api.concurrency_limit)
@@ -294,7 +330,7 @@ def log_startup_summary(
     if settings.otel.enabled:
         log_method("  OpenTelemetry", status="ENABLED")
         endpoint = settings.otel.endpoint
-        log_method("  OTEL Endpoint", value=redact_url_userinfo(endpoint) if endpoint else endpoint)
+        log_method("  OTEL Endpoint", value=redact_url_setting(endpoint) if endpoint else endpoint)
         log_method("  OTEL Service Name", value=settings.otel.service_name)
         log_method("  OTEL Tracing", value="enabled")
     else:

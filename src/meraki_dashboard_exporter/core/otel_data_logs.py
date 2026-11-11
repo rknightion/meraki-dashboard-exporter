@@ -40,6 +40,7 @@ from opentelemetry.sdk._logs.export import (  # noqa: PLC2701
 from prometheus_client import CollectorRegistry, Counter
 from prometheus_client.core import REGISTRY
 
+from .config_logger import redact_url_setting
 from .constants.metrics_constants import CollectorMetricName
 from .logging import get_logger
 from .metrics import LabelName
@@ -252,7 +253,11 @@ class DataLogEmitter:
             self._logger = provider.get_logger("meraki_dashboard_exporter.data_logs")
             logger.info(
                 "OTel data-log emitter initialized",
-                endpoint=self.settings.otel.logs_endpoint,
+                endpoint=(
+                    redact_url_setting(self.settings.otel.logs_endpoint)
+                    if self.settings.otel.logs_endpoint
+                    else None
+                ),
                 include_identifiers=self._include_identifiers,
                 events=(
                     sorted(self._events_allowlist) if self._events_allowlist is not None else "all"

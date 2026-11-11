@@ -14,6 +14,7 @@ from meraki_dashboard_exporter.core.config_logger import (
     get_env_vars,
     log_startup_summary,
     mask_sensitive_value,
+    redact_url_setting,
     redact_url_userinfo,
 )
 from meraki_dashboard_exporter.core.config_models import MerakiSettings
@@ -317,8 +318,8 @@ class TestUrlUserinfoInStartupLog:
         assert "otlpuser" not in out
 
 
-class TestRedactUrlUserinfoFailsClosed:
-    """Anything before the last ``@`` that could be a credential is masked, parsed or not."""
+class TestRedactUrlSettingFailsClosed:
+    """For a URL setting, anything before the last ``@`` that could be a credential is masked."""
 
     @pytest.mark.parametrize(
         ("value", "expected"),
@@ -331,20 +332,100 @@ class TestRedactUrlUserinfoFailsClosed:
             ("http://" + "user:pw?sentinel@proxy.example:3128", "http://***@proxy.example:3128"),
             # A raw "@" in the password: everything up to the last "@" goes.
             ("http://" + "user:pw@sentinel@proxy.example:3128", "http://***@proxy.example:3128"),
-            # Username-only userinfo is often a token.
+            # Username-only userinfo is often a token, with or without a scheme (#1030).
             ("https://" + "tokensentinel@collector.example", "https://***@collector.example"),
+            ("tokensentinel" + "@proxy.example:3128", "***@proxy.example:3128"),
+            # "://" inside a scheme-less password.
+            ("user:pw://" + "sentinel@proxy.example:3128", "***@proxy.example:3128"),
         ],
-        ids=["scheme-less", "hash", "slash", "query", "at-sign", "username-only"],
+        ids=[
+            "scheme-less",
+            "hash",
+            "slash",
+            "query",
+            "at-sign",
+            "username-only",
+            "scheme-less-username-only",
+            "scheme-in-password",
+        ],
     )
     def test_credentials_masked(self, value: str, expected: str) -> None:
         """Malformed and well-formed credentialed values both lose the credential."""
+        assert redact_url_setting(value) == expected
+        assert "sentinel" not in redact_url_setting(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        ["http://proxy.example:3128", "plain-text", ""],
+        ids=["url", "text", "empty"],
+    )
+    def test_values_without_at_sign_unchanged(self, value: str) -> None:
+        """A URL setting with no ``@`` is shown as configured."""
+        assert redact_url_setting(value) == value
+
+
+class TestRedactUrlUserinfoOnlyMasksAuthority:
+    """For any other string, only a userinfo inside a URL authority is masked (#1030)."""
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            (
+                "https://" + "user:pw-sentinel@collector.example/v1",
+                "https://***@collector.example/v1",
+            ),
+            ("http://" + "tokensentinel@proxy.example:3128", "http://***@proxy.example:3128"),
+            (
+                "socks5h://" + "user:pw-sentinel@proxy.example:1080",
+                "socks5h://***@proxy.example:1080",
+            ),
+            ("git+ssh://" + "user:pw-sentinel@host.example/r", "git+ssh://***@host.example/r"),
+            (
+                "see http://" + "user:pw-sentinel@a.example and https://b.example/x@y",
+                "see http://***@a.example and https://b.example/x@y",
+            ),
+        ],
+        ids=["user-password", "username-only", "digit-scheme", "plus-scheme", "embedded"],
+    )
+    def test_authority_userinfo_masked(self, value: str, expected: str) -> None:
+        """A credential in the URL authority is masked."""
         assert redact_url_userinfo(value) == expected
 
     @pytest.mark.parametrize(
         "value",
-        ["http://proxy.example:3128", "alerts@example.com", "plain-text", ""],
-        ids=["url", "email", "text", "empty"],
+        [
+            "Site: HQ@Lon",
+            "https://host.example/p?email=a@b.example",
+            "https://host.example/a@b",
+            "alerts@example.com",
+            "http://proxy.example:3128",
+            "plain-text",
+            "",
+        ],
+        ids=["filter-name", "at-in-query", "at-in-path", "email", "url", "text", "empty"],
     )
-    def test_values_without_credentials_unchanged(self, value: str) -> None:
-        """A URL with no userinfo, or an address with no colon before the @, is kept."""
+    def test_non_credentials_unchanged(self, value: str) -> None:
+        """A value with no authority userinfo is shown as configured."""
         assert redact_url_userinfo(value) == value
+
+
+class TestEnvDumpUrlSettings:
+    """The startup environment dump masks URL settings by key (#1030)."""
+
+    def test_username_only_proxy_masked_to_last_at(self) -> None:
+        """A username-only proxy credential is masked up to its last ``@``."""
+        masked = mask_sensitive_value(
+            "MERAKI_EXPORTER_API__REQUESTS_PROXY", "tokensentinel" + "@proxy.example:3128"
+        )
+        assert masked == "***@proxy.example:3128"
+
+    def test_url_inside_safe_key_value_masked(self) -> None:
+        """A URL credential embedded in a safe key's value (for example JSON) is masked."""
+        value = '{"a": "http://' + 'user:pw-sentinel@h.example"}'
+        masked = mask_sensitive_value("MERAKI_EXPORTER_OTEL__RESOURCE_ATTRIBUTES", value)
+        assert masked == '{"a": "http://***@h.example"}'
+
+    def test_non_url_safe_key_keeps_colon_at_value(self) -> None:
+        """A safe, non-URL key whose value has ``:`` before ``@`` is not masked."""
+        value = "Site: HQ@Lon"
+        assert mask_sensitive_value("MERAKI_EXPORTER_NETWORK_FILTER__INCLUDE_NAMES", value) == value

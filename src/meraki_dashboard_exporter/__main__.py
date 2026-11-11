@@ -8,6 +8,7 @@ import uvicorn
 from pydantic import ValidationError
 
 from .core.config import Settings
+from .core.config_logger import redact_url_setting
 from .core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -27,7 +28,7 @@ def _print_redacted_summary(settings: Settings) -> None:
     """
     org_filter = settings.meraki.org_id or "None (all organizations)"
     lines = [
-        f"  API Base URL:       {settings.meraki.api_base_url}",
+        f"  API Base URL:       {redact_url_setting(settings.meraki.api_base_url)}",
         "  API Key:            ***REDACTED***",
         f"  Organization:       {org_filter}",
         f"  Server:             {settings.server.host}:{settings.server.port}",

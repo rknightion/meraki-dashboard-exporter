@@ -30,6 +30,7 @@ from opentelemetry.sdk.trace.sampling import (
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 from ..__version__ import get_version
+from .config_logger import redact_url_setting
 from .logging import get_logger
 
 if TYPE_CHECKING:
@@ -223,7 +224,7 @@ class TracingConfig:
             self._initialized = True
             logger.info(
                 "OpenTelemetry tracing initialized",
-                endpoint=self.settings.otel.endpoint,
+                endpoint=redact_url_setting(self.settings.otel.endpoint or ""),
                 service_name=self.settings.otel.service_name,
                 sampling_rate=self._get_sampling_rate(),
             )
