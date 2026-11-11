@@ -125,7 +125,8 @@ as other client data.
 
 INFO, WARNING, and ERROR events deliberately contain counts, stable operation names, and safe error
 types only; they do not include client IP addresses, IDs, MAC addresses, hostnames, or descriptions.
-DEBUG is the intentional diagnostic surface and must receive the same access controls as client data.
+A logged exception carries its structured traceback (file, line and function per frame) but never
+the frames' local variables, at any log level. DEBUG is the intentional diagnostic surface and must receive the same access controls as client data.
 The DNS resolver can record queried, cached, expired, old, and new **client IP addresses**; resolved
 **hostnames**; and a **client ID** when an IP change invalidates a cached entry. The client collector
 can record a **client ID**, **MAC address**, **description**, **hostname**, and **SSID** when it emits
