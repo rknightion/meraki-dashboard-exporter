@@ -70,6 +70,10 @@ nginx/Traefik/Ingress examples are in
 [docs/deployment-operations.md](../../docs/deployment-operations.md). Do **not** expose `/metrics`
 publicly via ingress — scrape it in-cluster.
 
+The default `ingress.hosts` rule routes only `/api/webhooks/meraki`. Keep that path when you set your
+own host: Helm replaces the whole `hosts` list, and a path of `/` publishes the unauthenticated web
+UI, `/status`, `/config`, `/clients` and `/metrics` on the Ingress host.
+
 ### NetworkPolicy
 
 `networkPolicy.enabled: true` renders a policy that (requires a NetworkPolicy-enforcing CNI):
