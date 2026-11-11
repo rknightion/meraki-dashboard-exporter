@@ -28,7 +28,7 @@ class OrgMetricName(StrEnum):
     ORG_LICENSES = "meraki_org_licenses"
     ORG_LICENSES_EXPIRING = "meraki_org_licenses_expiring"
 
-    # Client and usage metrics (usage values emitted in bytes, Meraki KB x1024)
+    # Client and usage metrics (usage values emitted in bytes, Meraki MB x1024**2)
     ORG_CLIENTS_COUNT = "meraki_org_clients_count"
     ORG_USAGE_TOTAL_BYTES = "meraki_org_usage_total_bytes"
     ORG_USAGE_DOWNSTREAM_BYTES = "meraki_org_usage_downstream_bytes"

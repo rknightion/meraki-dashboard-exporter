@@ -537,11 +537,16 @@ class TestMSCollector:
             "Q123-456-789", timespan=3600
         )
 
-        # In a real test with actual metrics registry, you would verify:
-        # - Port status metric has speed and duplex labels
-        # - Usage bytes metric is set with correct values
-        # - Client count metric is set correctly
-        # - All metrics have network_id and network_name labels
+        # Usage bytes on the per-device usageInKb path: Meraki KB * 1024 (#1032),
+        # the same factor as the org-wide usage history path.
+        usage = {
+            s.labels["direction"]: s.value
+            for metric in REGISTRY.collect()
+            if metric.name == "meraki_ms_port_usage_bytes"
+            for s in metric.samples
+            if s.labels.get("serial") == "Q123-456-789" and s.labels.get("port_id") == "1"
+        }
+        assert usage == {"rx": 1000000 * 1024, "tx": 500000 * 1024, "total": 1500000 * 1024}
 
     async def test_packet_statistics_collection(
         self,
@@ -2274,7 +2279,13 @@ class TestMSCollector:
     ) -> None:
         """Driving the fallback directly must reach the API and emit."""
         mock_api.switch.getDeviceSwitchPortsStatuses = MagicMock(
-            return_value=[{"portId": "1", "trafficInKbps": {"recv": 8.0, "sent": 16.0}}]
+            return_value=[
+                {
+                    "portId": "1",
+                    "trafficInKbps": {"recv": 8.0, "sent": 16.0},
+                    "usageInKb": {"recv": 2, "sent": 1, "total": 3},
+                }
+            ]
         )
         device = {
             "serial": "Q2XX-0001",
@@ -2303,3 +2314,19 @@ class TestMSCollector:
             )
             is not None
         )
+        # Usage bytes on this fallback: Meraki KB * 1024 (#1032).
+        labels = {
+            "org_id": "org1",
+            "network_id": "net1",
+            "serial": "Q2XX-0001",
+            "model": "MS250-48",
+            "device_type": "MS",
+            "port_id": "1",
+        }
+        for direction, expected in (("rx", 2 * 1024), ("tx", 1 * 1024), ("total", 3 * 1024)):
+            assert (
+                REGISTRY.get_sample_value(
+                    "meraki_ms_port_usage_bytes", {**labels, "direction": direction}
+                )
+                == expected
+            )
