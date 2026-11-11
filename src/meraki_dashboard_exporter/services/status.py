@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 from prometheus_client import REGISTRY
 from prometheus_client.registry import CollectorRegistry
 
+from ..core.config_logger import redact_url_userinfo_tree
 from ..core.constants.metrics_constants import NetworkMetricName
 from ..core.org_health import OrgHealth
 
@@ -271,13 +272,17 @@ def build_webhook_status(
 def build_effective_config(settings: Settings) -> dict[str, Any]:
     """Build a redacted, JSON-safe view of the effective configuration (#312).
 
-    Redaction relies on Pydantic's ``SecretStr`` masking: ``model_dump(mode="json")``
+    Two redactions apply. Pydantic's ``SecretStr`` masking: ``model_dump(mode="json")``
     renders every secret field (``meraki.api_key``, ``webhooks.shared_secret``,
-    ``server.api_token``) as ``"**********"`` rather than its value, so this is
-    the single canonical redaction path (aligns with SEC-07 / #564). Never build
-    this dict from raw attribute access, which would bypass that masking.
+    ``server.api_token``) as ``"**********"`` rather than its value (aligns with
+    SEC-07 / #564). Then credentials embedded in any URL string, such as a proxy
+    given as ``http://<user>:<password>@<host>:<port>``, are replaced with ``***``,
+    because plain ``str`` fields such as ``api.requests_proxy`` get no ``SecretStr``
+    masking. Never build this dict from raw attribute access, which would bypass
+    both.
     """
-    return settings.model_dump(mode="json")
+    redacted: dict[str, Any] = redact_url_userinfo_tree(settings.model_dump(mode="json"))
+    return redacted
 
 
 @dataclass

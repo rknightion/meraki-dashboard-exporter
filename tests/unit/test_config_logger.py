@@ -14,6 +14,7 @@ from meraki_dashboard_exporter.core.config_logger import (
     get_env_vars,
     log_startup_summary,
     mask_sensitive_value,
+    redact_url_userinfo,
 )
 from meraki_dashboard_exporter.core.config_models import MerakiSettings
 
@@ -273,3 +274,77 @@ class TestLogStartupSummary:
         collectors = self._enabled_collectors(test_settings)
 
         assert "networkhealth" not in collectors
+
+
+class TestUrlUserinfoInStartupLog:
+    """Credentials embedded in a URL setting never reach the startup log."""
+
+    _PASSWORD = "otlp-pass-sentinel"  # pragma: allowlist secret
+
+    def _url(self, host: str) -> str:
+        # Built from parts so the privacy sweep does not read the test URL as a credential.
+        return "https://" + "otlpuser:" + self._PASSWORD + "@" + host
+
+    def test_mask_keeps_safe_url_but_redacts_userinfo(self) -> None:
+        """A known-safe URL key keeps scheme, host and port and loses the userinfo."""
+        masked = mask_sensitive_value(
+            "MERAKI_EXPORTER_OTEL__ENDPOINT", self._url("otlp.example:4317")
+        )
+        assert masked == "https://***@otlp.example:4317"
+
+    def test_startup_summary_omits_otlp_endpoint_password(
+        self,
+        test_settings: Settings,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Neither the env dump nor the configuration summary prints endpoint credentials."""
+        for key in (
+            "MERAKI_EXPORTER_OTEL__ENDPOINT",
+            "MERAKI_EXPORTER_OTEL__LOGS__ENDPOINT",
+            "MERAKI_EXPORTER_OTEL__METRICS__ENDPOINT",
+        ):
+            monkeypatch.setenv(key, self._url("otlp.example:4317"))
+        test_settings.otel.enabled = True
+        test_settings.otel.endpoint = self._url("otlp.example:4317")
+
+        log_startup_summary(test_settings)
+
+        out = capsys.readouterr().out
+        assert "MERAKI_EXPORTER_OTEL__LOGS__ENDPOINT" in out
+        assert "otlp.example:4317" in out
+        assert self._PASSWORD not in out
+        assert "otlpuser" not in out
+
+
+class TestRedactUrlUserinfoFailsClosed:
+    """Anything before the last ``@`` that could be a credential is masked, parsed or not."""
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            # Scheme-less: urlsplit reads "user" as the scheme and the password as the path.
+            ("user:" + "pw-sentinel@proxy.example:3128", "***@proxy.example:3128"),
+            # A raw "#", "/" or "?" in the password moves the rest out of the netloc.
+            ("http://" + "user:pw#sentinel@proxy.example:3128", "http://***@proxy.example:3128"),
+            ("http://" + "user:pw/sentinel@proxy.example:3128", "http://***@proxy.example:3128"),
+            ("http://" + "user:pw?sentinel@proxy.example:3128", "http://***@proxy.example:3128"),
+            # A raw "@" in the password: everything up to the last "@" goes.
+            ("http://" + "user:pw@sentinel@proxy.example:3128", "http://***@proxy.example:3128"),
+            # Username-only userinfo is often a token.
+            ("https://" + "tokensentinel@collector.example", "https://***@collector.example"),
+        ],
+        ids=["scheme-less", "hash", "slash", "query", "at-sign", "username-only"],
+    )
+    def test_credentials_masked(self, value: str, expected: str) -> None:
+        """Malformed and well-formed credentialed values both lose the credential."""
+        assert redact_url_userinfo(value) == expected
+
+    @pytest.mark.parametrize(
+        "value",
+        ["http://proxy.example:3128", "alerts@example.com", "plain-text", ""],
+        ids=["url", "email", "text", "empty"],
+    )
+    def test_values_without_credentials_unchanged(self, value: str) -> None:
+        """A URL with no userinfo, or an address with no colon before the @, is kept."""
+        assert redact_url_userinfo(value) == value

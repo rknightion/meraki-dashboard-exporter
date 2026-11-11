@@ -40,6 +40,18 @@ image tag.
     Release images and charts are signed. See [Security](security.md) for how to verify
     signatures before deploying.
 
+## Changes after 2.3.0
+
+### Helm chart Ingress routes only the webhook receiver
+
+The chart's default `ingress.hosts` rule now routes `/api/webhooks/meraki` (`Prefix`) instead of
+`/`. Enabling the Ingress for webhook delivery no longer publishes the unauthenticated web UI,
+`/status`, `/config`, `/clients` or `/metrics` on the Ingress host. A values file that sets its own
+`ingress.hosts` list is unaffected, because Helm replaces the list whole. If you relied on the old
+default to reach other pages through the Ingress, list those paths explicitly. `server.api_token`
+gates `/status`, `/config`, `/clients` and the cardinality pages, but `/` and `/metrics` stay open
+(see [Security](security.md#endpoint-exposure-threat-model)).
+
 ## Changes at 1.1
 
 ### Configuration compatibility changes

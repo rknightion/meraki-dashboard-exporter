@@ -519,6 +519,92 @@ class TestWebhookHandlerSecurity:
         assert secret not in logged, "sharedSecret value leaked into logs on validation failure"
 
 
+class TestWebhookHandlerMalformedInput:
+    """A body or secret of the wrong JSON type is a rejection, never a processing failure."""
+
+    @pytest.mark.parametrize("body", [[], "x", 5, None], ids=["array", "string", "number", "null"])
+    def test_non_object_body_is_a_validation_rejection(
+        self, webhook_handler: WebhookHandler, monkeypatch: pytest.MonkeyPatch, body: object
+    ) -> None:
+        """A JSON body that is not an object is rejected as invalid input (HTTP 400)."""
+        fake_logger = MagicMock()
+        monkeypatch.setattr(webhook_handler_module, "logger", fake_logger)
+
+        result = webhook_handler.process_webhook(body)
+
+        assert result.outcome is WebhookOutcome.REJECTED
+        assert result.failure_reason is WebhookFailureReason.VALIDATION
+        assert webhook_handler.get_status()["validation_failures"] == 1
+        fake_logger.exception.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "secret", [5, ["a"], {"a": "b"}, True], ids=["number", "array", "object", "bool"]
+    )
+    def test_non_string_secret_is_an_authentication_rejection(
+        self, webhook_handler: WebhookHandler, monkeypatch: pytest.MonkeyPatch, secret: object
+    ) -> None:
+        """A sharedSecret that is not a string is treated exactly like a wrong secret."""
+        fake_logger = MagicMock()
+        monkeypatch.setattr(webhook_handler_module, "logger", fake_logger)
+
+        result = webhook_handler.process_webhook({"sharedSecret": secret})
+
+        assert result.outcome is WebhookOutcome.REJECTED
+        assert result.failure_reason is WebhookFailureReason.AUTHENTICATION
+        assert webhook_handler.get_status()["validation_failures"] == 1
+        fake_logger.exception.assert_not_called()
+
+    def test_validate_secret_rejects_non_string(self, webhook_handler: WebhookHandler) -> None:
+        """validate_secret answers False for a non-string value instead of raising."""
+        assert webhook_handler.validate_secret(5) is False
+        assert webhook_handler.validate_secret(["test_secret_123"]) is False
+
+    def test_unencodable_secret_is_an_authentication_rejection(
+        self, webhook_handler: WebhookHandler, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A secret holding a lone surrogate (valid JSON escape) is a wrong secret, not a crash."""
+        fake_logger = MagicMock()
+        monkeypatch.setattr(webhook_handler_module, "logger", fake_logger)
+
+        result = webhook_handler.process_webhook({"sharedSecret": "\ud800"})
+
+        assert result.outcome is WebhookOutcome.REJECTED
+        assert result.failure_reason is WebhookFailureReason.AUTHENTICATION
+        assert webhook_handler.get_status()["validation_failures"] == 1
+        fake_logger.exception.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "configured",
+        ["test_secret_\udcff", "test_secret_\ud800"],
+        ids=["undecodable-env-byte", "lone-surrogate"],
+    )
+    @pytest.mark.parametrize(
+        "provided", ["test_secret_", "test_secret_\udcff", "test_secret_\ud800", "\u00ff"]
+    )
+    def test_configured_secret_with_surrogates_never_raises(
+        self,
+        settings_with_secret: Settings,
+        monkeypatch: pytest.MonkeyPatch,
+        configured: str,
+        provided: str,
+    ) -> None:
+        """A configured secret holding surrogates rejects every delivery without a crash.
+
+        Undecodable bytes in an environment variable reach the process as surrogates.
+        No JSON string encodes to those bytes, so nothing can match: fail closed with 401.
+        """
+        fake_logger = MagicMock()
+        monkeypatch.setattr(webhook_handler_module, "logger", fake_logger)
+        settings_with_secret.webhooks.shared_secret = SecretStr(configured)
+        handler = WebhookHandler(settings_with_secret)
+
+        result = handler.process_webhook({"sharedSecret": provided})
+
+        assert result.outcome is WebhookOutcome.REJECTED
+        assert result.failure_reason is WebhookFailureReason.AUTHENTICATION
+        fake_logger.exception.assert_not_called()
+
+
 class _StubApplier:
     """Records apply_webhook_device_state calls; returns a fixed verdict (#614)."""
 

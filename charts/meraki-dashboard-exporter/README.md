@@ -17,6 +17,13 @@ filesystem, all Linux capabilities dropped, and the ServiceAccount token unmount
 
 See [`values.yaml`](values.yaml) for the fully-commented, authoritative list of settings.
 
+Everything under `config:` is rendered into a ConfigMap in plaintext. A setting that carries a
+credential belongs in a Secret, injected through `extraEnv` with `valueFrom.secretKeyRef`. That
+includes `MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET`, `MERAKI_EXPORTER_SERVER__API_TOKEN` and an
+authenticating proxy: set `MERAKI_EXPORTER_API__REQUESTS_PROXY`
+(`http://<user>:<password>@<proxy>:<port>`) from a Secret this way, not through
+`config.apiRequestsProxy`.
+
 ## Singleton / replicas
 
 The exporter is a **single-writer singleton — it has no leader election.** Every running pod
@@ -62,6 +69,10 @@ receiver URL configured in the Meraki Dashboard must be `https://…/api/webhook
 nginx/Traefik/Ingress examples are in
 [docs/deployment-operations.md](../../docs/deployment-operations.md). Do **not** expose `/metrics`
 publicly via ingress — scrape it in-cluster.
+
+The default `ingress.hosts` rule routes only `/api/webhooks/meraki`. Keep that path when you set your
+own host: Helm replaces the whole `hosts` list, and a path of `/` publishes the unauthenticated web
+UI, `/status`, `/config`, `/clients` and `/metrics` on the Ingress host.
 
 ### NetworkPolicy
 

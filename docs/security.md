@@ -142,6 +142,15 @@ API keys are loaded as Pydantic `SecretStr` values and are not logged or
 serialised in the `/status`, `/metrics`, or web UI surfaces. Treat the
 container environment that holds `MERAKI_EXPORTER_MERAKI__API_KEY` as sensitive.
 
+### Proxy credentials
+
+`MERAKI_EXPORTER_API__REQUESTS_PROXY` is a plain URL setting, so an authenticating proxy is given
+as `http://<user>:<password>@<proxy>:<port>`. `/config` replaces the `<user>:<password>` part of
+any URL setting with `***` and keeps the scheme, host and port, but the value is still plaintext
+wherever it is configured. On Kubernetes, supply a credentialed proxy from a Secret through `extraEnv`
+(`valueFrom.secretKeyRef`), never through the chart's `config.apiRequestsProxy`, which is written
+into a ConfigMap.
+
 ### Endpoint authentication
 
 The exporter serves three categories of HTTP endpoint (see the
@@ -200,7 +209,7 @@ What each endpoint exposes:
 | `/metrics` | GET | All metric series: full device/network topology, label values | Low (topology) | Keep open for Prometheus; restrict at the network layer |
 | `/` | GET | Collector health, tier schedule, org count | No | `ui_enabled=false` |
 | `/status` | GET | Topology-ish health, org health, network-filter state, webhook health | No | token / `ui_enabled=false` |
-| `/config` | GET | Effective configuration (secrets masked as `**********`) | No (redacted) | token / `ui_enabled=false` |
+| `/config` | GET | Effective configuration (secrets masked as `**********`, credentials in URLs as `***`) | No (redacted) | token / `ui_enabled=false` |
 | `/clients` | GET | **Client MAC / IP / hostname / username** | **Yes** | token / `ui_enabled=false` |
 | `/cardinality*`, `/api/metrics/cardinality` | GET | Metric + label-value surface | Low | token / `ui_enabled=false` |
 | `/api/collectors/trigger` | POST | Burns org API-rate-limit budget on demand | No | Fail-closed `api_token` |

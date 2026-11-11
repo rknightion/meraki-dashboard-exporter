@@ -14,6 +14,13 @@ if TYPE_CHECKING:
 
 _LOGGING_CONFIGURED = False
 
+# Structured tracebacks without frame locals. structlog's stock ``dict_tracebacks``
+# renders every frame's local variables, which can hold shared secrets, API
+# responses and client identifiers; none of that may reach the log.
+_EXCEPTION_RENDERER = structlog.processors.ExceptionRenderer(
+    structlog.tracebacks.ExceptionDictTransformer(show_locals=False)
+)
+
 
 def _select_renderer(log_format: str) -> Processor:
     """Select the final structlog renderer for the configured log format.
@@ -162,7 +169,7 @@ def setup_logging(settings: Settings) -> None:
         structlog.processors.StackInfoRenderer(),
         structlog.dev.set_exc_info,
         structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.dict_tracebacks,
+        _EXCEPTION_RENDERER,
     ]
 
     # Add OTEL context processor if OTEL is enabled

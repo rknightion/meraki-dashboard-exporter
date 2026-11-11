@@ -107,10 +107,12 @@ ingress:
   # -- Annotations for the Ingress (put cert-manager / TLS-termination hints here).
   annotations: {}
   # -- Ingress host rules. Each host maps one or more paths to the Service http port.
+  # The default routes only the webhook receiver. Widening a path to `/` publishes the
+  # unauthenticated web UI, /status, /config, /clients and /metrics on the Ingress host.
   hosts:
     - host: meraki-exporter.example.com
       paths:
-        - path: /
+        - path: /api/webhooks/meraki
           pathType: Prefix
   # -- TLS configuration. Meraki requires HTTPS for webhook delivery, so populate this
   # (or terminate TLS at an upstream LB) when exposing the webhook receiver.

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
+import meraki_dashboard_exporter.core.webhook_handler as webhook_handler_module
 from meraki_dashboard_exporter.app import ExporterApp
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import MerakiSettings, WebhookSettings
@@ -293,3 +295,37 @@ def test_webhook_endpoint_missing_required_fields(
 
     assert response.status_code == 400
     # Validation should fail due to missing required fields
+
+
+@pytest.mark.parametrize(
+    ("body", "status_code"),
+    [
+        ("[]", 400),
+        ('"x"', 400),
+        ('{"sharedSecret": 5}', 401),
+        ('{"sharedSecret": ["a"]}', 401),
+        ('{"sharedSecret": "\\ud800"}', 401),
+    ],
+    ids=["array-body", "string-body", "number-secret", "array-secret", "lone-surrogate-secret"],
+)
+def test_webhook_endpoint_malformed_shapes_are_client_errors(
+    webhook_enabled_settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+    body: str,
+    status_code: int,
+) -> None:
+    """Valid JSON of the wrong shape gets a 4xx, never a 500 or a logged traceback."""
+    fake_logger = MagicMock()
+    monkeypatch.setattr(webhook_handler_module, "logger", fake_logger)
+    exporter = ExporterApp(webhook_enabled_settings)
+    client = TestClient(exporter.create_app(), raise_server_exceptions=False)
+
+    response = client.post(
+        "/api/webhooks/meraki",
+        content=body,
+        headers={"Content-Type": "application/json"},
+    )
+
+    assert response.status_code == status_code
+    assert "validation failed" in response.json()["detail"].lower()
+    fake_logger.exception.assert_not_called()

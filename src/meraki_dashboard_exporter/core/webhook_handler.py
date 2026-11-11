@@ -221,6 +221,22 @@ def enforce_webhook_security(*, enabled: bool, require_secret: bool, allow_insec
         )
 
 
+def _utf8_or_none(value: str, errors: str = "strict") -> bytes | None:
+    """Return ``value`` as UTF-8, or None when it cannot be encoded.
+
+    A JSON string escape can encode a lone surrogate (code point U+D800 to
+    U+DFFF), which decodes to a ``str`` that strict UTF-8 cannot encode. The
+    configured secret is encoded with ``surrogateescape`` so undecodable bytes
+    from the environment round-trip to the bytes the operator set. A value that
+    still cannot be encoded can never match, so callers treat None as a wrong
+    secret instead of raising.
+    """
+    try:
+        return value.encode("utf-8", errors)
+    except UnicodeEncodeError:
+        return None
+
+
 class WebhookHandler:
     """Handler for processing Meraki webhook events with metrics tracking.
 
@@ -384,13 +400,14 @@ class WebhookHandler:
             [LabelName.DIRECTION.value, LabelName.RESULT.value],
         )
 
-    def validate_secret(self, payload_secret: str | None) -> bool:
+    def validate_secret(self, payload_secret: object) -> bool:
         """Validate webhook shared secret.
 
         Parameters
         ----------
-        payload_secret : str | None
-            Shared secret from the webhook payload.
+        payload_secret : object
+            Shared secret from the webhook payload. Anything other than a string,
+            including a missing value, is treated as a wrong secret.
 
         Returns
         -------
@@ -413,9 +430,9 @@ class WebhookHandler:
         # A plain `!=` compare leaks the length of the matching prefix via timing,
         # letting an attacker recover the secret byte-by-byte.
         expected_secret = self.settings.webhooks.shared_secret.get_secret_value()
-        if payload_secret is None or not hmac.compare_digest(
-            payload_secret.encode("utf-8"), expected_secret.encode("utf-8")
-        ):
+        provided = _utf8_or_none(payload_secret) if isinstance(payload_secret, str) else None
+        expected = _utf8_or_none(expected_secret, "surrogateescape")
+        if provided is None or expected is None or not hmac.compare_digest(provided, expected):
             logger.warning("Invalid shared secret in webhook payload")
             self.record_validation_failure("secret_mismatch")
             return False
@@ -458,13 +475,14 @@ class WebhookHandler:
         if len(self._replay_cache) > self.settings.webhooks.replay_cache_max_entries:
             self._replay_cache.popitem(last=False)
 
-    def process_webhook(self, payload_data: dict[str, Any]) -> WebhookProcessResult:
+    def process_webhook(self, payload_data: object) -> WebhookProcessResult:
         """Process a webhook event.
 
         Parameters
         ----------
-        payload_data : dict
-            Raw webhook payload data.
+        payload_data : object
+            Decoded JSON body. Anything other than a JSON object is rejected as
+            invalid input.
 
         Returns
         -------
@@ -473,6 +491,21 @@ class WebhookHandler:
 
         """
         start_time = time.time()
+
+        if not isinstance(payload_data, dict):
+            # Valid JSON of the wrong shape (array, string, number, null). Log only
+            # the bounded type name, never the value.
+            logger.warning(
+                "Webhook payload is not a JSON object",
+                payload_type=type(payload_data).__name__,
+            )
+            self.record_validation_failure("invalid_payload")
+            self.events_failed.labels(error_type="validation_error").inc()
+            self._events_failed_total += 1
+            return WebhookProcessResult(
+                WebhookOutcome.REJECTED,
+                failure_reason=WebhookFailureReason.VALIDATION,
+            )
 
         try:
             # The route has already size-capped and decoded the JSON body. Check

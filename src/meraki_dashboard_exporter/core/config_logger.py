@@ -85,6 +85,44 @@ _SENSITIVE_KEY_SUBSTRINGS: frozenset[str] = frozenset({
     "salt",
 })
 
+USERINFO_MASK = "***"
+
+
+def redact_url_userinfo(value: str) -> str:
+    """Mask everything that could be a credential before the last ``@`` of a value.
+
+    Shared by the startup log and the ``/config`` view, because URL settings are
+    plain strings that ``SecretStr`` masking never reaches. The rule works on the
+    raw text, not on a URL parse, so it fails closed for values a parser splits
+    elsewhere: a proxy typed without a scheme, or a password holding a raw ``#``,
+    ``/``, ``?`` or ``@``. When the value has a ``scheme://`` prefix, everything
+    between it and the last ``@`` becomes ``***``; without one, everything before
+    the last ``@`` does when it contains a ``:``. The scheme and whatever follows
+    the last ``@`` (host, port, path) are kept. A value with no ``@``, or an
+    address-shaped value with no ``:`` before its ``@``, is returned as is.
+    """
+    at = value.rfind("@")
+    if at == -1:
+        return value
+    scheme_end = value.find("://")
+    if 0 <= scheme_end < at:
+        return f"{value[: scheme_end + 3]}{USERINFO_MASK}{value[at:]}"
+    if ":" in value[:at]:
+        return f"{USERINFO_MASK}{value[at:]}"
+    return value
+
+
+def redact_url_userinfo_tree(node: Any) -> Any:
+    """Apply :func:`redact_url_userinfo` to every string in a dumped config tree."""
+    if isinstance(node, str):
+        return redact_url_userinfo(node)
+    if isinstance(node, dict):
+        return {key: redact_url_userinfo_tree(item) for key, item in node.items()}
+    if isinstance(node, list):
+        return [redact_url_userinfo_tree(item) for item in node]
+    return node
+
+
 # Env-key prefixes stripped before matching so the ``exporter``/``meraki`` prefix
 # noise cannot accidentally match safe/sensitive substrings.
 _KEY_PREFIXES: tuple[str, ...] = ("meraki_exporter_", "meraki_")
@@ -110,7 +148,8 @@ def mask_sensitive_value(key: str, value: Any) -> Any:
     Returns
     -------
     Any
-        The original value if the key is known-safe, otherwise ``"***REDACTED***"``.
+        The original value if the key is known-safe (with any URL userinfo
+        replaced by ``***``), otherwise ``"***REDACTED***"``.
 
     """
     field = key.lower()
@@ -125,7 +164,8 @@ def mask_sensitive_value(key: str, value: Any) -> Any:
 
     # Redact-by-default: only surface values whose key is explicitly known-safe.
     if any(token in field for token in _SAFE_KEY_SUBSTRINGS):
-        return value
+        # Safe keys include "endpoint" and "url", whose values can embed credentials.
+        return redact_url_userinfo(value) if isinstance(value, str) else value
 
     return REDACTED
 
@@ -205,7 +245,7 @@ def log_startup_summary(
     log_method("-" * 80)
     log_method("Configuration Summary:")
 
-    log_method("  API Base URL", value=settings.meraki.api_base_url)
+    log_method("  API Base URL", value=redact_url_userinfo(settings.meraki.api_base_url))
     log_method("  API Timeout", value=f"{settings.api.timeout}s")
     log_method("  API Max Retries", value=settings.api.max_retries)
     log_method("  API Concurrency Limit", value=settings.api.concurrency_limit)
@@ -253,7 +293,8 @@ def log_startup_summary(
 
     if settings.otel.enabled:
         log_method("  OpenTelemetry", status="ENABLED")
-        log_method("  OTEL Endpoint", value=settings.otel.endpoint)
+        endpoint = settings.otel.endpoint
+        log_method("  OTEL Endpoint", value=redact_url_userinfo(endpoint) if endpoint else endpoint)
         log_method("  OTEL Service Name", value=settings.otel.service_name)
         log_method("  OTEL Tracing", value="enabled")
     else:

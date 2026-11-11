@@ -11,8 +11,10 @@ from pydantic import SecretStr
 
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import (
+    APISettings,
     MerakiSettings,
     NetworkFilterSettings,
+    OTelSettings,
     WebhookSettings,
 )
 from meraki_dashboard_exporter.core.constants.metrics_constants import NetworkMetricName
@@ -135,3 +137,44 @@ class TestBuildEffectiveConfig:
         # Non-secret resolved values present.
         assert config["meraki"]["org_id"] == "123456"
         assert config["webhooks"]["enabled"] is True
+
+    def test_proxy_userinfo_redacted_host_kept(self) -> None:
+        """Credentials in a proxy URL never reach the view; scheme, host and port do."""
+        settings = _settings(
+            api=APISettings(
+                requests_proxy="http://" + "proxyuser:proxypass" + "@proxy.example:3128"
+            )
+        )
+        config = build_effective_config(settings)
+
+        flat = repr(config)
+        assert "proxyuser" not in flat
+        assert "proxypass" not in flat
+        assert config["api"]["requests_proxy"] == "http://***@proxy.example:3128"
+
+    def test_userinfo_redacted_in_any_url_field(self) -> None:
+        """Redaction covers every URL string in the tree, not only the proxy."""
+        settings = _settings(
+            otel=OTelSettings(endpoint="https://" + "otlpuser:otlppass" + "@collector.example:4317")
+        )
+        config = build_effective_config(settings)
+
+        assert "otlppass" not in repr(config)
+        assert config["otel"]["endpoint"] == "https://***@collector.example:4317"
+
+    def test_url_without_userinfo_unchanged(self) -> None:
+        """A proxy URL with no credentials is shown as configured."""
+        settings = _settings(api=APISettings(requests_proxy="http://proxy.example:3128"))
+        assert (
+            build_effective_config(settings)["api"]["requests_proxy"] == "http://proxy.example:3128"
+        )
+
+    def test_scheme_less_proxy_credentials_redacted(self) -> None:
+        """A proxy typed without a scheme still loses its credentials in the view."""
+        settings = _settings(
+            api=APISettings(requests_proxy="proxyuser:" + "proxypass@proxy.example:3128")
+        )
+        config = build_effective_config(settings)
+
+        assert "proxypass" not in repr(config)
+        assert config["api"]["requests_proxy"] == "***@proxy.example:3128"
