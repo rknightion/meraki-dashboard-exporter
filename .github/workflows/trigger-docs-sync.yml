@@ -38,7 +38,7 @@ jobs:
       # contents:write really is what the dispatch endpoint wants -- actions:write
       # is the intuitive wrong answer.
       #
-      # Docs sync now depends on camden being up, unsealed and on the tailnet. The
+      # Docs sync now depends on the token broker host being up, unsealed and reachable. The
       # hub's daily 06:00 UTC cron rebuild remains the backstop if this fails.
       - name: Mint a scoped docs-sync token
         id: bao

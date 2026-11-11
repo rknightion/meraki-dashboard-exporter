@@ -32,7 +32,7 @@ jobs:
       # action_required gate applies to github-actions[bot], not to bot identities
       # generally -- Renovate, a GitHub App, already runs fine.
       #
-      # Releases now depend on camden being up, unsealed and on the tailnet; a
+      # Releases now depend on the token broker host being up, unsealed and reachable; a
       # failure here is infrastructure, not the commit.
       - name: Mint a scoped release token
         id: bao
