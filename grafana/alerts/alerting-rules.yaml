@@ -43,19 +43,14 @@
 # MerakiWirelessConnectionFailuresHigh (no failed wireless connections recorded), and
 # MerakiMTWaterDetected (no water event). Treat those three as syntax-verified but NOT
 # behaviourally exercised against real firing data.
-# One correctness fix was required versus a literal copy of the chart's `on(collector)` join in
-# MerakiExporterCollectorStale: with two shards under the same `job` label (this soak topology),
-# an `on(collector)` join alone throws a Prometheus 422 "duplicate series" error, because both
-# shards emit a same-named `collector` series. Fixed by joining `on(collector, instance)` instead
-# — verified live (422 without the fix, clean "no data" with it). If you only ever run a single
-# exporter instance per job (the chart's own topology), `on(collector)` alone is fine; this fix is
-# only needed for multi-shard/multi-instance-per-job setups like this one.
+# Both this file and the chart join staleness series by job, instance and collector or group.
+# This keeps the comparison per scrape target when multiple exporters share a Prometheus.
 
 groups:
   - name: meraki-exporter-self-health
     rules:
       - alert: MerakiExporterDown
-        expr: up{job="meraki_dashboard"} == 0
+        expr: up{job=~"meraki_dashboard"} == 0
         for: 5m
         labels:
           severity: critical
@@ -68,11 +63,11 @@ groups:
 
       - alert: MerakiExporterCollectorStale
         # Each collector runs at its own solved cadence (no tiers, #631); a collector is stale
-        # once it hasn't succeeded within 3x that cadence. Joined on (collector, instance) rather
-        # than the chart's bare (collector) — see the file header note on why.
+        # once it hasn't succeeded within 3x that cadence. Both this file and the chart
+        # join on job, instance and collector to match each scrape target.
         expr: >-
           (time() - meraki_exporter_collector_success_timestamp_seconds{job="meraki_dashboard"})
-          > on(collector, instance) (3 * meraki_exporter_collector_cadence_seconds{job="meraki_dashboard"})
+          > on(job, instance, collector) (3 * meraki_exporter_collector_cadence_seconds{job="meraki_dashboard"})
         for: 5m
         labels:
           severity: warning
@@ -164,7 +159,7 @@ groups:
       - alert: MerakiExporterSchedulerGroupStale
         expr: >-
           time() - meraki_exporter_scheduler_group_success_timestamp_seconds{job="meraki_dashboard"}
-          > on(group, instance) (3 * meraki_exporter_scheduler_interval_seconds{job="meraki_dashboard"})
+          > on(job, instance, group) (3 * meraki_exporter_scheduler_interval_seconds{job="meraki_dashboard"})
         for: 5m
         labels:
           severity: warning

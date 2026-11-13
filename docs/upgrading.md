@@ -55,6 +55,10 @@ The following previously accepted configurations now prevent startup:
 - Remove any zero legacy interval pin or give it a positive value.
 - When the webhook receiver requires a secret, set `MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET`.
 
+`prometheusRule.job` now defaults to the release's Service name and is matched as a regular
+expression. If a static scrape configuration uses another job name and relied on the old default
+`meraki-dashboard-exporter`, set `prometheusRule.job` to match that job.
+
 ### Helm chart Ingress routes only the webhook receiver
 
 The chart's default `ingress.hosts` rule now routes `/api/webhooks/meraki` (`Prefix`) instead of

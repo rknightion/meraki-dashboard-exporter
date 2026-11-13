@@ -15,7 +15,7 @@ spec:
     - name: meraki-exporter-self-health
       rules:
         - alert: MerakiExporterDown
-          expr: up{job="{{ .Values.prometheusRule.job }}"} == 0
+          expr: up{job=~{{ .Values.prometheusRule.job | default (include "meraki-dashboard-exporter.fullname" .) | quote }}} == 0
           for: 5m
           labels:
             severity: critical
@@ -31,7 +31,7 @@ spec:
           # collector is stale once it hasn't succeeded within 3x that cadence.
           expr: >-
             (time() - meraki_exporter_collector_success_timestamp_seconds)
-            > on(collector) (3 * meraki_exporter_collector_cadence_seconds)
+            > on(job, instance, collector) (3 * meraki_exporter_collector_cadence_seconds)
           for: 5m
           labels:
             severity: warning
@@ -45,7 +45,7 @@ spec:
         - alert: MerakiExporterSchedulerGroupStale
           expr: >-
             time() - meraki_exporter_scheduler_group_success_timestamp_seconds
-            > on(group) (3 * meraki_exporter_scheduler_interval_seconds)
+            > on(job, instance, group) (3 * meraki_exporter_scheduler_interval_seconds)
           for: 5m
           labels:
             severity: warning

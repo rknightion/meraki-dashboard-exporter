@@ -523,9 +523,9 @@ prometheusRule:
   namespace: ""
   # -- Additional labels to add to the PrometheusRule (e.g. for your Prometheus's ruleSelector)
   additionalLabels: {}
-  # -- `job` label value to match in the up{} liveness alert. Should match whatever
-  # job label your scrape config / ServiceMonitor actually produces.
-  job: meraki-dashboard-exporter
+  # -- Regular expression matched against the `job` label of up. Empty uses this
+  # release's Service name; set this when scraping under another job name.
+  job: ""
   # -- Set true if webhooks.enabled is true for this deployment (see config.webhooksEnabled
   # below / docs/getting-started.md). Selects the faster (5m) webhook fast-path device-down
   # alert instead of the poll-path default (15m) - only one of the two is ever rendered.
