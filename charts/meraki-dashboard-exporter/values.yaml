@@ -139,9 +139,10 @@ meraki:
 # Application configuration (maps to MERAKI_EXPORTER_* environment variables).
 #
 # Every tuning knob the exporter exposes is listed below, commented at its schema
-# default with the field's own description. Uncomment and change only what you
-# need -- anything left commented falls through to the application's built-in
-# default. Names are friendly camelCase.
+# default with the field's own description. To set a knob here, replace `config: {}`
+# with `config:` and uncomment the lines you need. Alternatively, set keys under
+# `config:` in your own values file. Anything left commented uses the application's
+# built-in default. Names are friendly camelCase.
 #
 # GENERATED region: the block between the BEGIN/END markers is written by
 # scripts/generate_helm_config.py from the Pydantic config schema. Do NOT hand-edit
@@ -294,7 +295,7 @@ config: {}
   # -- Collection profile controlling which endpoint priorities run: availability includes priority 1, standard includes priorities 1-3, and full includes all priorities. When unset, the full surface is preserved if the solved full-plan demand fits the adaptive scheduler's budget target; above that threshold, startup requires an explicit profile choice. Fixed scheduler mode does not apply this gate.
   # collectorsProfile: ""
   # -- Enabled collector names
-  # collectorsEnabledCollectors: "["alerts", "clients", "config", "device", "insight", "mtsensor", "mtsensoralerts", "networkhealth", "organization"]"
+  # collectorsEnabledCollectors: "[\"alerts\", \"clients\", \"config\", \"device\", \"insight\", \"mtsensor\", \"mtsensoralerts\", \"networkhealth\", \"organization\"]"
   # -- Explicitly disabled collectors (overrides enabled)
   # collectorsDisableCollectors: ""
   # -- Timeout for individual collector runs in seconds (min: 30, max: 600)
@@ -454,8 +455,9 @@ readinessProbe:
   httpGet:
     # -- /ready returns 200 once every collector owning a priority-<=3 endpoint
     # group has completed a successful run, and 503 until then, so Kubernetes only
-    # routes traffic once the exporter has real data. Do not point this at /health (which is
-    # always 200) or the readiness gate becomes a no-op.
+    # routes traffic once the exporter has real data. Do not point this at /health:
+    # it answers 200 from startup and only turns 503 when the liveness dead-man
+    # switch trips, so it would not gate on first collection.
     path: /ready
     port: http
   # -- Number of seconds after container start before first probe. Kept small
@@ -498,7 +500,7 @@ serviceMonitor:
   namespace: ""
   # -- Additional labels to add to the ServiceMonitor (e.g. for Prometheus selector)
   additionalLabels: {}
-  # -- Scrape interval. Should match the exporter's fast update interval.
+  # -- Scrape interval. Collection cadence is solved per endpoint group (there are no fixed tiers); 60s is a sensible default.
   interval: "60s"
   # -- Scrape timeout
   scrapeTimeout: "30s"

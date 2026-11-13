@@ -18,6 +18,7 @@ working. Run via ``just gen``.
 
 from __future__ import annotations
 
+import json
 import sys
 import typing
 from pathlib import Path
@@ -50,9 +51,6 @@ EXCLUDE = {
 NAME_OVERRIDES = {
     "LOGGING__LEVEL": "logLevel",
     "MERAKI__API_BASE_URL": "apiBaseUrl",
-    "UPDATE_INTERVALS__FAST": "updateIntervalFast",
-    "UPDATE_INTERVALS__MEDIUM": "updateIntervalMedium",
-    "UPDATE_INTERVALS__SLOW": "updateIntervalSlow",
     "COLLECTORS__COLLECTOR_TIMEOUT": "collectorTimeout",
 }
 
@@ -129,7 +127,7 @@ def render_values_block(knobs: list[dict[str, str]]) -> str:
     for k in knobs:
         if k["desc"]:
             lines.append(f"  # -- {k['desc']}")
-        lines.append(f'  # {k["key"]}: "{k["default"]}"')
+        lines.append(f"  # {k['key']}: {json.dumps(k['default'])}")
     lines.append(f"  {END}")
     return "\n".join(lines)
 
@@ -139,7 +137,9 @@ def render_configmap_block(knobs: list[dict[str, str]]) -> str:
     lines = [f"  {BEGIN}", "  {{- with .Values.config }}"]
     for k in knobs:
         lines.append(f'  {{{{- if hasKey . "{k["key"]}" }}}}')
-        lines.append(f"  {k['env']}: {{{{ .{k['key']} | quote }}}}")
+        lines.append(
+            f'  {k["env"]}: {{{{ include "meraki-dashboard-exporter.configValue" .{k["key"]} }}}}'
+        )
         lines.append("  {{- end }}")
     lines.append("  {{- end }}")
     lines.append(f"  {END}")
