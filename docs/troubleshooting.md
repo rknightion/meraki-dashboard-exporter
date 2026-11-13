@@ -205,6 +205,8 @@ networks/devices than intended (see the NetworkFilter section above).
 
 **Check / fix by outcome:**
 
+- **Exporter won't start**, error mentions `MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET`: set
+  the shared secret when the enabled receiver requires one.
 - **Exporter won't start**, error mentions `require_secret=false`: this is
   `enforce_webhook_security()` refusing to boot with an unauthenticated webhook receiver. Either
   set `MERAKI_EXPORTER_WEBHOOKS__REQUIRE_SECRET=true` (recommended - also set

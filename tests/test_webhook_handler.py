@@ -52,7 +52,7 @@ def settings_without_secret() -> Settings:
 
 @pytest.fixture
 def settings_secret_not_configured() -> Settings:
-    """Create settings requiring secret but not configured."""
+    """Create settings requiring a secret."""
     return Settings(
         meraki=MerakiSettings(
             api_key=SecretStr("test_api_key_at_least_30_characters_long"),
@@ -61,7 +61,7 @@ def settings_secret_not_configured() -> Settings:
         webhooks=WebhookSettings(
             enabled=True,
             require_secret=True,
-            shared_secret=None,
+            shared_secret=SecretStr("test-secret"),
         ),
     )
 
@@ -130,6 +130,7 @@ class TestWebhookHandlerSecretValidation:
     ) -> None:
         """Test secret validation when required but not configured."""
         handler = WebhookHandler(settings_secret_not_configured)
+        handler.settings.webhooks.shared_secret = None
         result = handler.validate_secret("any_secret")
         assert result is False
 

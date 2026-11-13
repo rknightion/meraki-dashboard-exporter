@@ -20,8 +20,9 @@
 (`core/error_handling.py`) matches the message against `RATE_LIMIT_PATTERNS` - "rate limit
 exceeded", "too many requests", "throttled", "rate limited" - and then really retries. Its
 `max_retries=3` and `base_delay=10.0` are decorator defaults, not settings, so the autouse
-`fast_test_settings` fixture (which only sets `MERAKI_EXPORTER_API__MAX_RETRIES=0` and disables
-smoothing) does not disable them: roughly 10s + 20s + 40s of real `asyncio.sleep` against
+`fast_test_settings` fixture (which sets `MERAKI_EXPORTER_API__MAX_RETRIES=1`, disables
+smoothing and normally removes the facade backoff) does not disable them: roughly 10s + 20s + 40s
+of real `asyncio.sleep` against
 pytest-timeout's `timeout = 30`, so the test dies with an opaque timeout instead of an assertion.
 Use a message like `"Connection error"` for generic error paths, or `with_error(method, 429)` with
 `asyncio.sleep` patched when the retry path is the point.

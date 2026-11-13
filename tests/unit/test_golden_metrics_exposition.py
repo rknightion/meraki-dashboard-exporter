@@ -289,7 +289,7 @@ def _fast_env() -> None:
     """
     os.environ.setdefault("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
     os.environ["MERAKI_EXPORTER_API__SMOOTHING_ENABLED"] = "false"
-    os.environ["MERAKI_EXPORTER_API__MAX_RETRIES"] = "0"
+    os.environ["MERAKI_EXPORTER_API__MAX_RETRIES"] = "1"
     os.environ["MERAKI_EXPORTER_API__RATE_LIMIT_ENABLED"] = "false"
 
 

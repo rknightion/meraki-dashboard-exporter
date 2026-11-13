@@ -112,6 +112,7 @@ markers = [
   "fleet_scheduled: scale presets selected by scheduled CI",
   "fleet_on_demand: scale presets selected by workflow dispatch",
   "strict_facade_limiter: disables the shared immediate limiter to test fail-closed pacing",
+  "real_facade_backoff: preserves the production facade retry backoff base",
 ]
 testpaths = [ "tests", "tools/apidrift/tests" ]
 python_files = [ "test_*.py", "*_test.py" ]

@@ -319,6 +319,7 @@ async def test_facade_retry_records_one_compatibility_retry_and_honors_capped_re
     sleep.assert_awaited_once_with(7.0)
 
 
+@pytest.mark.real_facade_backoff
 @pytest.mark.asyncio
 async def test_facade_retry_uses_the_documented_ten_second_jittered_base(
     monkeypatch: pytest.MonkeyPatch, metric_facade: MerakiApiFacade

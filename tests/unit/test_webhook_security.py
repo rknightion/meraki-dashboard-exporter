@@ -65,6 +65,30 @@ class TestBoundOrgId:
 class TestEnforceWebhookSecurity:
     """Fail-fast on the insecure require_secret=false combination."""
 
+    @pytest.mark.parametrize("secret", [None, SecretStr("")])
+    def test_handler_refuses_required_secret_that_is_missing(
+        self, secret: SecretStr | None
+    ) -> None:
+        """Reject unusable receivers before registering metrics."""
+        settings = _insecure_settings()
+        settings.webhooks.require_secret = True
+        settings.webhooks.shared_secret = secret
+        with pytest.raises(WebhookSecurityError, match="MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET"):
+            WebhookHandler(settings)
+
+    @pytest.mark.parametrize("mode", ["secure", "insecure", "disabled"])
+    def test_receiver_startup_allowed_for_supported_modes(self, mode: str) -> None:
+        """A secret, explicit insecure opt-in, or disabled receiver can start."""
+        from meraki_dashboard_exporter.app import ExporterApp
+
+        settings = _insecure_settings()
+        settings.webhooks.enabled = mode != "disabled"
+        settings.webhooks.require_secret = mode != "insecure"
+        settings.webhooks.allow_insecure = mode == "insecure"
+        settings.webhooks.shared_secret = SecretStr("test-secret") if mode == "secure" else None
+        exporter = ExporterApp(settings)
+        assert (exporter.webhook_handler is not None) == (mode != "disabled")
+
     def test_insecure_combo_without_optin_raises(self) -> None:
         """Insecure combo without optin raises."""
         with pytest.raises(WebhookSecurityError):

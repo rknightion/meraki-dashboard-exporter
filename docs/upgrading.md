@@ -49,6 +49,12 @@ If you set either value, it now takes effect.
 
 ## Changes after 2.3.0
 
+The following previously accepted configurations now prevent startup:
+
+- Set `MERAKI_EXPORTER_API__MAX_RETRIES` to at least 1. A value of 1 makes a single SDK attempt.
+- Remove any zero legacy interval pin or give it a positive value.
+- When the webhook receiver requires a secret, set `MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET`.
+
 ### Helm chart Ingress routes only the webhook receiver
 
 The chart's default `ingress.hosts` rule now routes `/api/webhooks/meraki` (`Prefix`) instead of
