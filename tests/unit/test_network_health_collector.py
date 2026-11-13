@@ -586,6 +586,14 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             .build()
         )
         collector.api = api
+        collector.rf_health_collector.api = api
+        collector.connection_stats_collector.api = api
+        collector.data_rates_collector.api = api
+        collector.bluetooth_collector.api = api
+        collector.ssid_performance_collector.api = api
+        collector.latency_stats_collector.api = api
+        collector.air_marshal_collector.api = api
+        collector.mesh_collector.api = api
 
         # Run collection
         await self.run_collector(collector)
@@ -593,16 +601,14 @@ class TestNetworkHealthCollector(BaseCollectorTest):
         # Verify success
         self.assert_collector_success(collector, metrics)
 
-        # Should not call wireless-specific APIs
-        # We can't directly check that methods weren't called with the mock builder,
-        # but we can verify that no wireless-specific API calls were tracked
-        try:
-            self.assert_api_call_tracked(
-                collector, metrics, "getNetworkWirelessConnectionStats", count=0
-            )
-        except AssertionError:
-            # Expected - the API call wasn't tracked
-            pass
+        api.wireless.getNetworkWirelessConnectionStats.assert_not_called()
+        api.wireless.getNetworkWirelessDataRateHistory.assert_not_called()
+        api.wireless.getNetworkWirelessFailedConnections.assert_not_called()
+        api.wireless.getNetworkWirelessAirMarshal.assert_not_called()
+        api.wireless.getNetworkWirelessMeshStatuses.assert_not_called()
+        api.wireless.getNetworkWirelessClientsLatencyStats.assert_not_called()
+        api.wireless.getNetworkWirelessDevicesLatencyStats.assert_not_called()
+        api.networks.getNetworkBluetoothClients.assert_not_called()
 
     async def test_bluetooth_error_does_not_zero_metric(self, collector, mock_api_builder, metrics):
         """F-015: a rate-limit/transient error must NOT manufacture a 0 client count."""
