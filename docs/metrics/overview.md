@@ -67,9 +67,23 @@ meraki_<category>_<metric>_<unit>
 ```
 
 Examples:
-- `meraki_org_devices_total` - Total count
+- `meraki_org_devices` - Current device count
 - `meraki_mt_temperature_celsius` - Temperature in Celsius
-- `meraki_ms_port_traffic_bytes` - Traffic in bytes
+- `meraki_ms_port_traffic_bytes_per_second` - Switch port traffic rate
+
+### Suffix and unit conventions
+
+The suffix tells you the metric's kind and how to query it:
+
+- `_total` is a monotonic counter: query it with `rate()` or `increase()`. Example: `meraki_exporter_api_requests_total`.
+- Standalone `_count` gauges count events or members, often over a trailing window stated in the metric's `# HELP`: read these gauges directly, not through `rate()`. Example: `meraki_org_api_requests_count` (trailing hour). Histogram and summary `_count` series instead count cumulative observations and can be queried with `rate()`.
+- A bare plural is a gauge holding the current number of inventory objects. Example: `meraki_org_devices`.
+- `_info` is a join carrier with the value `1` whose labels hold names (see [Info Metrics](#info-metrics)).
+- `total` inside a name means a whole or a sum, not a counter: `meraki_org_usage_total_bytes` is a gauge.
+
+Units are Prometheus base units, spelled in the name: `_bytes`, `_seconds`, `_joules`, `_percent` (0 to 100), `_ratio` (a fraction, where 1 is 100%) and `_bytes_per_second` for rates. Where the domain's own unit is the useful one it is named instead: `_mbps`, `_mhz`, `_dbm`.
+
+Two exporter self-metrics, `meraki_exporter_client_dns_cache_total` and `meraki_exporter_client_store_total`, are gauges that keep a legacy `_total` name. For any single metric, the Type column of the [Complete Metrics Reference](metrics.md) is authoritative.
 
 ## Metric Types
 
@@ -84,7 +98,6 @@ Most metrics are gauges representing current values:
 Some metrics are counters that only increase:
 - Total API calls
 - Error counts
-- Traffic bytes (when collected cumulatively)
 
 ### Info Metrics
 Informational metrics with labels:
@@ -213,7 +226,7 @@ meraki_exporter_collector_duration_seconds{collector="OrganizationCollector"} 2.
 meraki_exporter_collector_api_calls_total{collector="DeviceCollector"} 145
 
 # Collection errors
-meraki_exporter_collector_errors_total{collector="SensorCollector"} 0
+meraki_exporter_collector_errors_total{collector="MTSensorCollector"} 0
 
 # Timestamp of last successful collection
 meraki_exporter_collector_success_timestamp_seconds{collector="AlertsCollector"} 1705320000
@@ -223,8 +236,11 @@ meraki_exporter_collector_success_timestamp_seconds{collector="AlertsCollector"}
 
 ### 1. Use Appropriate Queries
 ```promql
-# Good: Rate calculation over 5 minutes
-rate(meraki_org_usage_total_bytes[5m])
+# Good: rate() on a counter (the name ends in _total)
+sum(rate(meraki_exporter_api_requests_total[5m]))
+
+# Good: read a windowed gauge directly, never through rate()
+meraki_org_usage_total_bytes
 
 # Good: Alert on missing data
 up{job="meraki"} == 0
@@ -275,7 +291,11 @@ meraki_mt_temperature_celsius{network_id="$network"}
 
 ### API Usage Rate
 ```promql
-rate(meraki_org_api_requests_total[5m])
+# Requests per second this exporter sends to the Meraki API
+sum(rate(meraki_exporter_api_requests_total[5m]))
+
+# Requests from every API client of the organization in the trailing hour (a gauge)
+meraki_org_api_requests_count
 ```
 
 ## Next Steps

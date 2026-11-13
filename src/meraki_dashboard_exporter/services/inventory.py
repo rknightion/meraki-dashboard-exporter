@@ -2,7 +2,8 @@
 
 This service provides a shared cache of organization, network, and device
 inventory data to reduce redundant API calls across collectors. Implements
-TTL-based cache invalidation with different TTLs per update tier.
+TTL-based cache invalidation with one general TTL and separate TTLs for
+availability and licence data.
 """
 
 from __future__ import annotations

@@ -42,7 +42,7 @@ Child spans follow parent sampling decisions.
 | httpx | Any httpx usage is traced |
 | FastAPI | All endpoints except `/health` and `/metrics` (the `/status` health-dashboard page is traced) |
 | Threading | `asyncio.to_thread()` operations |
-| Logging | Trace IDs added to logfmt output |
+| Logging | Trace IDs added to structured log output |
 
 ## Span Attributes
 
@@ -67,6 +67,8 @@ metrics generation (e.g., Tempo, Jaeger, Datadog) if you need span-derived SLIs.
 - Remember that `/health` and `/metrics` are excluded from tracing.
 
 ## Log Correlation Example
+
+With `MERAKI_EXPORTER_LOGGING__LOG_FORMAT=logfmt` (the default is JSON, with the same keys):
 
 ```text
 timestamp=2025-12-22T10:30:45.123Z level=info event="Collected metrics" trace_id=... span_id=...

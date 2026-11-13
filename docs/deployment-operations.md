@@ -93,6 +93,8 @@ so Prometheus can scrape the metrics needed to diagnose the outage. `/health` is
 dead-man check; alert on `time() - meraki_exporter_scheduler_group_success_timestamp_seconds` for
 per-endpoint-group freshness and on `meraki_exporter_scheduler_over_budget` for deferred work.
 
+<a id="webhook-receiver-https-tls-termination"></a>
+
 ## Webhook receiver (HTTPS / TLS termination)
 
 The exporter can receive Meraki alert webhooks (`config.webhooksEnabled: true`, endpoint
