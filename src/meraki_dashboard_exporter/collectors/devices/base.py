@@ -155,7 +155,7 @@ class BaseDeviceCollector(SubCollectorMixin, ABC):
                 device_data["orgName"] = org_name
 
                 # Extract network info from nested structure
-                network_info = device_data.get("network", {})
+                network_info = device_data.get("network") or {}
                 device_data["networkId"] = network_info.get("id", "")
                 device_data["networkName"] = network_info.get("name", device_data["networkId"])
 
@@ -180,17 +180,18 @@ class BaseDeviceCollector(SubCollectorMixin, ABC):
                     )
 
                 # Get the most recent interval data
-                intervals = device_data.get("intervals", [])
+                intervals = device_data.get("intervals") or []
                 if intervals:
                     # Use the first interval (most recent)
-                    latest_interval = intervals[0]
-                    memory_stats = latest_interval.get("memory", {})
+                    latest_interval = intervals[0] or {}
+                    memory_stats = latest_interval.get("memory") or {}
 
                     # Used memory stats
-                    used_stats = memory_stats.get("used", {})
+                    used_stats = memory_stats.get("used") or {}
                     if used_stats:
                         # Maximum used
-                        if "maximum" in used_stats:
+                        used_maximum = used_stats.get("maximum")
+                        if used_maximum is not None:
                             # Create labels with stat
                             used_labels = create_device_labels(
                                 device_data, org_id=org_id, org_name=org_name, stat="max"
@@ -198,25 +199,27 @@ class BaseDeviceCollector(SubCollectorMixin, ABC):
                             self._set_metric_value(
                                 "_device_memory_used_bytes",
                                 used_labels,
-                                used_stats["maximum"] * 1024,  # Convert KB to bytes
+                                used_maximum * 1024,  # Convert KB to bytes
                                 ttl_seconds=ttl_seconds,
                             )
 
                         # Memory usage percentage (use maximum percentage)
-                        percentages = used_stats.get("percentages", {})
-                        if "maximum" in percentages:
+                        percentages = used_stats.get("percentages") or {}
+                        percentage_maximum = percentages.get("maximum")
+                        if percentage_maximum is not None:
                             self._set_metric_value(
                                 "_device_memory_usage_percent",
                                 labels,
-                                percentages["maximum"],
+                                percentage_maximum,
                                 ttl_seconds=ttl_seconds,
                             )
 
                     # Free memory stats
-                    free_stats = memory_stats.get("free", {})
+                    free_stats = memory_stats.get("free") or {}
                     if free_stats:
                         # Minimum free
-                        if "minimum" in free_stats:
+                        free_minimum = free_stats.get("minimum")
+                        if free_minimum is not None:
                             # Create labels with stat
                             free_labels = create_device_labels(
                                 device_data, org_id=org_id, org_name=org_name, stat="min"
@@ -224,7 +227,7 @@ class BaseDeviceCollector(SubCollectorMixin, ABC):
                             self._set_metric_value(
                                 "_device_memory_free_bytes",
                                 free_labels,
-                                free_stats["minimum"] * 1024,  # Convert KB to bytes
+                                free_minimum * 1024,  # Convert KB to bytes
                                 ttl_seconds=ttl_seconds,
                             )
 
