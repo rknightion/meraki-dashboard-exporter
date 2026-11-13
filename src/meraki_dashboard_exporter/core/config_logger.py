@@ -91,7 +91,7 @@ USERINFO_MASK = "***"
 # RFC 3986 scheme: a letter, then letters, digits, "+", "-" or ".".
 _SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*")
 # A scheme, then an authority up to its last "@" (greedy, never past a delimiter).
-_AUTHORITY_USERINFO = re.compile(r"(?<![A-Za-z0-9+.-])([A-Za-z][A-Za-z0-9+.-]*://)[^/?#\s\"']*@")
+_AUTHORITY_USERINFO = re.compile(r"(?<![A-Za-z])([A-Za-z][A-Za-z0-9+.-]*://)[^/?#\s\"]*@")
 
 
 def redact_url_setting(value: str) -> str:
@@ -118,7 +118,7 @@ def redact_url_userinfo(value: str) -> str:
     """Mask URL-authority userinfo anywhere inside a string that is not a URL setting.
 
     Every ``scheme://userinfo@host`` in the value loses its userinfo, where the
-    ``@`` comes before the first ``/``, ``?``, ``#``, quote or whitespace after the
+    ``@`` comes before the first ``/``, ``?``, ``#``, double quote or whitespace after the
     scheme; this also covers a URL embedded in a longer value such as JSON.
     Anything else, such as a filter name holding ``@`` or a URL with ``@`` only in
     its path or query, is returned as is.

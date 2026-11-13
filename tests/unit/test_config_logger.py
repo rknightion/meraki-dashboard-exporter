@@ -375,6 +375,12 @@ class TestRedactUrlUserinfoOnlyMasksAuthority:
                 "https://***@collector.example/v1",
             ),
             ("http://" + "tokensentinel@proxy.example:3128", "http://***@proxy.example:3128"),
+            ("https://user:pw'sentinel@host.example", "https://***@host.example"),
+            ("'https://user:pw'sentinel@host.example'", "'https://***@host.example'"),
+            ("7https://" + "user:pw-sentinel@host.example", "7https://***@host.example"),
+            ("-https://" + "user:pw-sentinel@host.example", "-https://***@host.example"),
+            ("+https://" + "user:pw-sentinel@host.example", "+https://***@host.example"),
+            (".https://" + "user:pw-sentinel@host.example", ".https://***@host.example"),
             (
                 "socks5h://" + "user:pw-sentinel@proxy.example:1080",
                 "socks5h://***@proxy.example:1080",
@@ -385,7 +391,19 @@ class TestRedactUrlUserinfoOnlyMasksAuthority:
                 "see http://***@a.example and https://b.example/x@y",
             ),
         ],
-        ids=["user-password", "username-only", "digit-scheme", "plus-scheme", "embedded"],
+        ids=[
+            "user-password",
+            "username-only",
+            "apostrophe",
+            "quoted-apostrophe",
+            "digit-prefix",
+            "dash-prefix",
+            "plus-prefix",
+            "dot-prefix",
+            "digit-scheme",
+            "plus-scheme",
+            "embedded",
+        ],
     )
     def test_authority_userinfo_masked(self, value: str, expected: str) -> None:
         """A credential in the URL authority is masked."""
