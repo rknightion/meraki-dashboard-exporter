@@ -612,6 +612,7 @@ class OrganizationCollector(MetricCollector):
     @log_batch_operation("collect org metrics", batch_size=1)
     @with_error_handling(
         operation="Collect organization metrics",
+        apply_deadline=False,
         continue_on_error=False,
     )
     async def _collect_org_metrics(self, org: dict[str, Any]) -> None:

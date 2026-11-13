@@ -178,6 +178,7 @@ def with_error_handling(
     base_delay: float = 10.0,
     max_delay: float = 60.0,
     return_error_category: bool = False,
+    apply_deadline: bool = True,
 ) -> Callable[[Callable[P, Coroutine[Any, Any, T]]], Callable[P, Coroutine[Any, Any, T | None]]]:
     """Decorator for standardized error handling on collector methods.
 
@@ -199,6 +200,10 @@ def with_error_handling(
         Return the classified :class:`ErrorCategory` after a tolerated final
         failure. Intended for coordinator-owned sub-collections that must keep
         running while propagating the failure category to domain backoff.
+
+    apply_deadline : bool
+        Apply the per-fetch deadline. Set to False for a coordinator awaiting
+        many fetches that are each bounded independently.
 
     Returns
     -------
@@ -517,7 +522,7 @@ def with_error_handling(
             # result is handed back for metric emission and the collector's
             # remaining budget is preserved. Instances without settings (plain
             # decorated functions) keep the historic no-deadline behavior.
-            deadline = _resolve_per_fetch_deadline(collector_instance)
+            deadline = _resolve_per_fetch_deadline(collector_instance) if apply_deadline else None
             try:
                 async with asyncio.timeout(deadline):
                     return await _run_attempts()

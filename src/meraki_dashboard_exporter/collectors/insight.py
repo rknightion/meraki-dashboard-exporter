@@ -316,6 +316,7 @@ class InsightCollector(MetricCollector):
 
     @with_error_handling(
         operation="Collect Insight applications",
+        apply_deadline=False,
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )

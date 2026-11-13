@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ast
 import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, Mock, patch
@@ -747,6 +749,58 @@ class TestRetryAfterCap:
 
 class TestPerFetchDeadline:
     """#546: per-fetch wall-clock deadline with defined timeout semantics."""
+
+    @pytest.mark.asyncio
+    async def test_apply_deadline_false_outlives_the_deadline(self) -> None:
+        """A coordinator can finish several individually bounded fetches."""
+        instance = _FakeCollector(per_fetch_deadline_seconds=0.05)
+
+        @with_error_handling(operation="Coordinator", apply_deadline=False)
+        async def method(self: _FakeCollector) -> str:
+            for _ in range(3):
+                await asyncio.sleep(0.05)
+            return "done"
+
+        assert await method(instance) == "done"
+        assert instance.tracked_errors == []
+
+    def test_only_whole_org_coordinators_opt_out(self) -> None:
+        """Only the five whole-organisation passes omit the fetch deadline."""
+        source_root = Path(__file__).resolve().parents[1] / "src"
+        expected = {
+            ("meraki_dashboard_exporter/collectors/device.py", "_collect_org_devices"),
+            (
+                "meraki_dashboard_exporter/collectors/network_health.py",
+                "_collect_org_network_health",
+            ),
+            ("meraki_dashboard_exporter/collectors/organization.py", "_collect_org_metrics"),
+            ("meraki_dashboard_exporter/collectors/mt_alerts.py", "_collect_org_sensor_alerts"),
+            ("meraki_dashboard_exporter/collectors/insight.py", "_collect_org"),
+        }
+        found = []
+        for path in source_root.rglob("*.py"):
+            tree = ast.parse(path.read_text())
+            for node in ast.walk(tree):
+                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                for decorator in node.decorator_list:
+                    if not (
+                        isinstance(decorator, ast.Call)
+                        and (
+                            isinstance(decorator.func, ast.Name)
+                            and decorator.func.id == "with_error_handling"
+                            or isinstance(decorator.func, ast.Attribute)
+                            and decorator.func.attr == "with_error_handling"
+                        )
+                    ):
+                        continue
+                    for keyword in decorator.keywords:
+                        if keyword.arg == "apply_deadline":
+                            assert isinstance(keyword.value, ast.Constant)
+                            assert keyword.value.value is False
+                            found.append((path.relative_to(source_root).as_posix(), node.name))
+        assert len(found) == len(expected)
+        assert set(found) == expected
 
     def test_resolve_deadline_from_instance_settings(self) -> None:
         """The deadline comes from settings.api.per_fetch_deadline_seconds."""
