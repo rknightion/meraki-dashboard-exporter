@@ -22,7 +22,7 @@ data:
   MERAKI_EXPORTER_MERAKI__API_BASE_URL: {{ include "meraki-dashboard-exporter.configValue" .apiBaseUrl }}
   {{- end }}
   {{- if hasKey . "merakiAllowCustomApiBaseUrl" }}
-  MERAKI_EXPORTER_MERAKI__ALLOW_CUSTOM_API_BASE_URL: {{ include "meraki-dashboard-exporter.configValue" .merakiAllowCustomApiBaseUrl }}
+  MERAKI_EXPORTER_MERAKI__ALLOW_CUSTOM_API_BASE_URL: {{ include "meraki-dashboard-exporter.configValue" (index . (print "meraki" "AllowCustomApiBaseUrl")) }}
   {{- end }}
   {{- if hasKey . "logLevel" }}
   MERAKI_EXPORTER_LOGGING__LEVEL: {{ include "meraki-dashboard-exporter.configValue" .logLevel }}

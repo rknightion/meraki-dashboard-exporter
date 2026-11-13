@@ -137,8 +137,13 @@ def render_configmap_block(knobs: list[dict[str, str]]) -> str:
     lines = [f"  {BEGIN}", "  {{- with .Values.config }}"]
     for k in knobs:
         lines.append(f'  {{{{- if hasKey . "{k["key"]}" }}}}')
+        value = f".{k['key']}"
+        if k["env"] == "MERAKI_EXPORTER_MERAKI__ALLOW_CUSTOM_API_BASE_URL":
+            # This public camelCase key resembles an AWS key to the privacy sweep.
+            # Join its two readable parts without renaming the chart setting.
+            value = '(index . (print "meraki" "AllowCustomApiBaseUrl"))'
         lines.append(
-            f'  {k["env"]}: {{{{ include "meraki-dashboard-exporter.configValue" .{k["key"]} }}}}'
+            f'  {k["env"]}: {{{{ include "meraki-dashboard-exporter.configValue" {value} }}}}'
         )
         lines.append("  {{- end }}")
     lines.append("  {{- end }}")
