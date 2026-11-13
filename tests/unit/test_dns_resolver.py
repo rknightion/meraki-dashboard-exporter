@@ -45,6 +45,55 @@ async def test_resolve_hostname_caches_result(resolver, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_timed_out_lookup_is_retried_after_short_negative_ttl(resolver, monkeypatch):
+    """A timed-out address is retried after five minutes."""
+    calls = 0
+    resolver.timeout = 0.001
+    ip = "192.0.2.1"
+
+    async def slow_lookup(_ip):
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0.01)
+
+    monkeypatch.setattr(resolver, "_system_dns_lookup", slow_lookup)
+    assert await resolver.resolve_hostname(ip) is None
+    written = resolver._cache[ip].timestamp
+    assert await resolver.resolve_hostname(ip) is None
+    resolver._cache[ip].timestamp = written - 299
+    assert await resolver.resolve_hostname(ip) is None
+    assert calls == 1
+    resolver._cache[ip].timestamp = written - 301
+    assert resolver.get_cache_stats()["expired_entries"] == 1
+    assert await resolver.resolve_hostname(ip) is None
+    assert calls == 2
+    assert resolver.get_cache_stats()["lookup_timeouts"] == 2
+    assert resolver.get_cache_stats()["failed_lookups"] == 0
+
+
+@pytest.mark.asyncio
+async def test_no_ptr_answer_is_cached_for_full_ttl(resolver, monkeypatch):
+    """A definite negative answer retains the configured cache lifetime."""
+    calls = 0
+    ip = "192.0.2.2"
+
+    async def no_ptr(_ip) -> None:
+        nonlocal calls
+        calls += 1
+
+    monkeypatch.setattr(resolver, "_system_dns_lookup", no_ptr)
+    assert await resolver.resolve_hostname(ip) is None
+    written = resolver._cache[ip].timestamp
+    for age in (301, resolver.cache_ttl - 1):
+        resolver._cache[ip].timestamp = written - age
+        assert await resolver.resolve_hostname(ip) is None
+        assert calls == 1
+    resolver._cache[ip].timestamp = written - resolver.cache_ttl - 1
+    assert await resolver.resolve_hostname(ip) is None
+    assert calls == 2
+
+
+@pytest.mark.asyncio
 async def test_resolve_hostname_invalid_ip(resolver, monkeypatch):
     """Invalid IP addresses return ``None`` without lookup."""
 
