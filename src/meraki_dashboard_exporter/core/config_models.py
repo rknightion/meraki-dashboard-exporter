@@ -325,10 +325,10 @@ class MonitoringSettings(BaseModel):
     """Monitoring and observability settings."""
 
     max_consecutive_failures: int = Field(
-        10,
+        5,
         ge=1,
         le=100,
-        description="Maximum consecutive failures before alerting",
+        description="Consecutive failed collection cycles for one organisation source before that source is backed off",
     )
     histogram_buckets: list[float] = Field(
         default=[0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0],

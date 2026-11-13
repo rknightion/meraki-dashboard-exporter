@@ -279,8 +279,8 @@ config: {}
   # otelClientCertPath: ""
   # -- Path to a client private key (PEM) for mTLS to the OTLP collector, shared by all three OTLP channels. Must be set together with client_cert_path (#314).
   # otelClientKeyPath: ""
-  # -- Maximum consecutive failures before alerting (min: 1, max: 100)
-  # monitoringMaxConsecutiveFailures: "10"
+  # -- Consecutive failed collection cycles for one organisation source before that source is backed off (min: 1, max: 100)
+  # monitoringMaxConsecutiveFailures: "5"
   # -- Histogram buckets for collector duration metrics
   # monitoringHistogramBuckets: "[0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0]"
   # -- Days before license expiration to start warning (min: 7, max: 90)

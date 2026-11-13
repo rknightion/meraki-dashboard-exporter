@@ -259,7 +259,7 @@ class LicenseCollector(BaseOrganizationCollector):
             key = (license_type, status)
             license_counts[key] = license_counts.get(key, 0) + 1
 
-            # Check if expiring within 30 days. Include both 'active' and
+            # Check if expiring within the configured warning window. Include both 'active' and
             # 'expiring' states - the Meraki API itself moves a license to
             # state 'expiring' as it approaches expiration, and excluding
             # that state undercounts the gauge (F-097).
@@ -268,7 +268,10 @@ class LicenseCollector(BaseOrganizationCollector):
                 exp_dt = self._parse_meraki_date(expiration_date)
                 if exp_dt:
                     days_until_expiry = (exp_dt - now).days
-                    if days_until_expiry <= 30:
+                    if (
+                        days_until_expiry
+                        <= self.settings.monitoring.license_expiration_warning_days
+                    ):
                         expiring_counts[license_type] = expiring_counts.get(license_type, 0) + 1
 
         # Set total license metrics
@@ -483,10 +486,13 @@ class LicenseCollector(BaseOrganizationCollector):
                 days_until_expiry = (exp_dt - now).days
 
                 # For co-termination, all licenses expire together
-                # Set expiring metric for each device type if within 30 days
+                # Set expiring metric for each device type if within the configured warning window
                 if licensed_device_counts:
                     for device_type, count in licensed_device_counts.items():
-                        if days_until_expiry <= 30:
+                        if (
+                            days_until_expiry
+                            <= self.settings.monitoring.license_expiration_warning_days
+                        ):
                             # Create org labels using helper
                             org_data = {"id": org_id, "name": org_name}
                             labels = create_org_labels(

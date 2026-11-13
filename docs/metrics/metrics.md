@@ -451,7 +451,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_org_firmware_upgrades_pending` | gauge | `org_id`, `product_type` | Number of pending/in-flight firmware upgrade events by product type |  |
 | `meraki_org_has_beta_api` | gauge | `org_id` | Whether the organization has opted into the Meraki beta API spec (1 = has_beta_api opt-in present, 0 = absent). Emitted for every org so absence is queryable rather than a missing series |  |
 | `meraki_org_licenses` | gauge | `org_id`, `license_type`, `status` | Number of licenses |  |
-| `meraki_org_licenses_expiring` | gauge | `org_id`, `license_type` | Number of licenses expiring within 30 days |  |
+| `meraki_org_licenses_expiring` | gauge | `org_id`, `license_type` | Number of licenses expiring within the configured warning window (default 30 days) |  |
 | `meraki_org_networks` | gauge | `org_id` | Number of networks in the organization |  |
 | `meraki_org_networks_bound_to_template` | gauge | `org_id` | Number of NetworkFilter-visible networks bound to a configuration template (counts only networks within the configured NetworkFilter, not the whole org) |  |
 | `meraki_org_packetcaptures` | gauge | `org_id` | Number of packet captures in the organization |  |

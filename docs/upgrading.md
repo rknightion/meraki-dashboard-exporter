@@ -40,6 +40,13 @@ image tag.
     Release images and charts are signed. See [Security](security.md) for how to verify
     signatures before deploying.
 
+## Monitoring settings now take effect
+
+`monitoring.max_consecutive_failures` and `monitoring.license_expiration_warning_days` are now
+honoured. Earlier releases ignored both and used 5 and 30. The default of
+`max_consecutive_failures` is now 5, matching that behaviour, where the reference used to say 10.
+If you set either value, it now takes effect.
+
 ## Changes after 2.3.0
 
 ### Helm chart Ingress routes only the webhook receiver
