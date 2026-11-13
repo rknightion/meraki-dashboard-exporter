@@ -15,8 +15,11 @@ This page is the **compatibility contract** for the metrics this exporter expose
 the 1.0 release promises (and deliberately does *not* promise), and how metric names, labels,
 and units will change after 1.0.
 
-If you only read one thing: **Stable metrics keep their names, labels, and base units across
-1.x. Experimental metrics may change at any time.** Everything else below is detail.
+If you only read one thing: **Stable metrics keep their names, labels, and base units within
+a major version. Experimental metrics may change at any time.** The promise began at 1.0. Between
+1.0.2 and 2.0.0, the generated metrics references record no removed metric names, type changes, or
+loss of documented labels; they omit some label sets.
+Everything else below is detail.
 
 !!! abstract "Scope"
     This contract covers the Prometheus metrics on the `/metrics` endpoint only. It does not
@@ -49,7 +52,7 @@ a settled contract.
 | `meraki_network_filter_*` | Live network-filter scope observability |
 | `meraki_webhook_*` | Webhook receiver counters and processing duration (present only when the receiver is enabled, but the contract for these names is stable) |
 | `meraki_exporter_*` | Exporter self-observability: collector durations/errors, API client latency/counters, inventory cache, cardinality, metric expiration, `build_info` |
-| `meraki_client_*`, `meraki_clients_*` | Per-client metrics. Stable contract: the ID-only numeric series plus the `meraki_client_info` join shape (per #533; see [Name labels](#name-labels-are-not-part-of-numeric-series)) is stable across 1.x. `meraki_client_info` additionally carries `ip` and `ip6` label keys (#764); their *values* are config-gated (`clients.ip_label_enabled` default on, `clients.ip6_label_enabled` default off) but the keys are always present, so the label set does not vary with configuration. These are opt-in and disabled by default (`MERAKI_EXPORTER_CLIENTS__ENABLED`), so whether the series are *present* is gated by config - that non-guarantee is the "Presence of optional subsystems" bullet under [What 1.0 does NOT promise](#what-10-does-not-promise), not an exception to the name/label/unit contract. |
+| `meraki_client_*`, `meraki_clients_*` | Per-client metrics. Stable contract: the ID-only numeric series plus the `meraki_client_info` join shape (per #533; see [Name labels](#name-labels-are-not-part-of-numeric-series)) is stable within a major version. `meraki_client_info` additionally carries `ip` and `ip6` label keys (#764); their *values* are config-gated (`clients.ip_label_enabled` default on, `clients.ip6_label_enabled` default off) but the keys are always present, so the label set does not vary with configuration. These are opt-in and disabled by default (`MERAKI_EXPORTER_CLIENTS__ENABLED`), so whether the series are *present* is gated by config - that non-guarantee is the "Presence of optional subsystems" bullet under [What 1.0 does NOT promise](#what-10-does-not-promise), not an exception to the name/label/unit contract. |
 
 ### Experimental
 
@@ -62,6 +65,7 @@ Build production alerts against them at your own risk.
 | `meraki_mx_*` | MX security-appliance metrics (uplink health/usage, VPN, firewall, HA, performance). No live MX hardware is available to the maintainer; these are best-effort, driven from public API/SDK docs (see the note in the project README) and not verified against real devices. |
 | `meraki_mg_*` | MG cellular-gateway metrics. Same best-effort, no-live-hardware caveat as MX. |
 | `meraki_mv_*` | MV camera metrics (people counting, analytics zones, retention/audio). Same best-effort caveat, and the underlying analytics surface is subject to change. |
+| `meraki_insight_*` | Meraki Insight application health. Licence-gated and not verified against a live Insight organization. |
 
 !!! tip "Which tier is a metric in?"
     Match the metric's name prefix to the tables above. If a metric's family is not listed
@@ -70,10 +74,10 @@ Build production alerts against them at your own risk.
 
 ## What 1.0 promises
 
-For **Stable** metrics, within the 1.x series the exporter promises:
+For **Stable** metrics, within a major version the exporter promises:
 
-- **Names are stable.** A Stable metric will not be renamed within 1.x except through the
-  deprecation process below (dual-publish, then removal in a later minor).
+- **Names are stable.** A Stable metric name will not be removed within a major version. A replacement
+  name follows the deprecation process below (dual-publish, then removal in a new major).
 - **Labels are stable and additive.** Existing label *keys* on a Stable metric will not be
   removed or repurposed. New label keys may be *added* (see [Labels are
   additive](#labels-are-additive)).
@@ -188,13 +192,14 @@ new name) through a **dual-publish deprecation window**:
    `DEPRECATED:` note that names the replacement and the earliest release in which the old
    metric may be removed.
 3. **Dual-publish for at least one minor release.** Both names are emitted together for a
-   minimum of one full minor release (`1.n` → `1.n+1`), giving consumers time to migrate
+   minimum of one full minor release (`X.n` to `X.n+1`), giving consumers time to migrate
    dashboards and alerts.
-4. **Remove the old name in a later minor.** Removal happens no earlier than the release named
-   in the deprecation note, and never in a patch release.
+4. **Remove the old name in a new major.** Removal happens no earlier than the release named
+   in the deprecation note and after the minimum dual-publish window.
 
 Deprecations and removals are called out in the [Changelog](changelog.md). Breaking metric
-changes that cannot follow this process are reserved for a future **2.0**.
+changes that cannot follow this process are reserved for a new major version and are listed in
+[Upgrading](upgrading.md) for that version.
 
 ## One-time pre-1.0 sweep
 

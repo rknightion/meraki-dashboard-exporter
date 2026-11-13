@@ -6,11 +6,9 @@ import pytest
 
 from tests.fixtures.fleet import (
     MEDIUM_FLEET_PRESET,
-    FleetCITier,
     FleetParameters,
     FleetPreset,
     build_fleet,
-    presets_for_ci_tier,
 )
 
 
@@ -54,49 +52,19 @@ def test_branch_retail_is_the_frozen_literal_medium_topology() -> None:
     assert fleet.parameters.clients_per_network == 10
 
 
+_EXPECTED_TOPOLOGY = [
+    (FleetPreset.HOMELAB, 1, 19, 30),
+    (FleetPreset.BRANCH_RETAIL, 750, 4500, 18000),
+    (FleetPreset.CAMPUS, 20, 5200, 57600),
+    (FleetPreset.DENSE_SWITCH, 50, 2000, 96000),
+    (FleetPreset.XL_MULTI_SITE, 3500, 21000, 84000),
+    (FleetPreset.MULTI_ORG_SHARD, 750, 4500, 18000),
+    (FleetPreset.CAMERA_HEAVY, 30, 24000, 0),
+]
+
+
 @pytest.mark.slow
-@pytest.mark.parametrize(
-    ("preset", "networks", "devices", "ports"),
-    [
-        (FleetPreset.HOMELAB, 1, 19, 30),
-        (FleetPreset.BRANCH_RETAIL, 750, 4500, 18000),
-        pytest.param(
-            FleetPreset.CAMPUS,
-            20,
-            5200,
-            57600,
-            marks=pytest.mark.fleet_scheduled,
-        ),
-        pytest.param(
-            FleetPreset.DENSE_SWITCH,
-            50,
-            2000,
-            96000,
-            marks=pytest.mark.fleet_scheduled,
-        ),
-        pytest.param(
-            FleetPreset.XL_MULTI_SITE,
-            3500,
-            21000,
-            84000,
-            marks=pytest.mark.fleet_scheduled,
-        ),
-        pytest.param(
-            FleetPreset.MULTI_ORG_SHARD,
-            750,
-            4500,
-            18000,
-            marks=pytest.mark.fleet_on_demand,
-        ),
-        pytest.param(
-            FleetPreset.CAMERA_HEAVY,
-            30,
-            24000,
-            0,
-            marks=pytest.mark.fleet_on_demand,
-        ),
-    ],
-)
+@pytest.mark.parametrize(("preset", "networks", "devices", "ports"), _EXPECTED_TOPOLOGY)
 def test_every_named_preset_materializes_a_vendor_valid_topology(
     preset: FleetPreset, networks: int, devices: int, ports: int
 ) -> None:
@@ -152,22 +120,8 @@ def test_vendor_cap_overflow_is_rejected_before_materializing_data() -> None:
         invalid.validate()
 
 
-def test_ci_tiers_select_the_seven_presets_without_overlap() -> None:
-    """Workflow wiring has one source of truth for PR, scheduled, and on-demand scale work."""
-    selected = [preset for tier in FleetCITier for preset in presets_for_ci_tier(tier)]
-
-    assert presets_for_ci_tier(FleetCITier.PR) == (
-        FleetPreset.HOMELAB,
-        FleetPreset.BRANCH_RETAIL,
-    )
-    assert presets_for_ci_tier(FleetCITier.SCHEDULED) == (
-        FleetPreset.CAMPUS,
-        FleetPreset.DENSE_SWITCH,
-        FleetPreset.XL_MULTI_SITE,
-    )
-    assert presets_for_ci_tier(FleetCITier.ON_DEMAND) == (
-        FleetPreset.MULTI_ORG_SHARD,
-        FleetPreset.CAMERA_HEAVY,
-    )
+def test_topology_rows_cover_every_preset() -> None:
+    """Every named preset has exactly one topology assertion row."""
+    selected = [row[0] for row in _EXPECTED_TOPOLOGY]
     assert set(selected) == set(FleetPreset)
     assert len(selected) == len(set(selected))

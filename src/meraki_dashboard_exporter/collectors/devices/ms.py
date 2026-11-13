@@ -73,6 +73,7 @@ class MSCollector(BaseDeviceCollector):
         # (serial, port_id) so a transition can remove the now-stale label
         # series instead of relying on TTL expiration (see F-070).
         self._emitted_stp_states: dict[tuple[str, str], set[str]] = {}
+        self._emitted_port_status: dict[tuple[str, str], dict[str, str]] = {}
         self._emitted_8021x_statuses: dict[tuple[str, str], set[str]] = {}
         # Timestamp of the last successful STP priority collection, used to
         # gate collect_stp_priorities to the SLOW cadence even though it is
@@ -876,6 +877,38 @@ class MSCollector(BaseDeviceCollector):
                 ttl_seconds=ttl_seconds,
             )
 
+    def _emit_port_status(
+        self,
+        device: dict[str, Any],
+        port: dict[str, Any],
+        org_id: str,
+        org_name: str,
+        ttl_seconds: float | None,
+    ) -> None:
+        """Replace any superseded label set before emitting the current status."""
+        labels = create_port_labels(
+            device,
+            port,
+            org_id=org_id,
+            org_name=org_name,
+            link_speed=port.get("speed", ""),
+            duplex=port.get("duplex", ""),
+        )
+        key = (labels["serial"], labels["port_id"])
+        previous = self._emitted_port_status.get(key)
+        if previous is not None and previous != labels:
+            self.parent._expire_metric_series(
+                self._switch_port_status, previous, MSMetricName.MS_PORT_STATUS.value
+            )
+        self.parent._set_metric(
+            self._switch_port_status,
+            labels,
+            1 if port.get("status") == "Connected" else 0,
+            MSMetricName.MS_PORT_STATUS.value,
+            ttl_seconds=ttl_seconds,
+        )
+        self._emitted_port_status[key] = dict(labels)
+
     @log_api_call("getOrganizationSwitchPortsStatusesBySwitch")
     @with_error_handling(
         operation="Collect MS switch port statuses (org)",
@@ -974,25 +1007,7 @@ class MSCollector(BaseDeviceCollector):
             }
 
             for port in switch.get("ports", []) or []:
-                speed = port.get("speed", "")
-                duplex = port.get("duplex", "")
-                port_labels = create_port_labels(
-                    device_data,
-                    port,
-                    org_id=org_id,
-                    org_name=org_name,
-                    link_speed=speed,
-                    duplex=duplex,
-                )
-
-                is_connected = 1 if port.get("status") == "Connected" else 0
-                self.parent._set_metric(
-                    self._switch_port_status,
-                    port_labels,
-                    is_connected,
-                    MSMetricName.MS_PORT_STATUS.value,
-                    ttl_seconds=ttl,
-                )
+                self._emit_port_status(device_data, port, org_id, org_name, ttl)
 
                 self._emit_port_error_warning_metrics(
                     device_data, port, org_id, org_name, ttl_seconds=ttl
@@ -1069,22 +1084,7 @@ class MSCollector(BaseDeviceCollector):
                 )
 
             for port in port_statuses:
-                # Create port labels with additional attributes
-                speed = port.get("speed", "")  # e.g., "1 Gbps", "100 Mbps"
-                duplex = port.get("duplex", "")  # e.g., "full", "half"
-                port_labels = create_port_labels(
-                    device, port, org_id=org_id, org_name=org_name, link_speed=speed, duplex=duplex
-                )
-
-                # Port status with speed and duplex
-                is_connected = 1 if port.get("status") == "Connected" else 0
-                self.parent._set_metric(
-                    self._switch_port_status,
-                    port_labels,
-                    is_connected,
-                    MSMetricName.MS_PORT_STATUS.value,
-                    ttl_seconds=status_ttl,
-                )
+                self._emit_port_status(device, port, org_id, org_name, status_ttl)
 
                 # Active port errors/warnings (expire automatically once cleared)
                 self._emit_port_error_warning_metrics(

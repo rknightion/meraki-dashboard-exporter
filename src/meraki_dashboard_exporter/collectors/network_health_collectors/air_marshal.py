@@ -32,7 +32,12 @@ from typing import TYPE_CHECKING, Any
 
 from ...core.api_facade import facade_for
 from ...core.constants.metrics_constants import NetworkHealthMetricName
-from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
+from ...core.error_handling import (
+    CollectorError,
+    ErrorCategory,
+    validate_response_format,
+    with_error_handling,
+)
 from ...core.label_helpers import create_network_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -137,9 +142,12 @@ class AirMarshalCollector(BaseNetworkHealthCollector):
     @with_error_handling(
         operation="Collect Air Marshal rogue AP detection",
         continue_on_error=True,
+        return_error_category=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def _fetch_air_marshal(self, network_id: str) -> list[dict[str, Any]] | None:
+    async def _fetch_air_marshal(
+        self, network_id: str
+    ) -> list[dict[str, Any]] | ErrorCategory | None:
         """Fetch Air Marshal entries for a network.
 
         Parameters
@@ -149,9 +157,8 @@ class AirMarshalCollector(BaseNetworkHealthCollector):
 
         Returns
         -------
-        list[dict[str, Any]] | None
-            List of Air Marshal SSID entries, or None on error (handled by
-            the error decorator).
+        list[dict[str, Any]] | ErrorCategory | None
+            List of entries, or an error category when the fetch fails.
 
         """
         response = await facade_for(self).call(
@@ -182,6 +189,10 @@ class AirMarshalCollector(BaseNetworkHealthCollector):
         org_name = network.get("orgName", org_id)
 
         entries = await self._fetch_air_marshal(network_id)
+        if isinstance(entries, ErrorCategory):
+            if entries != ErrorCategory.API_NOT_AVAILABLE:
+                raise CollectorError("Failed to collect Air Marshal data", entries)
+            return
         if entries is None:
             return
 

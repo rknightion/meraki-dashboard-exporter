@@ -27,7 +27,7 @@ def mock_settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     """Real Settings with minimal required env vars."""
     monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
     monkeypatch.setenv("MERAKI_EXPORTER_API__SMOOTHING_ENABLED", "false")
-    monkeypatch.setenv("MERAKI_EXPORTER_API__MAX_RETRIES", "0")
+    monkeypatch.setenv("MERAKI_EXPORTER_API__MAX_RETRIES", "1")
     return Settings()
 
 

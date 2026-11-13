@@ -29,8 +29,8 @@ or `/status` shows `authenticated: false`.
 
 **Check:**
 
-- `curl -s http://<host>:9099/status | jq '.api_health.authenticated'` - this reflects
-  `MerakiClient.get_auth_ok()`, which is `true` after any HTTP 200 from the Meraki API, `false`
+- `curl -s 'http://<host>:9099/status?format=json' | jq '.api_health.authenticated'` - this reflects
+  `AsyncMerakiClient.get_auth_ok()`, which is `true` after any HTTP 200 from the Meraki API, `false`
   after any HTTP 401, and `null`/unset if no auth-signalling response has been seen yet.
 - Run an offline config check plus a live auth probe:
   ```bash
@@ -64,7 +64,7 @@ metrics.
 - Log line, one per affected organization: `"Network filter resolved to zero networks for
   organization"` (with `org_id`, `org_name`, `total_networks_in_org`, and `configured_filter`
   fields) - emitted by `CollectorManager._validate_network_filter()` at startup.
-- `curl -s http://<host>:9099/status | jq '.network_filter'` shows the effective filter state.
+- `curl -s 'http://<host>:9099/status?format=json' | jq '.network_filter'` shows the effective filter state.
 
 **Important nuance:** this only **fails startup** (raises and exits) if the filter resolves to
 **zero networks across every configured organization** - a multi-org deployment where the filter
@@ -128,8 +128,7 @@ the same exporter instance are fine.
 **Check:**
 
 - Log lines: `"Organization entering backoff"` (fields: `org_id`, `org_name`, `source`,
-  `consecutive_failures`, `backoff_seconds`) and, on recovery, `"Organization recovered from
-  backoff"`.
+  `consecutive_failures`, `backoff_seconds`) and, on recovery, `"Organization failure domain recovered from backoff"`.
 - Per-collector skip lines while an org is backed off: `"Skipping organization collection due to
   backoff"`, `"Skipping device collection for organization in backoff"`, `"Skipping network health
   collection for organization in backoff"`, `"Skipping client collection for organization in
@@ -168,7 +167,7 @@ endpoint groups stop completing within their solved interval.
   proactive client-side throttle above.
 - `meraki_exporter_api_rate_limiter_tokens{org_id}` - estimated remaining tokens in the client-side
   bucket; a value pinned near zero indicates sustained pressure.
-- `curl -s http://<host>:9099/status | jq '.api_health'` surfaces `throttle_events` and
+- `curl -s 'http://<host>:9099/status?format=json' | jq '.api_health'` surfaces `throttle_events` and
   `per_org_rate_limits` (tokens remaining per org) in one place.
 
 **Fix:** the AIMD controller already self-adjusts the effective rate down on real 429s and
@@ -206,6 +205,8 @@ networks/devices than intended (see the NetworkFilter section above).
 
 **Check / fix by outcome:**
 
+- **Exporter won't start**, error mentions `MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET`: set
+  the shared secret when the enabled receiver requires one.
 - **Exporter won't start**, error mentions `require_secret=false`: this is
   `enforce_webhook_security()` refusing to boot with an unauthenticated webhook receiver. Either
   set `MERAKI_EXPORTER_WEBHOOKS__REQUIRE_SECRET=true` (recommended - also set

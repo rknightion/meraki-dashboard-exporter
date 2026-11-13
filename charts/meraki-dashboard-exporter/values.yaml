@@ -139,9 +139,10 @@ meraki:
 # Application configuration (maps to MERAKI_EXPORTER_* environment variables).
 #
 # Every tuning knob the exporter exposes is listed below, commented at its schema
-# default with the field's own description. Uncomment and change only what you
-# need -- anything left commented falls through to the application's built-in
-# default. Names are friendly camelCase.
+# default with the field's own description. To set a knob here, replace `config: {}`
+# with `config:` and uncomment the lines you need. Alternatively, set keys under
+# `config:` in your own values file. Anything left commented uses the application's
+# built-in default. Names are friendly camelCase.
 #
 # GENERATED region: the block between the BEGIN/END markers is written by
 # scripts/generate_helm_config.py from the Pydantic config schema. Do NOT hand-edit
@@ -157,7 +158,7 @@ config: {}
   # logLevel: "INFO"
   # -- Structured-log renderer: 'json' (default) or 'logfmt'. JSON is the default because the primary sinks (Loki/ELK/CloudWatch) parse it cheaply and the multi-line exception field becomes valid nested JSON; set 'logfmt' for human-readable console output (#640).
   # loggingLogFormat: "json"
-  # -- Maximum number of retries for API requests (min: 0, max: 10)
+  # -- Total SDK attempts per request for connection errors and 5xx responses (1 means no retry), and the number of exporter retries for 429 responses (min: 1, max: 10)
   # apiMaxRetries: "3"
   # -- Per-request API timeout in seconds (SDK single_request_timeout). Note this applies to EACH page request, so a total_pages='all' bulk fetch may make many such requests; the overall fetch is additionally bounded by per_fetch_deadline_seconds. Reviewed for large-org bulk fetches (#556): kept at 30s (raise only if large-org page latencies are observed to exceed it). (min: 10, max: 300)
   # apiTimeout: "30"
@@ -205,13 +206,13 @@ config: {}
   # apiMsPortStatusUseOrgEndpoint: "true"
   # -- Collect dense per-port MS series (status, errors/warnings, usage/PoE/client count, packets, STP/802.1X, neighbours, and port-info). Disable to suppress about 74 observed meraki_ms_* samples per observed port; org-level port overview, switch-level STP, stack, and other MS metrics remain enabled.
   # apiMsPortMetricsEnabled: "true"
-  # -- Minimum seconds between per-switch port usage/POE refreshes (min: 0, max: 3600)
+  # -- Minimum seconds between per-switch port usage/POE refreshes (min: 1, max: 3600)
   # apiMsPortUsageInterval: "600"
-  # -- Minimum seconds between per-switch packet stats refreshes (min: 0, max: 3600)
+  # -- Minimum seconds between per-switch packet stats refreshes (min: 1, max: 3600)
   # apiMsPacketStatsInterval: "600"
-  # -- Minimum seconds between client application usage refreshes (min: 0, max: 3600)
+  # -- Minimum seconds between client application usage refreshes (min: 1, max: 3600)
   # apiClientAppUsageInterval: "600"
-  # -- Minimum seconds between per-client wireless signal-quality refreshes (min: 0, max: 3600)
+  # -- Minimum seconds between per-client wireless signal-quality refreshes (min: 1, max: 3600)
   # apiClientSignalQualityInterval: "600"
   # -- Maximum wireless clients queried for signal quality per network per cycle (0 disables the cap). Bounds the sequential per-client API fan-out. (min: 0, max: 5000)
   # apiClientSignalQualityMaxClients: "200"
@@ -279,8 +280,8 @@ config: {}
   # otelClientCertPath: ""
   # -- Path to a client private key (PEM) for mTLS to the OTLP collector, shared by all three OTLP channels. Must be set together with client_cert_path (#314).
   # otelClientKeyPath: ""
-  # -- Maximum consecutive failures before alerting (min: 1, max: 100)
-  # monitoringMaxConsecutiveFailures: "10"
+  # -- Consecutive failed collection cycles for one organisation source before that source is backed off (min: 1, max: 100)
+  # monitoringMaxConsecutiveFailures: "5"
   # -- Histogram buckets for collector duration metrics
   # monitoringHistogramBuckets: "[0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0]"
   # -- Days before license expiration to start warning (min: 7, max: 90)
@@ -294,7 +295,7 @@ config: {}
   # -- Collection profile controlling which endpoint priorities run: availability includes priority 1, standard includes priorities 1-3, and full includes all priorities. When unset, the full surface is preserved if the solved full-plan demand fits the adaptive scheduler's budget target; above that threshold, startup requires an explicit profile choice. Fixed scheduler mode does not apply this gate.
   # collectorsProfile: ""
   # -- Enabled collector names
-  # collectorsEnabledCollectors: "["alerts", "clients", "config", "device", "insight", "mtsensor", "mtsensoralerts", "networkhealth", "organization"]"
+  # collectorsEnabledCollectors: "[\"alerts\", \"clients\", \"config\", \"device\", \"insight\", \"mtsensor\", \"mtsensoralerts\", \"networkhealth\", \"organization\"]"
   # -- Explicitly disabled collectors (overrides enabled)
   # collectorsDisableCollectors: ""
   # -- Timeout for individual collector runs in seconds (min: 30, max: 600)
@@ -454,8 +455,9 @@ readinessProbe:
   httpGet:
     # -- /ready returns 200 once every collector owning a priority-<=3 endpoint
     # group has completed a successful run, and 503 until then, so Kubernetes only
-    # routes traffic once the exporter has real data. Do not point this at /health (which is
-    # always 200) or the readiness gate becomes a no-op.
+    # routes traffic once the exporter has real data. Do not point this at /health:
+    # it answers 200 from startup and only turns 503 when the liveness dead-man
+    # switch trips, so it would not gate on first collection.
     path: /ready
     port: http
   # -- Number of seconds after container start before first probe. Kept small
@@ -498,7 +500,7 @@ serviceMonitor:
   namespace: ""
   # -- Additional labels to add to the ServiceMonitor (e.g. for Prometheus selector)
   additionalLabels: {}
-  # -- Scrape interval. Should match the exporter's fast update interval.
+  # -- Scrape interval. Collection cadence is solved per endpoint group (there are no fixed tiers); 60s is a sensible default.
   interval: "60s"
   # -- Scrape timeout
   scrapeTimeout: "30s"
@@ -521,9 +523,9 @@ prometheusRule:
   namespace: ""
   # -- Additional labels to add to the PrometheusRule (e.g. for your Prometheus's ruleSelector)
   additionalLabels: {}
-  # -- `job` label value to match in the up{} liveness alert. Should match whatever
-  # job label your scrape config / ServiceMonitor actually produces.
-  job: meraki-dashboard-exporter
+  # -- Regular expression matched against the `job` label of up. Empty uses this
+  # release's Service name; set this when scraping under another job name.
+  job: ""
   # -- Set true if webhooks.enabled is true for this deployment (see config.webhooksEnabled
   # below / docs/getting-started.md). Selects the faster (5m) webhook fast-path device-down
   # alert instead of the poll-path default (15m) - only one of the two is ever rendered.

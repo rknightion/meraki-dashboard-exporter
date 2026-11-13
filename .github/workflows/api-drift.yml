@@ -8,7 +8,6 @@ on:
 permissions:
   contents: read
   issues: write
-  pull-requests: write
 
 jobs:
   spec-drift:
@@ -73,7 +72,7 @@ jobs:
             /specs/baseline.json /specs/live.json \
             --fail-on WARN \
             --err-ignore /cfg/oasdiff-ignore.txt \
-            --warn-ignore /cfg/oasdiff-ignore.txt >> /tmp/drift.md 2>&1
+            --warn-ignore /cfg/oasdiff-ignore.txt >> /tmp/drift.md 2>/tmp/oasdiff.stderr
           code=$?
           echo '```' >> /tmp/drift.md
           echo "code=$code" >> "$GITHUB_OUTPUT"
@@ -83,7 +82,10 @@ jobs:
       - name: Fail on oasdiff tool error (exit not 0/1)
         if: steps.oasdiff.outputs.code != '0' && steps.oasdiff.outputs.code != '1'
         run: |
-          echo "oasdiff errored (exit ${CODE}) — treating as tool failure, not API drift"; cat /tmp/drift.md || true; exit 1
+          echo "oasdiff errored (exit ${CODE}) — treating as tool failure, not API drift"
+          cat /tmp/oasdiff.stderr || true
+          cat /tmp/drift.md || true
+          exit 1
         env:
           CODE: ${{ steps.oasdiff.outputs.code }}
 

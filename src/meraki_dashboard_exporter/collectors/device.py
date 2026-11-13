@@ -804,6 +804,7 @@ class DeviceCollector(MetricCollector):
     @log_batch_operation("collect devices", batch_size=None)
     @with_error_handling(
         operation="Collect organization devices",
+        apply_deadline=False,
         continue_on_error=False,
     )
     async def _collect_org_devices(self, org_id: str, org_name: str) -> None:

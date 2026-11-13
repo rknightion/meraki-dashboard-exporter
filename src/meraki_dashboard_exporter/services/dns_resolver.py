@@ -16,6 +16,8 @@ import structlog
 from ..core.async_utils import AsyncRetry, shutdown_executor
 from ..core.config import Settings
 
+TIMEOUT_NEGATIVE_TTL_SECONDS = 300.0
+
 logger = structlog.get_logger(__name__)
 _resolution_generation: ContextVar[int | None] = ContextVar(
     "dns_resolution_generation", default=None
@@ -30,6 +32,7 @@ class CacheEntry:
     timestamp: float
     client_id: str | None = None
     description: str | None = None
+    ttl: float | None = None
 
 
 @dataclass(frozen=True)
@@ -158,6 +161,10 @@ class DNSResolver:
             return True
         return False
 
+    def _entry_ttl(self, entry: CacheEntry) -> float:
+        """Return the entry override or the configured cache TTL."""
+        return entry.ttl if entry.ttl is not None else self.cache_ttl
+
     def _is_cache_valid(self, entry: CacheEntry) -> bool:
         """Check if a cache entry is still valid.
 
@@ -173,7 +180,7 @@ class DNSResolver:
 
         """
         age = time.time() - entry.timestamp
-        return age < self.cache_ttl
+        return age < self._entry_ttl(entry)
 
     async def resolve_hostname(self, ip: str | None, client_id: str | None = None) -> str | None:
         """Resolve hostname from IP address.
@@ -267,13 +274,16 @@ class DNSResolver:
                 return None
             self._stats["failed_lookups"] += 1
 
-        # Cache the result
+        # Five minutes limits repeated timeout costs (about N / 32 * 5 seconds
+        # per network with default workers and timeout) while allowing recovery
+        # sooner than the normal six-hour cache TTL.
         self._cache_put(
             ip,
             CacheEntry(
                 hostname=hostname,
                 timestamp=time.time(),
                 client_id=client_id,
+                ttl=TIMEOUT_NEGATIVE_TTL_SECONDS if timed_out else None,
             ),
             generation=generation,
         )
@@ -309,7 +319,7 @@ class DNSResolver:
         evicted until it fits.
         """
         now = time.time()
-        expired = [ip for ip, e in self._cache.items() if now - e.timestamp >= self.cache_ttl]
+        expired = [ip for ip, e in self._cache.items() if now - e.timestamp >= self._entry_ttl(e)]
         for ip in expired:
             del self._cache[ip]
 
@@ -574,7 +584,7 @@ class DNSResolver:
 
         current_time = time.time()
         for entry in self._cache.values():
-            if current_time - entry.timestamp < self.cache_ttl:
+            if current_time - entry.timestamp < self._entry_ttl(entry):
                 valid += 1
             else:
                 expired += 1

@@ -639,13 +639,12 @@ class TestClientsCollector(BaseCollectorTest):
             # Run collection - should not raise exception
             await self.run_collector(collector)
 
-        # Verify error was tracked
-        try:
-            metrics.assert_counter_incremented("meraki_exporter_collector_errors", min_increment=1)
-        except AssertionError:
-            # Error tracking might not be implemented in the collector
-            # This is acceptable since the main functionality handles errors gracefully
-            pass
+        metrics.assert_counter_value(
+            "meraki_exporter_collector_errors",
+            1,
+            collector="ClientsCollector",
+            error_type="api_client_error",
+        )
 
     async def test_error_handling_in_signal_quality(self, collector, mock_api_builder, metrics):
         """Test error handling when signal quality API fails."""
@@ -667,6 +666,7 @@ class TestClientsCollector(BaseCollectorTest):
             .with_organizations([org])
             .with_networks([network], org_id=org["id"])
             .with_custom_response("getNetworkClients", clients)
+            .with_custom_response("getNetworkClientsApplicationUsage", [])
             .build()
         )
 
@@ -683,13 +683,13 @@ class TestClientsCollector(BaseCollectorTest):
             # Run collection - should not raise exception
             await self.run_collector(collector)
 
-        # Verify error was tracked
-        try:
-            metrics.assert_counter_incremented("meraki_exporter_collector_errors", min_increment=1)
-        except AssertionError:
-            # Error tracking might not be implemented in the collector
-            # This is acceptable since the main functionality handles errors gracefully
-            pass
+        metrics.assert_counter_value(
+            "meraki_exporter_collector_errors",
+            1,
+            collector="ClientsCollector",
+            error_type="api_client_error",
+        )
+        api.wireless.getNetworkWirelessSignalQualityHistory.assert_called_once()
 
     async def test_collect_network_with_fractional_usage_not_dropped(
         self, collector, mock_api_builder, metrics

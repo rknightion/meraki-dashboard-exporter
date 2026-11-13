@@ -15,16 +15,14 @@ Keep every `rknightion/.github` reference in this repo on the same version; copy
   `contains(needs.*.result, 'failure'|'cancelled')` over `[test, docker-build-test,
   helm-lint-kubeconform, ac-evidence, privacy-sweep, backlog-freeze, zizmor]`. **A new job that
   should gate merges has to be added to that `needs:` list**, or it runs and blocks nothing.
-- `scheduled-fleet-tests` and `on-demand-fleet-tests` are deliberately outside that list, so they
-  never block a PR.
 - The repository ruleset separately requires actionlint, zizmor and dependency review. When you add
   an independent scanner, update the ruleset only after observing the check's exact live name.
 
 ## harden-runner
 
 Applied **per job, in `egress-policy: audit` mode**, not workflow-wide, and only on jobs that run
-third-party steps. In `ci.yml` that is `test` and `docker-build-test`; its absence from the two
-fleet-test jobs is deliberate. Audit mode logs egress without blocking, so it is not a hard
+third-party steps. In `ci.yml` that is `test` and `docker-build-test`. Audit mode logs egress
+without blocking, so it is not a hard
 allowlist gate. A new job running third-party actions needs its own `harden-runner` step.
 
 ## Token minting

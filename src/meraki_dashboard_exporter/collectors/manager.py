@@ -132,7 +132,9 @@ class CollectorManager:
         )
 
         # Per-organization health tracking for graceful degradation
-        self.org_health_tracker = OrgHealthTracker()
+        self.org_health_tracker = OrgHealthTracker(
+            max_consecutive_failures=self.settings.monitoring.max_consecutive_failures
+        )
 
         # Track collector health state
         self.collector_health: dict[str, dict[str, Any]] = {}

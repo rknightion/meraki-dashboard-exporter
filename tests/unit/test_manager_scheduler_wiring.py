@@ -119,6 +119,31 @@ def _group(
 # ---------------------------------------------------------------------------
 
 
+def test_max_consecutive_failures_wiring() -> None:
+    """The manager uses the configured failure threshold."""
+    settings = _settings()
+    settings.monitoring.max_consecutive_failures = 3
+    manager = _bare_manager(settings)
+    assert manager.org_health_tracker.max_consecutive_failures == 3
+
+
+def test_max_consecutive_failures_defaults() -> None:
+    """Defaults preserve the previously effective thresholds."""
+    settings = _settings()
+    assert settings.monitoring.max_consecutive_failures == 5
+    assert settings.monitoring.license_expiration_warning_days == 30
+
+
+def test_max_consecutive_failures_fallback() -> None:
+    """A standalone organization collector uses the configured threshold."""
+    from meraki_dashboard_exporter.collectors.organization import OrganizationCollector
+
+    settings = _settings()
+    settings.monitoring.max_consecutive_failures = 3
+    collector = OrganizationCollector(api=MagicMock(), settings=settings)
+    assert collector.org_health_tracker.max_consecutive_failures == 3
+
+
 class TestSchedulerConstruction:
     """The scheduler is built once and injected into every collector."""
 

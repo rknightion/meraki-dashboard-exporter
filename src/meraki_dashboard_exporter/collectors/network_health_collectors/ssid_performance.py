@@ -135,9 +135,13 @@ class SSIDPerformanceCollector(BaseNetworkHealthCollector):
                     network_name=network_name,
                     error=error_str,
                 )
+                if not any(token in error_str for token in ("400", "404", "Bad Request")):
+                    raise
+                return
             else:
                 logger.exception(
                     "Failed to collect SSID performance metrics",
                     network_id=network_id,
                     network_name=network_name,
                 )
+                raise

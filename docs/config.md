@@ -54,7 +54,7 @@ Configuration for Meraki API interactions
 
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_API__MAX_RETRIES` | `int` | `3` | Maximum number of retries for API requests (min: 0, max: 10) |
+| `MERAKI_EXPORTER_API__MAX_RETRIES` | `int` | `3` | Total SDK attempts per request for connection errors and 5xx responses (1 means no retry), and the number of exporter retries for 429 responses (min: 1, max: 10) |
 | `MERAKI_EXPORTER_API__TIMEOUT` | `int` | `30` | Per-request API timeout in seconds (SDK single_request_timeout). Note this applies to EACH page request, so a total_pages='all' bulk fetch may make many such requests; the overall fetch is additionally bounded by per_fetch_deadline_seconds. Reviewed for large-org bulk fetches (#556): kept at 30s (raise only if large-org page latencies are observed to exceed it). (min: 10, max: 300) |
 | `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT` | `int` | `5` | Max in-flight sub-requests within a SINGLE collector's fan-out (the ManagedTaskGroup bound in device/network_health/organization collectors). This caps concurrency BREADTH (in-flight memory + SDK executor-thread pressure), which is distinct from the client-side AIMD rate limiter that caps request RATE: the limiter paces how fast requests leave, this caps how many are outstanding at once. Both are needed. Not to be confused with collectors.max_concurrent_collectors, which bounds how many collector loops run at once globally (#636). (min: 1, max: 20) |
 | `MERAKI_EXPORTER_API__BATCH_SIZE` | `int` | `20` | Default batch size for API operations (min: 1, max: 100) |
@@ -78,10 +78,10 @@ Configuration for Meraki API interactions
 | `MERAKI_EXPORTER_API__SMOOTHING_MAX_BATCH_DELAY` | `float` | `15.0` | Maximum delay between batches when smoothing (min: 0.0, max: 300.0) |
 | `MERAKI_EXPORTER_API__MS_PORT_STATUS_USE_ORG_ENDPOINT` | `bool` | `True` | Use org-level switch port status endpoint for MS status metrics |
 | `MERAKI_EXPORTER_API__MS_PORT_METRICS_ENABLED` | `bool` | `True` | Collect dense per-port MS series (status, errors/warnings, usage/PoE/client count, packets, STP/802.1X, neighbours, and port-info). Disable to suppress about 74 observed meraki_ms_* samples per observed port; org-level port overview, switch-level STP, stack, and other MS metrics remain enabled. |
-| `MERAKI_EXPORTER_API__MS_PORT_USAGE_INTERVAL` | `int` | `600` | Minimum seconds between per-switch port usage/POE refreshes (min: 0, max: 3600) |
-| `MERAKI_EXPORTER_API__MS_PACKET_STATS_INTERVAL` | `int` | `600` | Minimum seconds between per-switch packet stats refreshes (min: 0, max: 3600) |
-| `MERAKI_EXPORTER_API__CLIENT_APP_USAGE_INTERVAL` | `int` | `600` | Minimum seconds between client application usage refreshes (min: 0, max: 3600) |
-| `MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_INTERVAL` | `int` | `600` | Minimum seconds between per-client wireless signal-quality refreshes (min: 0, max: 3600) |
+| `MERAKI_EXPORTER_API__MS_PORT_USAGE_INTERVAL` | `int` | `600` | Minimum seconds between per-switch port usage/POE refreshes (min: 1, max: 3600) |
+| `MERAKI_EXPORTER_API__MS_PACKET_STATS_INTERVAL` | `int` | `600` | Minimum seconds between per-switch packet stats refreshes (min: 1, max: 3600) |
+| `MERAKI_EXPORTER_API__CLIENT_APP_USAGE_INTERVAL` | `int` | `600` | Minimum seconds between client application usage refreshes (min: 1, max: 3600) |
+| `MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_INTERVAL` | `int` | `600` | Minimum seconds between per-client wireless signal-quality refreshes (min: 1, max: 3600) |
 | `MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_MAX_CLIENTS` | `int` | `200` | Maximum wireless clients queried for signal quality per network per cycle (0 disables the cap). Bounds the sequential per-client API fan-out. (min: 0, max: 5000) |
 | `MERAKI_EXPORTER_API__RETRY_AFTER_MAX_SECONDS` | `int` | `60` | Upper bound (seconds) honoured for a server-sent Retry-After header when backing off a throttled (429/503) request. Caps pathological Retry-After values so a single throttled request cannot stall a collection cycle indefinitely. (min: 1, max: 3600) |
 | `MERAKI_EXPORTER_API__EXECUTOR_WORKERS` | `int` | `10` | Size of the thread pool used to run the synchronous Meraki SDK off the event loop (the asyncio.to_thread executor). Bounds the number of concurrent blocking SDK calls independently of the per-collector API concurrency limit. (min: 1, max: 100) |
@@ -150,7 +150,7 @@ Internal monitoring and alerting configuration
 
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_MONITORING__MAX_CONSECUTIVE_FAILURES` | `int` | `10` | Maximum consecutive failures before alerting (min: 1, max: 100) |
+| `MERAKI_EXPORTER_MONITORING__MAX_CONSECUTIVE_FAILURES` | `int` | `5` | Consecutive failed collection cycles for one organisation source before that source is backed off (min: 1, max: 100) |
 | `MERAKI_EXPORTER_MONITORING__HISTOGRAM_BUCKETS` | `list[float]` | `[0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0]` | Histogram buckets for collector duration metrics |
 | `MERAKI_EXPORTER_MONITORING__LICENSE_EXPIRATION_WARNING_DAYS` | `int` | `30` | Days before license expiration to start warning (min: 7, max: 90) |
 | `MERAKI_EXPORTER_MONITORING__METRIC_TTL_MULTIPLIER` | `float` | `2.0` | Multiplier for metric TTL (collection_interval * multiplier) (min: 1.0, max: 10.0) |

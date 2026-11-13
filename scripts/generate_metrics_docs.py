@@ -165,12 +165,18 @@ def resolve_label_expr(node: ast.AST, label_map: dict[str, str]) -> str | None:
     return None
 
 
-def parse_label_list(node: ast.AST, label_map: dict[str, str]) -> list[str]:
+def parse_label_list(
+    node: ast.AST, label_map: dict[str, str], label_vars: dict[str, list[str]] | None = None
+) -> list[str]:
     """Parse a literal list/tuple/set of labels."""
     if not isinstance(node, (ast.List, ast.Tuple, ast.Set)):
         return []
     labels: list[str] = []
     for elt in node.elts:
+        if isinstance(elt, ast.Starred):
+            if isinstance(elt.value, ast.Name) and label_vars is not None:
+                labels.extend(label_vars.get(elt.value.id, []))
+            continue
         label = resolve_label_expr(elt, label_map)
         if label:
             labels.append(label)
@@ -194,14 +200,14 @@ def extract_description(call: ast.Call) -> str:
 def extract_labels(
     call: ast.Call, label_map: dict[str, str], label_vars: dict[str, list[str]] | None = None
 ) -> list[str]:
-    """Extract label names from a call's labelnames keyword."""
-    for keyword in call.keywords:
-        if keyword.arg != "labelnames":
-            continue
-        if isinstance(keyword.value, (ast.List, ast.Tuple, ast.Set)):
-            return parse_label_list(keyword.value, label_map)
-        if isinstance(keyword.value, ast.Name) and label_vars is not None:
-            return label_vars.get(keyword.value.id, [])
+    """Extract label names from a keyword or third positional argument."""
+    value = next((keyword.value for keyword in call.keywords if keyword.arg == "labelnames"), None)
+    if value is None and len(call.args) > 2:
+        value = call.args[2]
+    if isinstance(value, (ast.List, ast.Tuple, ast.Set)):
+        return parse_label_list(value, label_map, label_vars)
+    if isinstance(value, ast.Name) and label_vars is not None:
+        return label_vars.get(value.id, [])
     return []
 
 
@@ -260,7 +266,7 @@ class CreateMetricVisitor(ast.NodeVisitor):
     def visit_Assign(self, node: ast.Assign) -> None:
         """Capture label variables and helper-based metric creation."""
         if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-            labels = parse_label_list(node.value, self.label_map)
+            labels = parse_label_list(node.value, self.label_map, self._label_vars())
             if labels:
                 self._label_vars()[node.targets[0].id] = labels
 
@@ -319,7 +325,7 @@ class CreateMetricVisitor(ast.NodeVisitor):
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         """Handle annotated assignments for label and metric tracking."""
         if node.value is not None and isinstance(node.target, ast.Name):
-            labels = parse_label_list(node.value, self.label_map)
+            labels = parse_label_list(node.value, self.label_map, self._label_vars())
             if labels:
                 self._label_vars()[node.target.id] = labels
         if not isinstance(node.value, ast.Call):
@@ -376,7 +382,7 @@ class PrometheusMetricVisitor(ast.NodeVisitor):
     def visit_Assign(self, node: ast.Assign) -> None:
         """Capture label variables and walk all assignment-value calls."""
         if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-            labels = parse_label_list(node.value, self.label_map)
+            labels = parse_label_list(node.value, self.label_map, self._label_vars())
             if labels:
                 self._label_vars()[node.targets[0].id] = labels
 
@@ -432,7 +438,7 @@ class PrometheusMetricVisitor(ast.NodeVisitor):
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         """Handle annotated assignments for label and metric tracking."""
         if node.value is not None and isinstance(node.target, ast.Name):
-            labels = parse_label_list(node.value, self.label_map)
+            labels = parse_label_list(node.value, self.label_map, self._label_vars())
             if labels:
                 self._label_vars()[node.target.id] = labels
         if not isinstance(node.value, ast.Call):

@@ -47,8 +47,8 @@ def setup_logging(settings: Settings) -> None:
     """Configure structured logging with structlog.
 
     The final renderer is selected by ``settings.logging.log_format``
-    (``"logfmt"`` by default, or ``"json"`` for JSON-native log pipelines such
-    as Loki/Datadog/ELK/CloudWatch).
+    (``"json"`` by default for JSON-native log pipelines such as
+    Loki/Datadog/ELK/CloudWatch, or ``"logfmt"`` as an alternative).
 
     Parameters
     ----------

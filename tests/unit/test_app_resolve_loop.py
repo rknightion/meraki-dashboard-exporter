@@ -211,6 +211,7 @@ class TestLivenessThresholdUnchangedByScheduler:
         exporter = ExporterApp(test_settings)
         assert exporter.settings.scheduler.mode == "adaptive"
         fastest = exporter.collector_manager.scheduler.fastest_effective_interval_seconds()
+        exporter._first_collection_complete = True
         assert exporter._liveness_threshold_seconds() == fastest * 3.0
 
     def test_threshold_invariant_across_scheduler_mode(self, test_settings: Settings) -> None:

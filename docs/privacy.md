@@ -95,7 +95,8 @@ source data for `/clients` and hold PII in process memory for as long as their T
 - **`DNSResolver`** reverse-DNS cache (`services/dns_resolver.py`) — resolved hostnames keyed by
   client IP, TTL `clients.dns_cache_ttl` (`MERAKI_EXPORTER_CLIENTS__DNS_CACHE_TTL`, default 21600s /
   6 hours), bounded by `clients.dns_cache_max_entries` (default 100,000 entries) so memory stays
-  bounded under client churn.
+  bounded under client churn. A timed-out lookup is retried after 300 seconds; only a resolved name
+  or a definite negative answer is kept for `dns_cache_ttl`.
 
 Neither cache persists to disk; both are cleared on process restart, and the DNS cache can be cleared
 on demand via `POST /api/clients/clear-dns-cache` (itself protectable by `server.api_token`, see

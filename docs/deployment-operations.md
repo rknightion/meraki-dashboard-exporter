@@ -90,8 +90,11 @@ reference for the authoritative list and enablement notes.
 `/ready` is a startup-only gate: it returns `200` after the initial required collection has
 succeeded and remains ready during later upstream failures. This keeps the pod in Service endpoints
 so Prometheus can scrape the metrics needed to diagnose the outage. `/health` is the liveness
-dead-man check; alert on `time() - meraki_exporter_scheduler_group_success_timestamp_seconds` for
+dead-man check. During initial collection, the auto-derived threshold is never below twice
+`collectors.collector_timeout`. Alert on `time() - meraki_exporter_scheduler_group_success_timestamp_seconds` for
 per-endpoint-group freshness and on `meraki_exporter_scheduler_over_budget` for deferred work.
+
+<a id="webhook-receiver-https-tls-termination"></a>
 
 ## Webhook receiver (HTTPS / TLS termination)
 

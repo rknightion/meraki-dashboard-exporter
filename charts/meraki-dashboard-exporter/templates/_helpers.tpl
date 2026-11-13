@@ -83,3 +83,11 @@ Return the key within the Secret that holds the API key value.
 {{- "MERAKI_EXPORTER_MERAKI__API_KEY" }}
 {{- end }}
 {{- end }}
+
+{{- define "meraki-dashboard-exporter.configValue" -}}
+{{- if kindIs "string" . -}}
+{{- . | quote -}}
+{{- else if not (kindIs "invalid" .) -}}
+{{- . | toJson | quote -}}
+{{- end -}}
+{{- end }}

@@ -185,7 +185,9 @@ class OrganizationCollector(MetricCollector):
         )
 
         # Per-org health tracker for graceful degradation
-        self.org_health_tracker = org_health_tracker or OrgHealthTracker()
+        self.org_health_tracker = org_health_tracker or OrgHealthTracker(
+            max_consecutive_failures=settings.monitoring.max_consecutive_failures
+        )
 
         # Create API helper
         self.api_helper = create_api_helper(self)
@@ -323,7 +325,7 @@ class OrganizationCollector(MetricCollector):
 
         self._licenses_expiring = self._create_gauge(
             OrgMetricName.ORG_LICENSES_EXPIRING,
-            "Number of licenses expiring within 30 days",
+            "Number of licenses expiring within the configured warning window (default 30 days)",
             labelnames=[LabelName.ORG_ID, LabelName.LICENSE_TYPE],
         )
 
@@ -610,6 +612,7 @@ class OrganizationCollector(MetricCollector):
     @log_batch_operation("collect org metrics", batch_size=1)
     @with_error_handling(
         operation="Collect organization metrics",
+        apply_deadline=False,
         continue_on_error=False,
     )
     async def _collect_org_metrics(self, org: dict[str, Any]) -> None:

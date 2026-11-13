@@ -270,6 +270,10 @@ class WebhookHandler:
             count-only behaviour.
 
         """
+        if settings.webhooks.require_secret and not settings.webhooks.shared_secret:
+            raise WebhookSecurityError(
+                "MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET is required when webhook secret validation is enabled"
+            )
         self.settings = settings
         self._device_state_applier = device_state_applier
         # Guards the one-time "applier not configured" debug log (avoids per-event

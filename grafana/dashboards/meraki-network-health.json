@@ -48,7 +48,7 @@
           "description": "F-152 fix: meraki_network_wireless_connection_stats_count is a 30-minute-window gauge (assoc/auth/dhcp/dns/success) — rendered directly, NOT wrapped in rate()/increase().",
           "id": 1,
           "links": [],
-          "title": "Wireless connection funnel (30-min window)",
+          "title": "Wireless connection outcomes by stage (30-min window)",
           "vizConfig": {
             "kind": "timeseries",
             "spec": {
@@ -706,7 +706,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(sum(meraki_network_wireless_connection_stats_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"success\"}) / clamp_min(sum(meraki_network_wireless_connection_stats_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"assoc\"}), 1)) * 100",
+                        "expr": "(sum(meraki_network_wireless_connection_stats_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"success\"}) / (sum(meraki_network_wireless_connection_stats_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) > 0)) * 100",
                         "legendFormat": "Success rate",
                         "range": true
                       }
@@ -719,7 +719,7 @@
               "transformations": []
             }
           },
-          "description": "success / assoc * 100, from the same 30-min-window gauge, no rate().",
+          "description": "success / (success + assoc + auth + dhcp + dns) * 100 from the 30-minute-window gauge, no rate(). assoc, auth, dhcp and dns count failed attempts at that stage.",
           "id": 2,
           "links": [],
           "title": "Connection success rate (%)",
@@ -785,7 +785,7 @@
           "description": "Same windowed-gauge family as a table, one row per network/stat_type.",
           "id": 3,
           "links": [],
-          "title": "Connection funnel by network (table)",
+          "title": "Connection outcomes by network (table)",
           "vizConfig": {
             "kind": "table",
             "spec": {

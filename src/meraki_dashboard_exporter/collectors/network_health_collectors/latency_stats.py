@@ -7,7 +7,12 @@ from typing import TYPE_CHECKING, Any
 
 from ...core.api_facade import facade_for
 from ...core.constants.metrics_constants import NetworkHealthMetricName
-from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
+from ...core.error_handling import (
+    CollectorError,
+    ErrorCategory,
+    validate_response_format,
+    with_error_handling,
+)
 from ...core.label_helpers import create_network_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -80,9 +85,12 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
     @with_error_handling(
         operation="Collect MR wireless devices latency stats",
         continue_on_error=True,
+        return_error_category=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def _fetch_device_latency_stats(self, network_id: str) -> list[dict[str, Any]] | None:
+    async def _fetch_device_latency_stats(
+        self, network_id: str
+    ) -> list[dict[str, Any]] | ErrorCategory | None:
         """Fetch per-device (AP) wireless latency stats for a network.
 
         Parameters
@@ -92,9 +100,8 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
 
         Returns
         -------
-        list[dict[str, Any]] | None
-            List of per-device latency stat entries, or None on error
-            (handled by the error decorator).
+        list[dict[str, Any]] | ErrorCategory | None
+            List of entries, or an error category when the fetch fails.
 
         """
         response = await facade_for(self).call(
@@ -115,9 +122,12 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
     @with_error_handling(
         operation="Collect MR wireless clients latency stats",
         continue_on_error=True,
+        return_error_category=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def _fetch_client_latency_stats(self, network_id: str) -> list[dict[str, Any]] | None:
+    async def _fetch_client_latency_stats(
+        self, network_id: str
+    ) -> list[dict[str, Any]] | ErrorCategory | None:
         """Fetch per-client wireless latency stats for a network.
 
         Parameters
@@ -127,9 +137,8 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
 
         Returns
         -------
-        list[dict[str, Any]] | None
-            List of per-client latency stat entries, or None on error
-            (handled by the error decorator).
+        list[dict[str, Any]] | ErrorCategory | None
+            List of entries, or an error category when the fetch fails.
 
         """
         response = await facade_for(self).call(
@@ -166,7 +175,7 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
         ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.NH_LATENCY_STATS)
 
         device_rows = await self._fetch_device_latency_stats(network_id)
-        if device_rows:
+        if device_rows and not isinstance(device_rows, ErrorCategory):
             for row in device_rows:
                 serial = row.get("serial", "")
                 latency_stats = row.get("latencyStats") or {}
@@ -188,7 +197,7 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
                     )
 
         client_rows = await self._fetch_client_latency_stats(network_id)
-        if client_rows:
+        if client_rows and not isinstance(client_rows, ErrorCategory):
             per_class_values: dict[str, list[float]] = {tc: [] for tc in _TRAFFIC_CLASS_KEYS}
 
             for row in client_rows:
@@ -212,3 +221,7 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
                     NetworkHealthMetricName.MR_NETWORK_CLIENT_LATENCY_SECONDS.value,
                     ttl_seconds=ttl_seconds,
                 )
+
+        for result in (device_rows, client_rows):
+            if isinstance(result, ErrorCategory) and result != ErrorCategory.API_NOT_AVAILABLE:
+                raise CollectorError("Failed to collect wireless latency stats", result)

@@ -295,6 +295,7 @@ class MTSensorAlertsCollector(MetricCollector):
 
     @with_error_handling(
         operation="Collect organization MT sensor alerts",
+        apply_deadline=False,
         continue_on_error=False,
     )
     async def _collect_org_sensor_alerts(

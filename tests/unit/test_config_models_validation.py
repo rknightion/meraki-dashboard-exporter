@@ -68,6 +68,22 @@ class TestCollectorCsv:
 class TestStartupConfigurationBoundaries:
     """Pin validation boundaries that participate in startup safety."""
 
+    @pytest.mark.parametrize(
+        "field",
+        [
+            "max_retries",
+            "ms_port_usage_interval",
+            "ms_packet_stats_interval",
+            "client_app_usage_interval",
+            "client_signal_quality_interval",
+        ],
+    )
+    def test_api_rejects_zero_retries_and_zero_interval_pins(self, field: str) -> None:
+        """Zero cannot produce requests or a schedulable interval."""
+        with pytest.raises(ValidationError, match=field):
+            APISettings(**{field: 0})
+        assert getattr(APISettings(**{field: 1}), field) == 1
+
     @pytest.mark.parametrize("profile", [None, "availability", "standard", "full"])
     def test_collector_profile_accepts_supported_values(self, profile: str | None) -> None:
         """Every documented profile, plus the implicit choice, parses."""

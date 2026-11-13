@@ -38,7 +38,7 @@ add it through the corpus and preset path tracked in #713.
 
 | Product family | Verification level (date and checked scope) | Collector | Coverage and limits |
 |---|---|---|---|
-| **MR** (wireless) | **Live-verified — 2026-08-12:** one MR56 response envelope. Multi-AP scale, pagination, SSID counts, and packet-loss shapes remain unverified. | `collectors/devices/mr/` | ~45 dedicated metrics for radio/SSID performance, opt-in per-AP signal quality, RF profiles, and client counts. |
+| **MR** (wireless) | **Live-verified — 2026-08-12:** one MR56 response envelope. Multi-AP scale, pagination, SSID counts, and packet-loss shapes remain unverified. | `collectors/devices/mr/` | ~45 dedicated metrics for radio/SSID performance, per-AP signal quality (on by default), RF profiles, and client counts. |
 | **MS** (pre-Catalyst switches) | **Live-verified — 2026-08-12:** MS120-8LP and MS250-24P envelopes. 500+ switches, stacks, and page boundaries remain unverified. | `collectors/devices/ms.py`, `ms_power.py`, `ms_stack.py` | ~44 dedicated port, PoE, and stack metrics. |
 | **MT** (sensors) | **Live-verified — 2026-08-12:** 16 sensor-reading envelopes. Not every reading variant, gateway link, or multi-network page was observed. | `collectors/devices/mt.py` | ~27 sensor and sensor-gateway metrics. |
 | **Catalyst / CS switches** | **Spec-verified — 2026-08-12:** routing through MS. No live device, stack, or port response observed. | MS routing | Uses the MS collector; no distinct live evidence. |
@@ -56,14 +56,12 @@ alerts data that is not tied to a single product line.
 
 ### Optional / opt-in collection
 
-A few things are shipped but **off by default** and must be explicitly enabled:
+Two collection features have their own switch:
 
 - **Per-AP signal quality** (`collectors.collect_ap_signal_quality`, default **on**, but costs one
   API call per selected AP per cycle — scope it with `collectors.ap_signal_quality_tags` or
   disable it for large MR fleets).
 - **Meraki Insight** (`collectors.collect_insight`, default **off**) — see below.
-
-## Non-goals
 
 ### Meraki Insight — opt-in, license-gated, best-effort
 
@@ -87,6 +85,8 @@ only when explicitly turned on:
 
 If you run Meraki Insight and can help verify the live response shapes, please open an issue.
 
+## Non-goals
+
 ### Meraki Systems Manager — explicit non-goal
 
 **Meraki Systems Manager (SM)**, Meraki's MDM/endpoint-management product, is **not collected at
@@ -108,9 +108,10 @@ URLs are recognized out of the box:
 | India | `https://api.meraki.in/api/v1` |
 | US Federal (GovCloud) | `https://api.gov-meraki.com/api/v1` |
 
-A well-formed `http(s)` URL that is *not* one of the values above (e.g. a custom proxy, or a future
-Meraki region not yet in this list) is still accepted — the exporter logs a warning but does not
-reject it, so custom endpoints and not-yet-catalogued regions keep working.
+Only HTTPS base URLs are accepted. A URL that is not one of the values above (a corporate proxy, or
+a Meraki region not yet in this list) is refused at startup unless
+`MERAKI_EXPORTER_MERAKI__ALLOW_CUSTOM_API_BASE_URL=true` is also set; the exporter then logs a
+warning and uses it.
 
 All testing has been performed against the global/default region; the regional endpoints above are
 supported on the assumption that they implement the same OpenAPI-documented API surface as the

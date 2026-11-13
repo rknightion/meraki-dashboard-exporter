@@ -84,6 +84,43 @@ class TestLicenseCollector:
         parent = MockParentCollector()
         return LicenseCollector(parent=parent)  # type: ignore[arg-type]
 
+    @pytest.mark.parametrize(("warning_days", "expected"), [(None, 0), (60, 1)])
+    async def test_per_device_warning_days(
+        self, license_collector, mock_api_builder, warning_days, expected
+    ):
+        """Count a 45-day licence only when the warning window includes it."""
+        if warning_days is not None:
+            license_collector.settings.monitoring.license_expiration_warning_days = warning_days
+        expiry = (datetime.now(UTC) + timedelta(days=45)).isoformat()
+        license_collector.api = (
+            mock_api_builder
+            .with_custom_response("getOrganizationLicensesOverview", {"status": "OK"})
+            .with_custom_response(
+                "getOrganizationLicenses",
+                [{"licenseType": "ENT", "state": "active", "expirationDate": expiry}],
+            )
+            .build()
+        )
+        await license_collector.collect("test-org", "Test Org")
+        key = ("_licenses_expiring", (("license_type", "ENT"), ("org_id", "test-org")))
+        assert license_collector.parent._metrics[key] == expected
+
+    @pytest.mark.parametrize(("warning_days", "expected"), [(None, 0), (60, 2)])
+    async def test_co_termination_warning_days(
+        self, license_collector, mock_api_builder, warning_days, expected
+    ):
+        """Count a 45-day licence only when the warning window includes it."""
+        if warning_days is not None:
+            license_collector.settings.monitoring.license_expiration_warning_days = warning_days
+        expiry = (datetime.now(UTC) + timedelta(days=45)).isoformat()
+        license_collector.api = mock_api_builder.with_custom_response(
+            "getOrganizationLicensesOverview",
+            {"status": "OK", "expirationDate": expiry, "licensedDeviceCounts": {"MS": 2}},
+        ).build()
+        await license_collector.collect("test-org", "Test Org")
+        key = ("_licenses_expiring", (("license_type", "MS"), ("org_id", "test-org")))
+        assert license_collector.parent._metrics[key] == expected
+
     async def test_collect_co_termination_licenses(self, license_collector, mock_api_builder):
         """Test collection of co-termination licensing model metrics."""
         org_id = "123"

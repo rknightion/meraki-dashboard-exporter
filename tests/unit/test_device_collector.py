@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
 
@@ -880,6 +880,104 @@ class TestDeviceCollector(BaseCollectorTest):
         await collector._collect_org_devices(org["id"], org.get("name", "Test Org"))
 
         collector._collect_mr_specific_metrics.assert_called_once()
+
+    @staticmethod
+    def _mock_mx_entry_points(collector):
+        mocks = [
+            (collector.mx_collector, "collect_uplink_statuses"),
+            (collector.mx_uplink_health_collector, "collect_uplink_loss_latency"),
+            (collector.mx_uplink_usage_collector, "collect_uplink_usage"),
+            (collector.mx_ha_collector, "collect_redundancy"),
+            (collector.mx_collector.vpn_collector, "collect"),
+            (collector.mx_collector.vpn_collector, "collect_vpn_stats"),
+            (collector.mx_collector.firewall_collector, "collect_org_security_events"),
+            (collector.mx_collector.firewall_collector, "collect_for_network"),
+        ]
+        for owner, name in mocks:
+            setattr(owner, name, AsyncMock())
+        collector._should_run_group = MagicMock(return_value=False)
+        collector.inventory.get_networks = AsyncMock(return_value=[])
+        return [getattr(owner, name) for owner, name in mocks]
+
+    @pytest.mark.parametrize("teleworker_type", ["Z3", "Z4"])
+    async def test_mx_specific_wiring_and_firewall_networks(self, collector, teleworker_type):
+        """MX calls share the VPN gate and target appliance networks."""
+        uplink, health, usage, ha, vpn, stats, security, firewall = self._mock_mx_entry_points(
+            collector
+        )
+        collector.inventory.get_networks.return_value = [
+            {"id": "N_MX", "name": "Appliance network"},
+            {"id": "N_OTHER", "name": "Other"},
+        ]
+        devices = {
+            "mx": {"device_type": "MX", "network_id": "N_MX"},
+            "z3": {"device_type": teleworker_type, "network_id": "N_Z3"},
+            "ms": {"device_type": "MS", "network_id": "N_OTHER"},
+            "empty": {"device_type": "MX", "network_id": ""},
+        }
+        await collector._collect_mx_specific_metrics("ORG", "Org", devices)
+        for mock in (uplink, health, usage, ha):
+            mock.assert_awaited_once_with("ORG", "Org", devices)
+        collector._should_run_group.assert_called_once_with(EndpointGroupName.MX_VPN)
+        vpn.assert_awaited_once_with("ORG", "Org", due=False)
+        stats.assert_awaited_once_with("ORG", "Org", due=False)
+        security.assert_awaited_once_with("ORG", "Org")
+        assert firewall.await_count == 2
+        firewall.assert_has_awaits(
+            [call("ORG", "Org", "N_MX", "Appliance network"), call("ORG", "Org", "N_Z3", "N_Z3")],
+            any_order=True,
+        )
+
+    async def test_mx_specific_error_continues(self, collector, metrics):
+        """An MX failure is counted and later collectors still run."""
+        uplink, health, usage, ha, vpn, stats, security, _ = self._mock_mx_entry_points(collector)
+        uplink.side_effect = RuntimeError("boom")
+        await collector._collect_mx_specific_metrics("ORG", "Org", {})
+        for mock in (health, usage, ha, vpn, stats, security):
+            mock.assert_awaited_once()
+        self.assert_collector_error(collector, metrics, error_type="unknown")
+
+    async def test_mg_specific_success_and_error(self, collector, metrics):
+        """MG collection and its error counter are wired."""
+        mock = collector.mg_collector.collect_uplink_statuses = AsyncMock()
+        devices = {"mg": {"device_type": "MG"}}
+        await collector._collect_mg_specific_metrics("ORG", "Org", devices)
+        mock.assert_awaited_once_with("ORG", "Org", devices)
+        mock.side_effect = RuntimeError("boom")
+        await collector._collect_mg_specific_metrics("ORG", "Org", devices)
+        self.assert_collector_error(collector, metrics, error_type="unknown")
+
+    @pytest.mark.parametrize(
+        ("models", "expected"),
+        [
+            ([("MX68", "appliance"), ("MG21", "cellularGateway")], (1, 1)),
+            ([("Z3", "appliance")], (1, 0)),
+            ([("MS120", "switch")], (0, 0)),
+        ],
+    )
+    async def test_specific_metrics_dispatch(self, collector, mock_api_builder, models, expected):
+        """Device families select their organization-wide collectors."""
+        org = OrganizationFactory.create(org_id="ORG")
+        devices = [
+            DeviceFactory.create(
+                serial=f"SERIAL-{i}", model=model, productType=kind, network_id="N_TEST"
+            )
+            for i, (model, kind) in enumerate(models)
+        ]
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([], org_id="ORG")
+            .with_devices(devices, org_id="ORG")
+            .with_device_statuses([], org_id="ORG")
+            .build()
+        )
+        collector.api = collector.inventory.api = api
+        for family in ("mr", "ms", "mx", "mg"):
+            setattr(collector, f"_collect_{family}_specific_metrics", AsyncMock())
+        await collector._collect_org_devices("ORG", org.get("name", "Test Org"))
+        assert collector._collect_mx_specific_metrics.await_count == expected[0]
+        assert collector._collect_mg_specific_metrics.await_count == expected[1]
 
     async def test_mr_subcollection_failure_increments_error_counter(self, collector, metrics):
         """RES-04/#511: a tolerated MR sub-collection failure must increment error metrics.

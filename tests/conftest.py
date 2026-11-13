@@ -46,10 +46,14 @@ def default_facade_limiter_for_tests(monkeypatch, request):
 
 
 @pytest.fixture(autouse=True)
-def fast_test_settings(monkeypatch):
+def fast_test_settings(monkeypatch, request):
     """Disable production timing features that slow down tests."""
     monkeypatch.setenv("MERAKI_EXPORTER_API__SMOOTHING_ENABLED", "false")
-    monkeypatch.setenv("MERAKI_EXPORTER_API__MAX_RETRIES", "0")
+    monkeypatch.setenv("MERAKI_EXPORTER_API__MAX_RETRIES", "1")
+    if request.node.get_closest_marker("real_facade_backoff") is None:
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.core.api_facade._FACADE_RETRY_BASE_SECONDS", 0.0
+        )
 
 
 @pytest.fixture(autouse=True)

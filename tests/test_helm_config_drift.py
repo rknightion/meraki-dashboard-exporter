@@ -94,3 +94,14 @@ def test_no_secret_env_in_configmap() -> None:
     text = CONFIGMAP.read_text()
     for leaked in ("WEBHOOKS__SHARED_SECRET", "SERVER__API_TOKEN", "MERAKI__API_KEY"):
         assert leaked not in text, f"{leaked} must be injected via a Secret, not the ConfigMap"
+
+
+def test_each_generated_knob_is_valid_yaml_when_uncommented() -> None:
+    """Each suggested default can be enabled under a block-style config mapping."""
+    import yaml
+
+    gen = _load_generator()
+    for line in gen.render_values_block(gen.collect_knobs()).splitlines():
+        if re.match(r"  # \w+: ", line):
+            parsed = yaml.safe_load("config:\n" + line.replace("# ", "", 1) + "\n")
+            assert isinstance(parsed["config"], dict), line

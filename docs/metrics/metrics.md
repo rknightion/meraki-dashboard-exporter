@@ -17,7 +17,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_mr_air_marshal_bssids_by_threat_type_count` | gauge | `threat_type` | Number of Air Marshal BSSIDs observed by threat type, last hour (rogue/spoof/other; entries without a threat-type field are not counted) |  |
+| `meraki_mr_air_marshal_bssids_by_threat_type_count` | gauge | `org_id`, `network_id`, `threat_type` | Number of Air Marshal BSSIDs observed by threat type, last hour (rogue/spoof/other; entries without a threat-type field are not counted) |  |
 | `meraki_mr_air_marshal_bssids_count` | gauge | `org_id`, `network_id` | Total number of BSSIDs across all Air Marshal SSID entries, last hour |  |
 | `meraki_mr_air_marshal_contained_bssids_count` | gauge | `org_id`, `network_id` | Number of Air Marshal BSSIDs currently contained, last hour |  |
 | `meraki_mr_air_marshal_ssids_count` | gauge | `org_id`, `network_id` | Number of foreign SSID entries observed by Air Marshal over the last hour |  |
@@ -348,12 +348,12 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_mx_content_filtering_blocked_url_patterns` | gauge | `org_id`, `network_id` | Number of blocked URL patterns configured for content filtering |  |
 | `meraki_mx_firewall_default_policy` | gauge | `org_id`, `network_id` | Firewall default policy for L3 rules (1=allow, 0=deny) |  |
 | `meraki_mx_firewall_rules` | gauge | `org_id`, `network_id`, `rule_type` | Number of user-defined firewall rules by type (excludes default rule) |  |
-| `meraki_mx_ids_mode` | gauge | `mode` | IDS/IPS mode one-hot indicator (1=active mode for this network) |  |
-| `meraki_mx_ids_ruleset` | gauge | `ruleset` | IDS/IPS ruleset one-hot indicator (1=active ruleset for this network) |  |
+| `meraki_mx_ids_mode` | gauge | `org_id`, `network_id`, `mode` | IDS/IPS mode one-hot indicator (1=active mode for this network) |  |
+| `meraki_mx_ids_ruleset` | gauge | `org_id`, `network_id`, `ruleset` | IDS/IPS ruleset one-hot indicator (1=active ruleset for this network) |  |
 | `meraki_mx_malware_allowed_files` | gauge | `org_id`, `network_id` | Number of files excluded from Advanced Malware Protection scanning |  |
 | `meraki_mx_malware_allowed_urls` | gauge | `org_id`, `network_id` | Number of URLs excluded from Advanced Malware Protection scanning |  |
 | `meraki_mx_malware_protection_enabled` | gauge | `org_id`, `network_id` | Advanced Malware Protection enablement (1=enabled, 0=disabled) |  |
-| `meraki_mx_nat_rules` | gauge | `nat_type` | Number of NAT rules configured for a network by type |  |
+| `meraki_mx_nat_rules` | gauge | `org_id`, `network_id`, `nat_type` | Number of NAT rules configured for a network by type |  |
 | `meraki_mx_port_forwarding_rules` | gauge | `org_id`, `network_id` | Number of port forwarding rules configured for a network |  |
 | `meraki_mx_security_events_by_network_count` | gauge | `org_id`, `network_id`, `event_type`, `blocked`, `priority` | Security events per appliance network by type, IPS outcome (blocked) and priority in the current collection window (not a monotonic total) |  |
 | `meraki_mx_security_events_count` | gauge | `org_id`, `event_type` | Security events by type in the current collection window (not a monotonic total) |  |
@@ -451,7 +451,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_org_firmware_upgrades_pending` | gauge | `org_id`, `product_type` | Number of pending/in-flight firmware upgrade events by product type |  |
 | `meraki_org_has_beta_api` | gauge | `org_id` | Whether the organization has opted into the Meraki beta API spec (1 = has_beta_api opt-in present, 0 = absent). Emitted for every org so absence is queryable rather than a missing series |  |
 | `meraki_org_licenses` | gauge | `org_id`, `license_type`, `status` | Number of licenses |  |
-| `meraki_org_licenses_expiring` | gauge | `org_id`, `license_type` | Number of licenses expiring within 30 days |  |
+| `meraki_org_licenses_expiring` | gauge | `org_id`, `license_type` | Number of licenses expiring within the configured warning window (default 30 days) |  |
 | `meraki_org_networks` | gauge | `org_id` | Number of networks in the organization |  |
 | `meraki_org_networks_bound_to_template` | gauge | `org_id` | Number of NetworkFilter-visible networks bound to a configuration template (counts only networks within the configured NetworkFilter, not the whole org) |  |
 | `meraki_org_packetcaptures` | gauge | `org_id` | Number of packet captures in the organization |  |
@@ -574,25 +574,25 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_exporter_inventory_cache_size` | gauge | — | Number of entries in inventory cache |  |
-| `meraki_network_filter_match` | gauge | — | 1 if the network passes the configured network filter, 0 otherwise. |  |
-| `meraki_network_filter_networks` | gauge | — | Number of networks discovered before filtering. |  |
-| `meraki_network_filter_resolved` | gauge | — | Number of networks included by the configured network filter. |  |
+| `meraki_exporter_inventory_cache_size` | gauge | `org_id`, `cache_type` | Number of entries in inventory cache |  |
+| `meraki_network_filter_match` | gauge | `org_id`, `network_id` | 1 if the network passes the configured network filter, 0 otherwise. |  |
+| `meraki_network_filter_networks` | gauge | `org_id` | Number of networks discovered before filtering. |  |
+| `meraki_network_filter_resolved` | gauge | `org_id` | Number of networks included by the configured network filter. |  |
 
 ### WebhookHandler
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_webhook_delivery_attempts_total` | counter | — | Authenticated webhook delivery attempts, including Meraki retries | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
-| `meraki_webhook_device_state_transitions_total` | counter | — | Webhook-driven meraki_device_up fast-path transitions, by direction (down/up) and result (applied = series flipped; unknown_serial = serial not poll-known) | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
-| `meraki_webhook_events_failed_total` | counter | — | Total webhook events that failed processing | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
-| `meraki_webhook_events_processed_total` | counter | — | Total webhook events successfully processed | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
-| `meraki_webhook_events_received_total` | counter | — | Total webhook events received by the active WebhookHandler request pipeline (POST /api/webhooks/meraki), labeled by org_id and alert_type | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
-| `meraki_webhook_processing_duration_seconds` | histogram | — | Time spent processing webhook events | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
-| `meraki_webhook_replays_rejected_total` | counter | — | Authenticated duplicate webhook deliveries suppressed by the per-process cache | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
-| `meraki_webhook_stale_rejected_total` | counter | — | Authenticated webhook deliveries acknowledged outside the freshness window | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
-| `meraki_webhook_unique_alerts_total` | counter | — | Unique authenticated webhook alerts accepted for processing | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
-| `meraki_webhook_validation_failures_total` | counter | — | Total webhook validation failures | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
+| `meraki_webhook_delivery_attempts_total` | counter | `org_id`, `alert_type` | Authenticated webhook delivery attempts, including Meraki retries | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
+| `meraki_webhook_device_state_transitions_total` | counter | `direction`, `result` | Webhook-driven meraki_device_up fast-path transitions, by direction (down/up) and result (applied = series flipped; unknown_serial = serial not poll-known) | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
+| `meraki_webhook_events_failed_total` | counter | `error_type` | Total webhook events that failed processing | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
+| `meraki_webhook_events_processed_total` | counter | `org_id`, `alert_type` | Total webhook events successfully processed | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
+| `meraki_webhook_events_received_total` | counter | `org_id`, `alert_type` | Total webhook events received by the active WebhookHandler request pipeline (POST /api/webhooks/meraki), labeled by org_id and alert_type | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
+| `meraki_webhook_processing_duration_seconds` | histogram | `org_id`, `alert_type` | Time spent processing webhook events | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
+| `meraki_webhook_replays_rejected_total` | counter | `org_id`, `alert_type` | Authenticated duplicate webhook deliveries suppressed by the per-process cache | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
+| `meraki_webhook_stale_rejected_total` | counter | `org_id`, `alert_type` | Authenticated webhook deliveries acknowledged outside the freshness window | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
+| `meraki_webhook_unique_alerts_total` | counter | `org_id`, `alert_type` | Unique authenticated webhook alerts accepted for processing | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
+| `meraki_webhook_validation_failures_total` | counter | `validation_error` | Total webhook validation failures | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 
 ### async_utils
 

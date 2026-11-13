@@ -104,14 +104,14 @@ lint.per-file-ignores."tests/**/*.py" = [ "PLR0904" ] # Allow more than 20 publi
 lint.per-file-ignores."tools/apidrift/tests/**/*.py" = [ "D101", "D103", "PLR6201", "PLW1510" ]
 
 [tool.pytest.ini_options]
+addopts = "--strict-markers"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 pythonpath = [ "src", "tools" ]
 markers = [
   "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-  "fleet_scheduled: scale presets selected by scheduled CI",
-  "fleet_on_demand: scale presets selected by workflow dispatch",
   "strict_facade_limiter: disables the shared immediate limiter to test fail-closed pacing",
+  "real_facade_backoff: preserves the production facade retry backoff base",
 ]
 testpaths = [ "tests", "tools/apidrift/tests" ]
 python_files = [ "test_*.py", "*_test.py" ]

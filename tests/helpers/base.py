@@ -320,7 +320,19 @@ class BaseCollectorTest:
             try:
                 metric = metrics.get_metric(metric_name)
                 # If metric exists, check it has no samples
-                samples = [s for s in metric.samples if s.name == metric_name]
+                samples = [
+                    s
+                    for s in metric.samples
+                    if s.name == metric_name
+                    or (
+                        s.name
+                        in {
+                            f"{metric_name}_{suffix}"
+                            for suffix in ("total", "count", "sum", "bucket")
+                        }
+                        and s.value > 0
+                    )
+                ]
                 if samples:
                     pytest.fail(
                         f"Metric {metric_name} was set but should not have been. "

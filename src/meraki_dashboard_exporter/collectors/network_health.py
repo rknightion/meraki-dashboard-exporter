@@ -438,6 +438,7 @@ class NetworkHealthCollector(MetricCollector):
     @log_batch_operation("collect network health", batch_size=None)
     @with_error_handling(
         operation="Collect organization network health",
+        apply_deadline=False,
         continue_on_error=False,
     )
     async def _collect_org_network_health(self, org_id: str, org_name: str | None = None) -> None:

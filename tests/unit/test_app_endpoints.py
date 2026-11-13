@@ -6,19 +6,22 @@ import asyncio
 import threading
 import time
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
+from prometheus_client import REGISTRY
 from pydantic import SecretStr
 
 from meraki_dashboard_exporter.app import ExporterApp
+from meraki_dashboard_exporter.collectors.manager import CollectorManager
 from meraki_dashboard_exporter.core.api_models import NetworkClient
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import MerakiSettings
 from meraki_dashboard_exporter.core.domain_models import ClientData
 from meraki_dashboard_exporter.core.error_handling import StartupConfigurationError
+from meraki_dashboard_exporter.core.scheduler import EndpointGroup, EndpointGroupName
 from meraki_dashboard_exporter.services.client_store import ClientPageSnapshot, ClientStore
 
 # Scheduling diagnostics shape returned by CollectorManager.get_scheduling_diagnostics
@@ -394,6 +397,71 @@ class TestHealthEndpoint:
         assert response.status_code == 503
 
 
+async def test_liveness_stays_green_when_one_initial_collector_times_out(
+    exporter: ExporterApp, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A timeout between successful initial runs does not trip liveness."""
+    exporter.settings.collectors.collector_timeout = 240
+    for metric in list(REGISTRY._collector_to_names):
+        REGISTRY.unregister(metric)
+    with (
+        patch.object(CollectorManager, "_initialize_collectors"),
+        patch.object(CollectorManager, "_validate_collector_configuration"),
+    ):
+        manager = CollectorManager(client=MagicMock(), settings=exporter.settings)
+    exporter.collector_manager = manager
+    manager.scheduler.register_groups([
+        EndpointGroup(
+            name=EndpointGroupName.MS_PORT_STATUS,
+            priority=3,
+            floor_seconds=60,
+            cost_fn=lambda shape: 1.0,
+        )
+    ])
+    assert exporter._liveness_threshold_seconds() == 480
+    clock = [1000.0]
+    monkeypatch.setattr(time, "time", lambda: clock[0])
+    observations: list[tuple[bool, str]] = []
+
+    def make_collector(name: str, elapsed: float, *, timeout: bool = False, check: bool = False):
+        async def collect(self):
+            clock[0] += elapsed
+            if timeout:
+                raise TimeoutError
+            if check:
+                observations.append(exporter._liveness_check())
+
+        return type(
+            name,
+            (),
+            {
+                "is_active": True,
+                "collect": collect,
+                "collector_cadence_seconds": lambda self: 60.0,
+            },
+        )()
+
+    collectors = [
+        make_collector("First", 10),
+        make_collector("Second", 240, timeout=True),
+        make_collector("Third", 30, check=True),
+    ]
+    manager.collectors = collectors
+    for collector in collectors:
+        name = type(collector).__name__
+        manager.collector_health[name] = {
+            "last_success_time": None,
+            "failure_streak": 0,
+            "total_runs": 0,
+            "total_successes": 0,
+            "total_failures": 0,
+        }
+        manager._collector_locks[name] = asyncio.Lock()
+        await manager.run_collector_once(collector, force=True)
+
+    assert observations and not observations[0][0], observations
+
+
 class TestLivenessThresholdFastestGroup:
     """The auto-derived liveness threshold is 3x the fastest solved group interval (#631)."""
 
@@ -404,6 +472,7 @@ class TestLivenessThresholdFastestGroup:
         _client, mock_manager = app_and_manager_health
         exporter = mock_manager._exporter_ref
         mock_manager.scheduler.fastest_effective_interval_seconds.return_value = 60
+        exporter._first_collection_complete = True
 
         assert exporter._liveness_threshold_seconds() == pytest.approx(60 * 3.0)
 
@@ -423,6 +492,7 @@ class TestLivenessThresholdFastestGroup:
         """A faster solved interval shrinks the derived threshold accordingly."""
         _client, mock_manager = app_and_manager_health
         exporter = mock_manager._exporter_ref
+        exporter._first_collection_complete = True
 
         mock_manager.scheduler.fastest_effective_interval_seconds.return_value = 60
         original_threshold = exporter._liveness_threshold_seconds()
@@ -443,6 +513,8 @@ class TestLivenessThresholdFastestGroup:
         exporter.settings.monitoring.liveness_max_stale_seconds = 123
         mock_manager.scheduler.fastest_effective_interval_seconds.return_value = 60
 
+        assert exporter._liveness_threshold_seconds() == pytest.approx(123)
+        exporter._first_collection_complete = True
         assert exporter._liveness_threshold_seconds() == pytest.approx(123)
 
 

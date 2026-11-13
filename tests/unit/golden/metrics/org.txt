@@ -80,7 +80,7 @@ meraki_org_licenses gauge
   help: Number of licenses
   labels: license_type,org_id,status
 meraki_org_licenses_expiring gauge
-  help: Number of licenses expiring within 30 days
+  help: Number of licenses expiring within the configured warning window (default 30 days)
   labels: license_type,org_id
 meraki_org_networks gauge
   help: Number of networks in the organization

@@ -19,7 +19,7 @@ from prometheus_client import CollectorRegistry, generate_latest
 
 
 class FleetPreset(StrEnum):
-    """Named, stable topologies used by the Issue #707 CI tiers."""
+    """Named, stable topologies used by the Issue #707 tests."""
 
     HOMELAB = "HOMELAB"
     BRANCH_RETAIL = "BRANCH-RETAIL"
@@ -28,14 +28,6 @@ class FleetPreset(StrEnum):
     XL_MULTI_SITE = "XL-MULTI-SITE"
     MULTI_ORG_SHARD = "MULTI-ORG-SHARD"
     CAMERA_HEAVY = "CAMERA-HEAVY"
-
-
-class FleetCITier(StrEnum):
-    """CI selection classes; workflow wiring maps these to pytest markers."""
-
-    PR = "pr"
-    SCHEDULED = "scheduled"
-    ON_DEMAND = "on-demand"
 
 
 _FAMILY_MODELS: Final[dict[str, str]] = {
@@ -300,21 +292,6 @@ PRESET_PARAMETERS: Final[dict[FleetPreset, FleetParameters]] = {
         clients_per_network=0,
     ),
 }
-
-PRESETS_BY_CI_TIER: Final[dict[FleetCITier, tuple[FleetPreset, ...]]] = {
-    FleetCITier.PR: (FleetPreset.HOMELAB, FleetPreset.BRANCH_RETAIL),
-    FleetCITier.SCHEDULED: (
-        FleetPreset.CAMPUS,
-        FleetPreset.DENSE_SWITCH,
-        FleetPreset.XL_MULTI_SITE,
-    ),
-    FleetCITier.ON_DEMAND: (FleetPreset.MULTI_ORG_SHARD, FleetPreset.CAMERA_HEAVY),
-}
-
-
-def presets_for_ci_tier(tier: FleetCITier | str) -> tuple[FleetPreset, ...]:
-    """Return the exact named presets selected by one CI tier."""
-    return PRESETS_BY_CI_TIER[FleetCITier(tier)]
 
 
 def peak_rss_bytes() -> int:

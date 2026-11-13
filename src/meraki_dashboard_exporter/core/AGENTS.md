@@ -10,8 +10,7 @@
 - `ConfigMetricName` is deliberately an empty enum. Configuration-change metrics live under
   `OrgMetricName`; it does not need populating.
 - Two symbols are not in the module their name suggests: `batch_with_concurrency_limit()` is in
-  `error_handling.py`, not `async_utils.py`, and `CollectorProtocol` is in `collector.py`, not
-  `type_definitions.py`.
+  `error_handling.py`, not `async_utils.py`, and `CollectorProtocol` is in `collector.py`.
 - `OrgRateLimiter` also runs AIMD on top of the token bucket: a real 429 or `Retry-After` halves the
   effective budget, floored at 0.5 rps and at most one halving per 30s cooldown, and
   `effective_rate_per_second()` feeds straight into the scheduler's next solve. A throttled org's

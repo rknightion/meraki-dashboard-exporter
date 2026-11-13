@@ -88,9 +88,12 @@ class APISettings(BaseModel):
 
     max_retries: int = Field(
         3,
-        ge=0,
+        ge=1,
         le=10,
-        description="Maximum number of retries for API requests",
+        description=(
+            "Total SDK attempts per request for connection errors and 5xx responses "
+            "(1 means no retry), and the number of exporter retries for 429 responses"
+        ),
     )
     timeout: int = Field(
         30,
@@ -255,25 +258,25 @@ class APISettings(BaseModel):
     )
     ms_port_usage_interval: int = Field(
         600,
-        ge=0,
+        ge=1,
         le=3600,
         description="Minimum seconds between per-switch port usage/POE refreshes",
     )
     ms_packet_stats_interval: int = Field(
         600,
-        ge=0,
+        ge=1,
         le=3600,
         description="Minimum seconds between per-switch packet stats refreshes",
     )
     client_app_usage_interval: int = Field(
         600,
-        ge=0,
+        ge=1,
         le=3600,
         description="Minimum seconds between client application usage refreshes",
     )
     client_signal_quality_interval: int = Field(
         600,
-        ge=0,
+        ge=1,
         le=3600,
         description="Minimum seconds between per-client wireless signal-quality refreshes",
     )
@@ -325,10 +328,10 @@ class MonitoringSettings(BaseModel):
     """Monitoring and observability settings."""
 
     max_consecutive_failures: int = Field(
-        10,
+        5,
         ge=1,
         le=100,
-        description="Maximum consecutive failures before alerting",
+        description="Consecutive failed collection cycles for one organisation source before that source is backed off",
     )
     histogram_buckets: list[float] = Field(
         default=[0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0],
