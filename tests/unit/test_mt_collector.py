@@ -382,6 +382,31 @@ class TestMTCollector(BaseCollectorTest):
         assert mt_collector._extract_metric_value("o3", {"concentration": 34}) == 34
         assert mt_collector._extract_metric_value("pm10", {"concentration": 5}) == 5
 
+    @pytest.mark.parametrize(
+        ("kind", "data", "expected"),
+        [
+            ("noise", {"ambient": {"level": 45}}, 45),
+            ("noise", {"ambient": None}, None),
+            ("indoorAirQuality", {"score": 88}, 88),
+            ("voltage", {"level": 230.1}, 230.1),
+            ("frequency", {"level": 50}, 50),
+            ("current", {"draw": 1.5}, 1.5),
+            ("realPower", {"draw": 300}, 300),
+            ("apparentPower", {"draw": 320}, 320),
+            ("powerFactor", {"percentage": 93}, 93),
+            ("battery", {"percentage": 77}, 77),
+            *(
+                (kind, {key: value}, expected)
+                for kind, key in [("downstreamPower", "enabled"), ("remoteLockoutSwitch", "locked")]
+                for value, expected in [(True, 1), (False, 0), (None, None)]
+            ),
+            ("unknown", {"value": 3}, None),
+        ],
+    )
+    def test_power_and_environment_extraction(self, mt_collector, kind, data, expected):
+        """Extract each power and environment reading."""
+        assert mt_collector._extract_metric_value(kind, data) == expected
+
     def test_process_validated_metric_no2(self, mt_collector, test_device):
         """#246: validated SensorMeasurement path routes no2 to its own gauge."""
         mock_metric = MagicMock()
@@ -947,4 +972,66 @@ class TestMTButtonPresses(BaseCollectorTest):
             model="MT20",
             device_type="MT",
             press_type="short",
+        )
+
+    async def test_power_and_environment_batch_gauges(self, collector, metrics):
+        """Batch readings reach the registered gauges."""
+        device = {
+            "serial": "SENSOR",
+            "model": "MT40",
+            "networkId": "N_TEST",
+            "orgId": "ORG",
+            "orgName": "Org",
+        }
+        values = [
+            ("temperature", {"celsius": 21.5}, "temperature_celsius", 21.5),
+            ("noise", {"ambient": {"level": 45}}, "noise_db", 45),
+            ("indoorAirQuality", {"score": 88}, "indoor_air_quality_score", 88),
+            ("voltage", {"level": 230.1}, "voltage_volts", 230.1),
+            ("current", {"draw": 1.5}, "current_amps", 1.5),
+            ("realPower", {"draw": 300}, "real_power_watts", 300),
+            ("apparentPower", {"draw": 320}, "apparent_power_va", 320),
+            ("powerFactor", {"percentage": 93}, "power_factor_percent", 93),
+            ("frequency", {"level": 50}, "frequency_hz", 50),
+            ("downstreamPower", {"enabled": True}, "downstream_power_enabled", 1),
+            ("remoteLockoutSwitch", {"locked": False}, "remote_lockout_status", 0),
+            ("battery", {"percentage": 77}, "battery_percent", 77),
+        ]
+        readings = [{"metric": kind, kind: data} for kind, data, _, _ in values]
+        readings.append({"metric": "rawTemperature", "rawTemperature": {"celsius": 999}})
+        collector.mt_collector.collect_batch(
+            [{"serial": "SENSOR", "readings": readings}], {"SENSOR": device}
+        )
+        for _, _, gauge, expected in values:
+            metrics.assert_gauge_value(
+                f"meraki_mt_{gauge}",
+                expected,
+                org_id="ORG",
+                network_id="N_TEST",
+                serial="SENSOR",
+                model="MT40",
+                device_type="MT",
+            )
+
+    async def test_batch_fallback_processes_nonempty_readings(self, collector):
+        """Validation errors route nonempty readings to fallback."""
+        mt = collector.mt_collector
+        mt._process_validated_metric = MagicMock(side_effect=RuntimeError("boom"))
+        mt._process_metric = MagicMock()
+        device = {"serial": "SENSOR", "networkId": "N_TEST"}
+        readings = [
+            {"metric": "temperature", "temperature": {"celsius": 21.5}},
+            {"metric": "battery", "battery": {"percentage": 77}},
+            {"metric": "noise", "noise": {}},
+            {"temperature": {"celsius": 5}},
+        ]
+        mt.collect_batch(
+            [{"serial": "SENSOR", "readings": readings}], {"SENSOR": device}, ttl_seconds=42
+        )
+        assert mt._process_metric.call_count == 2
+        mt._process_metric.assert_any_call(
+            device=device, metric_type="temperature", metric_data={"celsius": 21.5}, ttl_seconds=42
+        )
+        mt._process_metric.assert_any_call(
+            device=device, metric_type="battery", metric_data={"percentage": 77}, ttl_seconds=42
         )
