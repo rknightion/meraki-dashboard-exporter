@@ -67,7 +67,7 @@ ty:
 [group('check')]
 [no-exit-message]
 test filter="":
-    uv run pytest -m "not fleet_scheduled and not fleet_on_demand" {{ if filter == "" { "--cov=meraki_dashboard_exporter --cov-report=xml --cov-fail-under=80" } else { "-k " + quote(filter) } }}
+    uv run pytest -m "not fleet_scheduled and not fleet_on_demand" {{ if filter == "" { "--cov=meraki_dashboard_exporter --cov-report=xml --cov-fail-under=90" } else { "-k " + quote(filter) } }}
 
 # run the scheduled fleet scale presets (slow, cron-only in CI)
 [group('check')]

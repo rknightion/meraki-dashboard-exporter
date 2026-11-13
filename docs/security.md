@@ -52,8 +52,8 @@ Container publication has a stricter boundary than ordinary merge CI:
 
 CodeQL and Trivy still upload SARIF when a finding blocks publication, so the rejected result remains
 visible in the repository Security tab. Codecov and Codacy coverage uploads are reporting-only; the
-required coverage decision is pytest's local 80% floor in `just check`. Codacy's externally managed
-analysis remains enabled through `.codacy.yaml`; the unused Mend/WhiteSource and Safety configuration
+required coverage decision is pytest's local 90% line coverage floor in `just check`. Codacy's
+externally managed analysis remains enabled through `.codacy.yaml`; the unused Mend/WhiteSource and Safety configuration
 files were removed.
 
 #### Vulnerability exceptions

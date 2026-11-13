@@ -57,7 +57,7 @@ You can also run the **Release Please** workflow manually from GitHub Actions (w
 
 `just check` is the local source-tree gate and exactly what the CI `test` job
 enforces: ruff format check, ruff lint, mypy, generated-path drift, offline
-API-model conformance, and the marker-filtered test suite with the 80% coverage
+API-model conformance, and the marker-filtered test suite with the 90% line coverage
 floor. Run it before committing Python or documentation changes.
 
 CI deliberately covers additional checks that are not part of `just check`:
@@ -71,7 +71,7 @@ CI deliberately covers additional checks that are not part of `just check`:
 - the separate CodeQL, Docker-security, and Scorecard workflows.
 
 Codecov and Codacy uploads are best-effort reporting. A provider outage does not replace or fail the
-repository-owned 80% pytest coverage floor enforced by `just check`.
+repository-owned 90% pytest line coverage floor enforced by `just check`.
 
 CI does not currently run `git diff --check`; use it locally when reviewing a
 patch that may have whitespace errors. `just check` intentionally remains a
