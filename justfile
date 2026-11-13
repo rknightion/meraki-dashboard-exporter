@@ -67,19 +67,7 @@ ty:
 [group('check')]
 [no-exit-message]
 test filter="":
-    uv run pytest -m "not fleet_scheduled and not fleet_on_demand" {{ if filter == "" { "--cov=meraki_dashboard_exporter --cov-report=xml --cov-fail-under=90" } else { "-k " + quote(filter) } }}
-
-# run the scheduled fleet scale presets (slow, cron-only in CI)
-[group('check')]
-[no-exit-message]
-test-fleet-scheduled:
-    uv run pytest -m fleet_scheduled -v -s --timeout=300
-
-# run the on-demand fleet scale presets (slow, dispatch-only in CI)
-[group('check')]
-[no-exit-message]
-test-fleet-on-demand:
-    uv run pytest -m fleet_on_demand -v -s --timeout=300
+    uv run pytest {{ if filter == "" { "--cov=meraki_dashboard_exporter --cov-report=xml --cov-fail-under=90" } else { "-k " + quote(filter) } }}
 
 # offline Meraki model-conformance check against the vendored spec
 [group('check')]

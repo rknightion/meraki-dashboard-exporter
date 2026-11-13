@@ -57,7 +57,7 @@ You can also run the **Release Please** workflow manually from GitHub Actions (w
 
 `just check` is the local source-tree gate and exactly what the CI `test` job
 enforces: ruff format check, ruff lint, mypy, generated-path drift, offline
-API-model conformance, and the marker-filtered test suite with the 90% line coverage
+API-model conformance, and the test suite with the 90% line coverage
 floor. Run it before committing Python or documentation changes.
 
 CI deliberately covers additional checks that are not part of `just check`:
