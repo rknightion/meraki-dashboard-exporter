@@ -75,7 +75,7 @@ Stability & Deprecation Policy](stability.md#name-labels-are-not-part-of-numeric
 
 ### Can I rely on metric names not changing?
 
-Stable metric families keep their names, labels, and base units across the 1.x series;
+Stable metric families keep their names, labels, and base units within a major version;
 Experimental families may change at any time. Which families are Stable vs Experimental, and how
 post-1.0 renames are handled, is the [Metric Stability & Deprecation Policy](stability.md).
 

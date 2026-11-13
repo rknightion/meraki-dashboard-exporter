@@ -60,7 +60,7 @@ grows.
 
 **A published metric stability policy.** The [Metric Stability & Deprecation
 Policy](stability.md) states, as of the 1.0 release, exactly which metric names, labels, and
-units are covered by a compatibility promise across `1.x`, which are marked experimental and
+units are covered by a compatibility promise within a major version, which are marked experimental and
 may still change, and how a post-1.0 rename would be handled (old name kept alongside new for
 a deprecation window, not a silent breaking change). Building dashboards and alerts against a
 documented stability contract is different from building against "whatever fields happen to

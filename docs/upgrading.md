@@ -1,6 +1,6 @@
 ---
 title: Upgrading
-description: How to upgrade the Meraki Dashboard Exporter, the breaking changes to expect at 1.0, and where breaking metric and configuration changes are announced.
+description: How to upgrade the Meraki Dashboard Exporter, the breaking changes to expect at 1.0 and 2.0, and where breaking metric and configuration changes are announced.
 tags:
   - upgrade
   - migration
@@ -79,11 +79,11 @@ dashboard. They now match it:
 Thresholds set close to a boundary may need a small nudge. Rates (`*_bytes_per_second`) and device
 memory are unchanged.
 
-## Changes at 1.1
+## Changes at 2.0
 
 ### Configuration compatibility changes
 
-Review these settings before deploying 1.1; several configurations accepted by 1.0.2 are now
+Review these settings before deploying 2.0; several configurations accepted by 1.0.2 are now
 refused or behave differently:
 
 - `meraki.api_base_url` must use HTTPS. Local HTTP mock endpoints and plaintext proxies are no
@@ -118,6 +118,26 @@ adaptive profile-selection gate.
 The API client also strips its `Authorization` header on every cross-origin redirect, including
 when a custom API base URL was explicitly allowed. Proxies must complete authenticated redirects
 without forwarding the Meraki credential to a different origin.
+
+### Control API now requires an API token (BREAKING)
+
+The manual **Run Now** and **Clear DNS Cache** controls, and their POST endpoints
+(`/api/collectors/trigger` and `/api/clients/clear-dns-cache`), now fail closed when
+`server.api_token` is unset. Tokenless requests return HTTP 401 and the UI controls are disabled
+with a configuration tooltip. Configure `MERAKI_EXPORTER_SERVER__API_TOKEN` and have API clients
+or the authenticating reverse proxy supply `Authorization: Bearer <token>`. There is no
+unauthenticated compatibility flag. `/metrics`, `/health`, and `/ready` are unchanged.
+
+### Startup configuration validation
+
+The exporter now adds six deterministic configuration refusals before serving: a non-HTTPS API base
+URL, a custom API base URL without the explicit opt-in, an active Network Filter that successfully
+resolves to zero networks, no effective enabled collectors, a
+`MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` lower than
+`MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS`, or an invalid profile value. Each error names the
+setting to correct.
+Temporary Meraki API failures during startup verification do not abort the process; collection
+loops continue and retry when the API recovers.
 
 ### Network filtering and collected series
 
@@ -239,31 +259,14 @@ single instance covering multiple organizations, split it into **one instance pe
 Helm chart's multi-instance example (`charts/meraki-dashboard-exporter`) for running one release
 per organization, and the [Configuration](config.md) reference for the `org_id` key.
 
-### Control API now requires an API token (BREAKING)
-
-The manual **Run Now** and **Clear DNS Cache** controls, and their POST endpoints
-(`/api/collectors/trigger` and `/api/clients/clear-dns-cache`), now fail closed when
-`server.api_token` is unset. Tokenless requests return HTTP 401 and the UI controls are disabled
-with a configuration tooltip. Configure `MERAKI_EXPORTER_SERVER__API_TOKEN` and have API clients
-or the authenticating reverse proxy supply `Authorization: Bearer <token>`. There is no
-unauthenticated compatibility flag. `/metrics`, `/health`, and `/ready` are unchanged.
-
-### Startup configuration validation
-
-The exporter now adds six deterministic configuration refusals before serving: a non-HTTPS API base
-URL, a custom API base URL without the explicit opt-in, an active Network Filter that successfully
-resolves to zero networks, no effective enabled collectors, a
-`MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` lower than
-`MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS`, or an invalid profile value. Each error names the
-setting to correct.
-Temporary Meraki API failures during startup verification do not abort the process; collection
-loops continue and retry when the API recovers.
-
 ## Where breaking changes are announced
 
 Breaking metric and configuration changes are announced in the [Changelog](changelog.md), which
 is generated from Conventional Commits by release-please (see the [Release
 Process](development/release-process.md)).
+
+The configuration refusals that arrived in 2.0.0 are listed under [Changes at 2.0](#changes-at-20)
+on this page; the 2.0.0 changelog entry does not carry them.
 
 The conventions the project follows so you can spot them:
 
@@ -273,7 +276,8 @@ The conventions the project follows so you can spot them:
 - **Metric deprecations and removals** are called out in the changelog and follow the
   dual-publish deprecation window described in the [Metric Stability & Deprecation
   Policy](stability.md#post-10-rename-deprecation-process): a Stable metric is emitted under both
-  the old and new name for at least one full minor release before the old name is removed, and the
-  old metric's `# HELP` is prefixed with a `DEPRECATED:` note naming the replacement.
+  the old and new name for at least one full minor release before the old name is removed in a
+  new major version, and the old metric's `# HELP` is prefixed with a `DEPRECATED:` note naming
+  the replacement.
 
 Always read the changelog entry for the version you are moving to before upgrading production.
