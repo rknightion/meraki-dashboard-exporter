@@ -384,7 +384,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "rate(meraki_exporter_client_dns_resolution_seconds_total{job=\"meraki_dashboard\"}[$__rate_interval]) / clamp_min(rate(meraki_exporter_client_dns_lookups_total{job=\"meraki_dashboard\"}[$__rate_interval]) - rate(meraki_exporter_client_dns_lookups_cached_total{job=\"meraki_dashboard\"}[$__rate_interval]), 1)",
+                        "expr": "rate(meraki_exporter_client_dns_resolution_seconds_total{job=\"meraki_dashboard\"}[$__rate_interval]) / ((rate(meraki_exporter_client_dns_lookups_total{job=\"meraki_dashboard\"}[$__rate_interval]) - rate(meraki_exporter_client_dns_lookups_cached_total{job=\"meraki_dashboard\"}[$__rate_interval])) > 0)",
                         "legendFormat": "{{instance}}",
                         "range": true
                       }
