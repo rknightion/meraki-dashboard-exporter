@@ -38,3 +38,47 @@ def test_task_admission_metrics_are_documented_with_bounded_phase_labels() -> No
     assert "`collector_admission`" in rendered
     assert "`task_group`" in rendered
     assert "not endpoint failure" in rendered
+
+
+def test_scan_resolves_positional_and_starred_labels(tmp_path: Path) -> None:
+    """Scan direct and helper constructors with positional and expanded labels."""
+    (tmp_path / "metrics.py").write_text(
+        """
+plain = Gauge("plain", "help", ["org_id", "network_id"])
+enum = Counter("enum", "help", [LabelName.ORG_ID.value, LabelName.NETWORK_ID.value])
+class Example:
+    def register(self):
+        some_labels = [LabelName.ORG_ID, LabelName.NETWORK_ID]
+        expanded = [*some_labels, LabelName.MODE]
+        self.metric = self._create_gauge("starred", "help", labelnames=[*some_labels, LabelName.MODE])
+        self.other = self._create_gauge("assigned", "help", labelnames=expanded)
+""",
+        encoding="utf-8",
+    )
+    label_map = {
+        "LabelName.ORG_ID": "org_id",
+        "LabelName.NETWORK_ID": "network_id",
+        "LabelName.MODE": "mode",
+    }
+    metrics = metrics_docs.scan_for_metrics(tmp_path, tmp_path, {}, label_map)
+    assert {metric.name: metric.labels for metric in metrics} == {
+        "plain": ["org_id", "network_id"],
+        "enum": ["org_id", "network_id"],
+        "starred": ["org_id", "network_id", "mode"],
+        "assigned": ["org_id", "network_id", "mode"],
+    }
+
+
+def test_real_metrics_retain_positional_and_starred_labels() -> None:
+    """The real metric catalogue includes the full declared label sets."""
+    repo_root = metrics_docs.find_repo_root(SCRIPTS_DIR)
+    source = repo_root / "src" / "meraki_dashboard_exporter"
+    metrics = metrics_docs.scan_for_metrics(
+        repo_root / "src",
+        repo_root,
+        metrics_docs.parse_metric_constants(source / "core" / "constants"),
+        metrics_docs.parse_label_constants(source / "core" / "metrics.py"),
+    )
+    labels = {metric.name: tuple(metric.labels) for metric in metrics}
+    assert labels["meraki_webhook_events_received_total"] == ("org_id", "alert_type")
+    assert labels["meraki_mx_nat_rules"] == ("org_id", "network_id", "nat_type")
