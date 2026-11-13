@@ -5,6 +5,17 @@ description: Review Meraki Dashboard Exporter releases, including new collectors
 
 # Changelog
 
+## [3.0.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.3.1...v3.0.0) (2026-11-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* correct collection, configuration, dashboards and CI ([#1037](https://github.com/rknightion/meraki-dashboard-exporter/issues/1037))
+
+### Bug Fixes
+
+* correct collection, configuration, dashboards and CI ([#1037](https://github.com/rknightion/meraki-dashboard-exporter/issues/1037)) ([535b9af](https://github.com/rknightion/meraki-dashboard-exporter/commit/535b9afd89d1b6fe5d37a6ddb52cbeb9038ad54a))
+
 ## [2.3.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.3.0...v2.3.1) (2026-11-11)
 
 
