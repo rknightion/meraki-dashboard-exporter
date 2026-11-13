@@ -453,11 +453,16 @@ class ExporterApp:
         endpoint-group interval** (RES-08 / #631) - so a stalled fast poll trips
         liveness promptly while slower groups don't cause false positives. Read
         fresh each check so AIMD stretching widens the threshold automatically.
+        During initial collection, the auto-derived threshold is at least twice
+        the collector timeout.
         """
         configured = self.settings.monitoring.liveness_max_stale_seconds
         if configured > 0:
             return float(configured)
-        return self.collector_manager.scheduler.fastest_effective_interval_seconds() * 3.0
+        threshold = self.collector_manager.scheduler.fastest_effective_interval_seconds() * 3.0
+        if not self._first_collection_complete:
+            threshold = max(threshold, 2.0 * self.settings.collectors.collector_timeout)
+        return threshold
 
     def _liveness_check(self) -> tuple[bool, str]:
         """Evaluate the dead-man liveness switch (F-043).
