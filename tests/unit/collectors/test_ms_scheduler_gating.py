@@ -101,6 +101,56 @@ class _MSGatingBase(BaseCollectorTest):
 class TestMSPortStatusGate(_MSGatingBase):
     """MS_PORT_STATUS org-endpoint gate behaviour."""
 
+    @pytest.mark.parametrize(
+        ("first", "second", "per_switch", "expected"),
+        [
+            ("Connected", "Disconnected", False, 0),
+            ("Disconnected", "Connected", False, 1),
+            ("Connected", "Disconnected", True, 0),
+            ("Connected", "Connected", False, 1),
+        ],
+        ids=["link_drop", "link_recovery", "per_switch_link_drop", "unchanged_link"],
+    )
+    async def test_port_status_transition_leaves_one_series(
+        self, mock_api, settings, isolated_registry, inventory, first, second, per_switch, expected
+    ) -> None:
+        """Only the current link state remains in the real registry."""
+        dc = self._device_collector(
+            mock_api, settings, isolated_registry, inventory, _FakeScheduler()
+        )
+        inventory.get_allowed_network_ids = AsyncMock(return_value=None)
+        device = {"serial": "Q2XX-1", "networkId": "net1", "orgId": "org1", "orgName": "Org"}
+        mock_api.switch.getDeviceSwitchPortsStatusesPackets.return_value = []
+        expire = MagicMock(wraps=dc._expire_metric_series)
+        dc._expire_metric_series = expire
+        for status in (first, second):
+            port = {
+                "portId": "1",
+                "status": status,
+                "speed": "1 Gbps" if status == "Connected" else "",
+                "duplex": "full" if status == "Connected" else "",
+            }
+            if per_switch:
+                mock_api.switch.getDeviceSwitchPortsStatuses.return_value = [port]
+                await dc.ms_collector.collect(device)
+            else:
+                mock_api.switch.getOrganizationSwitchPortsStatusesBySwitch.return_value = [
+                    {"serial": "Q2XX-1", "network": {"id": "net1"}, "ports": [port]}
+                ]
+                await dc.ms_collector.collect_port_statuses_by_switch("org1", "Org", [device])
+        samples = [
+            sample
+            for metric in isolated_registry.collect()
+            for sample in metric.samples
+            if sample.name == "meraki_ms_port_status"
+            and sample.labels["serial"] == "Q2XX-1"
+            and sample.labels["port_id"] == "1"
+        ]
+        assert len(samples) == 1
+        assert samples[0].value == expected
+        if first == second:
+            expire.assert_not_called()
+
     async def test_org_port_status_gate_skips_fetch(
         self, mock_api, settings, isolated_registry, inventory
     ) -> None:

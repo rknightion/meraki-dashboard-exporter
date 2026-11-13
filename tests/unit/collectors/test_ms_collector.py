@@ -1138,7 +1138,7 @@ class TestMSCollector:
         F-084: port_status (and the other per-port/per-device gauges) must
         be routed through ``parent._set_metric`` -- not a bare
         ``.labels().set()`` call -- so expiration tracking covers removed
-        switches and stale link_speed/duplex series on renegotiation.
+        switches, while superseded link labels are removed immediately.
         """
         device = {
             "serial": "Q123-456-789",
