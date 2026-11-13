@@ -11,6 +11,7 @@ from prometheus_client import Gauge
 from meraki_dashboard_exporter.collectors.network_health_collectors.air_marshal import (
     AirMarshalCollector,
 )
+from meraki_dashboard_exporter.core.error_handling import CollectorError
 
 if TYPE_CHECKING:
     pass
@@ -255,7 +256,8 @@ class TestAirMarshalCollector:
             side_effect=Exception("API connection failed")
         )
 
-        await collector.collect(network)
+        with pytest.raises(CollectorError):
+            await collector.collect(network)
 
         mock_parent._set_metric.assert_not_called()
 

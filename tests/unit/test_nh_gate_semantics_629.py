@@ -17,7 +17,9 @@ Two fix sites:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from meraki_dashboard_exporter.collectors.network_health import NetworkHealthCollector
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
@@ -115,6 +117,175 @@ class TestBundleGroupGate(_NHGateBase):
         sched = MagicMock()
         sched.should_run.side_effect = lambda g: g in due
         return sched
+
+    async def test_real_subcollector_total_failure_not_marked(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ):
+        """Real connection fetch failures leave the group open."""
+        sched = self._sched_bundle({EndpointGroupName.NH_CONNECTION_STATS})
+        collector = self._make(mock_api_builder, settings, isolated_registry, inventory, sched)
+
+        async def fetch_networks(org_id):
+            return self._wireless("N_1", "N_2")
+
+        collector._fetch_networks_for_health = fetch_networks
+        collector.api.wireless.getNetworkWirelessConnectionStats = MagicMock(
+            side_effect=Exception("500 server error")
+        )
+        collector._track_error = MagicMock()
+        collector._set_metric = MagicMock()
+        await collector._collect_org_network_health("org1", "Org One")
+        assert EndpointGroupName.NH_CONNECTION_STATS not in self._marked(sched)
+        collector._track_error.assert_called()
+        collector._set_metric.assert_not_called()
+
+    async def test_real_subcollector_partial_failure_marks_ran(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ):
+        """One answered connection fetch closes the group."""
+        sched = self._sched_bundle({EndpointGroupName.NH_CONNECTION_STATS})
+        collector = self._make(mock_api_builder, settings, isolated_registry, inventory, sched)
+
+        async def fetch_networks(org_id):
+            return self._wireless("N_1", "N_2")
+
+        def fetch(network_id, **kwargs):
+            if network_id == "N_1":
+                raise Exception("500 server error")
+            return {"connectionStats": {}}
+
+        collector._fetch_networks_for_health = fetch_networks
+        collector.api.wireless.getNetworkWirelessConnectionStats = MagicMock(side_effect=fetch)
+        await collector._collect_org_network_health("org1", "Org One")
+        assert EndpointGroupName.NH_CONNECTION_STATS in self._marked(sched)
+
+    @pytest.mark.parametrize(
+        "message", ["400 Bad Request", "404 Not Found", "rate limit", "500 server error"]
+    )
+    @pytest.mark.parametrize(
+        ("group", "namespace", "method"),
+        [
+            (
+                EndpointGroupName.NH_CONNECTION_STATS,
+                "wireless",
+                "getNetworkWirelessConnectionStats",
+            ),
+            (EndpointGroupName.NH_DATA_RATES, "wireless", "getNetworkWirelessDataRateHistory"),
+            (EndpointGroupName.NH_BLUETOOTH, "networks", "getNetworkBluetoothClients"),
+            (
+                EndpointGroupName.NH_FAILED_CONNECTIONS,
+                "wireless",
+                "getNetworkWirelessFailedConnections",
+            ),
+            (EndpointGroupName.NH_MESH, "wireless", "getNetworkWirelessMeshStatuses"),
+        ],
+    )
+    async def test_real_subcollector_unavailable_and_rate_limit(
+        self,
+        mock_api_builder,
+        settings,
+        isolated_registry,
+        inventory,
+        message,
+        group,
+        namespace,
+        method,
+    ):
+        """Unavailable endpoints close the gate; real failures leave it open."""
+        sched = self._sched_bundle({group})
+        collector = self._make(mock_api_builder, settings, isolated_registry, inventory, sched)
+
+        async def fetch_networks(org_id):
+            return self._wireless("N_1")
+
+        collector._fetch_networks_for_health = fetch_networks
+        setattr(
+            getattr(collector.api, namespace), method, MagicMock(side_effect=Exception(message))
+        )
+        collector._set_metric = MagicMock()
+        await collector._collect_org_network_health("org1", "Org One")
+        assert (group in self._marked(sched)) == ("400" in message or "404" in message)
+        collector._set_metric.assert_not_called()
+
+    async def test_real_latency_total_failure_not_marked(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ):
+        """A failed latency fetch leaves the group open."""
+        sched = self._sched_bundle({EndpointGroupName.NH_LATENCY_STATS})
+        collector = self._make(mock_api_builder, settings, isolated_registry, inventory, sched)
+
+        async def fetch_networks(org_id):
+            return self._wireless("N_1", "N_2")
+
+        collector._fetch_networks_for_health = fetch_networks
+        collector.api.wireless.getNetworkWirelessDevicesLatencyStats = MagicMock(
+            side_effect=Exception("500 server error")
+        )
+        collector.api.wireless.getNetworkWirelessClientsLatencyStats = MagicMock(return_value=[])
+        collector._track_error = MagicMock()
+        collector._set_metric = MagicMock()
+        await collector._collect_org_network_health("org1", "Org One")
+        assert EndpointGroupName.NH_LATENCY_STATS not in self._marked(sched)
+        collector._track_error.assert_called()
+        collector._set_metric.assert_not_called()
+
+    @pytest.mark.parametrize("message", ["402 unavailable", "404 unavailable", "500 server error"])
+    @pytest.mark.parametrize(
+        ("group", "method"),
+        [
+            (EndpointGroupName.NH_LATENCY_STATS, "getNetworkWirelessDevicesLatencyStats"),
+            (EndpointGroupName.NH_AIR_MARSHAL, "getNetworkWirelessAirMarshal"),
+        ],
+    )
+    async def test_decorated_subcollector_unavailable_or_failure(
+        self, mock_api_builder, settings, isolated_registry, inventory, group, method, message
+    ):
+        """Decorated fetchers distinguish unavailable endpoints from failures."""
+        sched = self._sched_bundle({group})
+        collector = self._make(mock_api_builder, settings, isolated_registry, inventory, sched)
+
+        async def fetch_networks(org_id):
+            return self._wireless("N_1")
+
+        collector._fetch_networks_for_health = fetch_networks
+        setattr(collector.api.wireless, method, MagicMock(side_effect=Exception(message)))
+        collector.api.wireless.getNetworkWirelessClientsLatencyStats = MagicMock(return_value=[])
+        collector._set_metric = MagicMock()
+        await collector._collect_org_network_health("org1", "Org One")
+        assert (group in self._marked(sched)) == ("500" not in message)
+        collector._set_metric.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("group", "method"),
+        [
+            (EndpointGroupName.NH_LATENCY_STATS, "getNetworkWirelessDevicesLatencyStats"),
+            (EndpointGroupName.NH_AIR_MARSHAL, "getNetworkWirelessAirMarshal"),
+        ],
+    )
+    async def test_decorated_subcollector_exhausted_rate_limit(
+        self, mock_api_builder, settings, isolated_registry, inventory, monkeypatch, group, method
+    ):
+        """Exhausted decorator retries leave the group open and emit nothing."""
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.core.error_handling.asyncio.sleep", AsyncMock()
+        )
+        sched = self._sched_bundle({group})
+        collector = self._make(mock_api_builder, settings, isolated_registry, inventory, sched)
+
+        async def fetch_networks(org_id):
+            return self._wireless("N_1")
+
+        collector._fetch_networks_for_health = fetch_networks
+        setattr(
+            collector.api.wireless,
+            method,
+            MagicMock(side_effect=Exception("rate limit exceeded")),
+        )
+        collector.api.wireless.getNetworkWirelessClientsLatencyStats = MagicMock(return_value=[])
+        collector._set_metric = MagicMock()
+        await collector._collect_org_network_health("org1", "Org One")
+        assert group not in self._marked(sched)
+        collector._set_metric.assert_not_called()
 
     async def test_group_total_failure_not_marked(
         self, mock_api_builder, settings, isolated_registry, inventory

@@ -11,6 +11,7 @@ from prometheus_client import Gauge
 from meraki_dashboard_exporter.collectors.network_health_collectors.latency_stats import (
     LatencyStatsCollector,
 )
+from meraki_dashboard_exporter.core.error_handling import CollectorError
 
 if TYPE_CHECKING:
     pass
@@ -315,7 +316,8 @@ class TestLatencyStatsCollector:
             ]
         )
 
-        await collector.collect(network)
+        with pytest.raises(CollectorError):
+            await collector.collect(network)
 
         assert mock_parent._set_metric.call_count == 1
         gauge, labels, value, _metric_name = mock_parent._set_metric.call_args_list[0][0]
@@ -343,7 +345,8 @@ class TestLatencyStatsCollector:
             side_effect=Exception("API connection failed")
         )
 
-        await collector.collect(network)
+        with pytest.raises(CollectorError):
+            await collector.collect(network)
 
         assert mock_parent._set_metric.call_count == 1
         gauge, labels, value, _metric_name = mock_parent._set_metric.call_args_list[0][0]

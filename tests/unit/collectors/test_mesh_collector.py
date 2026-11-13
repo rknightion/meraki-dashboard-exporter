@@ -265,12 +265,13 @@ class TestMeshCollector:
         mock_parent: MagicMock,
         network: dict,
     ) -> None:
-        """Test a non-4xx error is swallowed (logged) rather than raised."""
+        """Test a non-4xx error propagates without emitting."""
         mock_api.wireless.getNetworkWirelessMeshStatuses = MagicMock(
             side_effect=Exception("connection reset by peer")
         )
 
-        await collector.collect(network)
+        with pytest.raises(Exception, match="connection reset"):
+            await collector.collect(network)
 
         mock_parent._set_metric.assert_not_called()
 
