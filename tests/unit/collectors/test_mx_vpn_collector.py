@@ -57,14 +57,15 @@ class TestMXVpnCollector:
         vpn_collector: MXVpnCollector,
         mock_parent: MagicMock,
     ) -> None:
-        """All five VPN gauge metrics must be created during __init__.
+        """All VPN gauge metrics must be created during __init__.
 
         Note: getOrganizationApplianceVpnStatuses' merakiVpnPeers/thirdPartyVpnPeers
         items carry no latency/jitter/loss fields (per the vendored OpenAPI spec), so
         no gauges are created for those — per-peer performance data instead comes
-        from collect_vpn_stats (MX_VPN_USAGE_SENT_BYTES/RECV_BYTES/STATS_AVG_LATENCY_SECONDS).
+        from collect_vpn_stats (MX_VPN_USAGE_SENT_BYTES/RECV_BYTES and the STATS_AVG_*
+        latency/loss/jitter/MOS gauges).
         """
-        assert mock_parent._create_gauge.call_count == 8
+        assert mock_parent._create_gauge.call_count == 11
 
         created_names = {call.args[0] for call in mock_parent._create_gauge.call_args_list}
         assert MXMetricName.MX_VPN_PEER_STATUS in created_names
@@ -72,6 +73,9 @@ class TestMXVpnCollector:
         assert MXMetricName.MX_VPN_USAGE_SENT_BYTES in created_names
         assert MXMetricName.MX_VPN_USAGE_RECV_BYTES in created_names
         assert MXMetricName.MX_VPN_STATS_AVG_LATENCY_SECONDS in created_names
+        assert MXMetricName.MX_VPN_STATS_AVG_LOSS_PERCENT in created_names
+        assert MXMetricName.MX_VPN_STATS_AVG_JITTER_SECONDS in created_names
+        assert MXMetricName.MX_VPN_STATS_AVG_MOS in created_names
         # Phase 4 (#287): site-to-site VPN topology
         assert MXMetricName.MX_VPN_SITE_TO_SITE_MODE in created_names
         assert MXMetricName.MX_VPN_HUBS in created_names
@@ -803,6 +807,78 @@ class TestMXVpnStatsCollector:
             if c[0][0] is vpn_collector._vpn_stats_avg_latency_seconds
         ]
         assert len(latency_calls) == 1
+
+    async def test_loss_jitter_and_mos_averaged_across_summaries(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Loss, jitter and MOS come from the same VpnStats row, one series per peer pair.
+
+        Each is averaged across the sender/receiver uplink combinations with None
+        entries ignored; jitter arrives in ms and is emitted in seconds. A peer the
+        API returns with only a usageSummary (no recent path samples, the live
+        shape) gets none of these series.
+        """
+        mock_api.appliance.getOrganizationApplianceVpnStats = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_1",
+                    "merakiVpnPeers": [
+                        {
+                            "networkId": "N_2",
+                            "usageSummary": {"sentInKilobytes": "0", "receivedInKilobytes": "0"},
+                            "lossPercentageSummaries": [
+                                {
+                                    "senderUplink": "wan1",
+                                    "receiverUplink": "wan1",
+                                    "avgLossPercentage": 0.0,
+                                },
+                                {
+                                    "senderUplink": "wan2",
+                                    "receiverUplink": "wan1",
+                                    "avgLossPercentage": 3.0,
+                                },
+                            ],
+                            "jitterSummaries": [
+                                {
+                                    "senderUplink": "wan1",
+                                    "receiverUplink": "wan1",
+                                    "avgJitter": 1.0,
+                                },
+                                {
+                                    "senderUplink": "wan2",
+                                    "receiverUplink": "wan1",
+                                    "avgJitter": 5.0,
+                                },
+                            ],
+                            "mosSummaries": [
+                                {"senderUplink": "wan1", "receiverUplink": "wan1", "avgMos": 4.3},
+                                {"senderUplink": "wan2", "receiverUplink": "wan1", "avgMos": None},
+                            ],
+                        },
+                        {
+                            "networkId": "N_3",
+                            "usageSummary": {"sentInKilobytes": "0", "receivedInKilobytes": "0"},
+                        },
+                    ],
+                }
+            ]
+        )
+
+        await vpn_collector.collect_vpn_stats("org1", "Test Org")
+
+        def series(gauge: object) -> dict[str, float]:
+            return {
+                c[0][1]["peer_network_id"]: c[0][2]
+                for c in mock_parent._set_metric.call_args_list
+                if c[0][0] is gauge
+            }
+
+        assert series(vpn_collector._vpn_stats_avg_loss_percent) == {"N_2": pytest.approx(1.5)}
+        assert series(vpn_collector._vpn_stats_avg_jitter_seconds) == {"N_2": pytest.approx(0.003)}
+        assert series(vpn_collector._vpn_stats_avg_mos) == {"N_2": pytest.approx(4.3)}
 
     async def test_null_usage_summary_handled(
         self,

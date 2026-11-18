@@ -100,8 +100,17 @@ meraki_mx_vpn_peers gauge
 meraki_mx_vpn_site_to_site_mode gauge
   help: Site-to-site VPN mode one-hot indicator (1=active mode for this network)
   labels: mode,network_id,org_id
+meraki_mx_vpn_stats_avg_jitter_seconds gauge
+  help: Average VPN jitter in seconds to a peer network (15-min avg), averaged across all sender/receiver uplink combinations
+  labels: network_id,org_id,peer_network_id
 meraki_mx_vpn_stats_avg_latency_seconds gauge
   help: Average VPN latency in seconds to a peer network (15-min avg), averaged across all sender/receiver uplink combinations
+  labels: network_id,org_id,peer_network_id
+meraki_mx_vpn_stats_avg_loss_percent gauge
+  help: Average VPN packet loss in percent (0-100) to a peer network (15-min avg), averaged across all sender/receiver uplink combinations
+  labels: network_id,org_id,peer_network_id
+meraki_mx_vpn_stats_avg_mos gauge
+  help: Average VPN mean opinion score (1-5) to a peer network (15-min avg), averaged across all sender/receiver uplink combinations
   labels: network_id,org_id,peer_network_id
 meraki_mx_vpn_subnets_advertised gauge
   help: Number of local subnets advertised to the site-to-site VPN

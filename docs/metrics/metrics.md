@@ -5,8 +5,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 369
-- **Gauges:** 329
+- **Total metrics:** 372
+- **Gauges:** 332
 - **Counters:** 35
 - **Histograms:** 4
 - **Info metrics:** 1
@@ -391,7 +391,10 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_mx_vpn_peer_status` | gauge | `org_id`, `network_id`, `peer_network_id`, `peer_type` | VPN peer reachability status (1=reachable, 0=unreachable) |  |
 | `meraki_mx_vpn_peers` | gauge | `org_id`, `network_id` | Number of VPN peers configured for a network |  |
 | `meraki_mx_vpn_site_to_site_mode` | gauge | `org_id`, `network_id`, `mode` | Site-to-site VPN mode one-hot indicator (1=active mode for this network) |  |
+| `meraki_mx_vpn_stats_avg_jitter_seconds` | gauge | `org_id`, `network_id`, `peer_network_id` | Average VPN jitter in seconds to a peer network (15-min avg), averaged across all sender/receiver uplink combinations |  |
 | `meraki_mx_vpn_stats_avg_latency_seconds` | gauge | `org_id`, `network_id`, `peer_network_id` | Average VPN latency in seconds to a peer network (15-min avg), averaged across all sender/receiver uplink combinations |  |
+| `meraki_mx_vpn_stats_avg_loss_percent` | gauge | `org_id`, `network_id`, `peer_network_id` | Average VPN packet loss in percent (0-100) to a peer network (15-min avg), averaged across all sender/receiver uplink combinations |  |
+| `meraki_mx_vpn_stats_avg_mos` | gauge | `org_id`, `network_id`, `peer_network_id` | Average VPN mean opinion score (1-5) to a peer network (15-min avg), averaged across all sender/receiver uplink combinations |  |
 | `meraki_mx_vpn_subnets_advertised` | gauge | `org_id`, `network_id` | Number of local subnets advertised to the site-to-site VPN |  |
 | `meraki_mx_vpn_usage_recv_bytes` | gauge | `org_id`, `network_id`, `peer_network_id` | VPN usage received in bytes over the last 15 minutes, per peer network |  |
 | `meraki_mx_vpn_usage_sent_bytes` | gauge | `org_id`, `network_id`, `peer_network_id` | VPN usage sent in bytes over the last 15 minutes, per peer network |  |
