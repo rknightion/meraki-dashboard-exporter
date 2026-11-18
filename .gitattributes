@@ -1,0 +1,7 @@
+/.env.example linguist-generated=true
+/.release-please-manifest.json linguist-generated=true
+/docs/collectors/reference.md linguist-generated=true
+/docs/config.md linguist-generated=true
+/docs/metrics/metrics.md linguist-generated=true
+/docs/reference/endpoints.md linguist-generated=true
+/uv.lock linguist-generated=true
