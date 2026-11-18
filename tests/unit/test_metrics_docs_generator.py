@@ -45,6 +45,7 @@ def test_scan_resolves_positional_and_starred_labels(tmp_path: Path) -> None:
     (tmp_path / "metrics.py").write_text(
         """
 plain = Gauge("plain", "help", ["org_id", "network_id"])
+unlabeled = Gauge("unlabeled", "help", [])
 enum = Counter("enum", "help", [LabelName.ORG_ID.value, LabelName.NETWORK_ID.value])
 class Example:
     def register(self):
@@ -63,6 +64,7 @@ class Example:
     metrics = metrics_docs.scan_for_metrics(tmp_path, tmp_path, {}, label_map)
     assert {metric.name: metric.labels for metric in metrics} == {
         "plain": ["org_id", "network_id"],
+        "unlabeled": [],
         "enum": ["org_id", "network_id"],
         "starred": ["org_id", "network_id", "mode"],
         "assigned": ["org_id", "network_id", "mode"],
