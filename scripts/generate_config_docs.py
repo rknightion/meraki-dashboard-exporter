@@ -314,7 +314,7 @@ def generate_configuration_docs() -> str:
     # Overview section
     sections.append("## Overview")
     sections.append("")
-    sections.append("The exporter can be configured using environment variables.")
+    sections.append("Configure the exporter with the environment variables listed below.")
     sections.append("All configuration is based on Pydantic models with built-in validation.")
     sections.append("")
 

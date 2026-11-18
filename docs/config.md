@@ -4,7 +4,7 @@ This document provides a comprehensive reference for all configuration options a
 
 ## Overview
 
-The exporter can be configured using environment variables.
+Configure the exporter with the environment variables listed below.
 All configuration is based on Pydantic models with built-in validation.
 
 ## Environment Variable Format
