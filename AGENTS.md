@@ -151,6 +151,20 @@ cache. Stop and ask; never pass `--yes` or `JUST_YES=1`. Run `just` with stdin f
 
 Commits are Conventional Commits: release-please and Renovate parse the subject. Cite the issue as `#N`.
 
+## Cursor Cloud specific instructions
+
+Cursor runs `just cloud-bootstrap </dev/null` on the pinned image. The recipe
+prepares the locked Python environment, bytecode cache and the Helm binary that
+pytest uses through `.venv/bin`. It also prepares the Groma scanner with the
+Node version selected by `.node-version`.
+
+- Fast check: `just fmt-check lint typecheck </dev/null`.
+- Source gate: `just check </dev/null && fnm exec --using=.node-version -- just groma-check </dev/null`.
+  The source gate uses synthetic data and the vendored API specification.
+- Use hosted CI for the image and chart checks. Local image checks use
+  `just ci </dev/null` and require Docker and `container-structure-test`. Live
+  Meraki verification requires a separate authorised environment.
+
 ## Tracking work
 
 Work is tracked in this repository's GitHub issues; they are the only queue. Do not add a checklist

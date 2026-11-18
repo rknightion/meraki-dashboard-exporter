@@ -13,6 +13,49 @@ readonly USER_BIN="${HOME}/.local/bin"
 repo_root="$(git rev-parse --show-toplevel)"
 cd "${repo_root}"
 
+setup_python() {
+    uv python install "${PYTHON_VERSION}"
+    uv sync --all-extras --locked --python "${PYTHON_VERSION}" "$@"
+}
+
+install_cursor_helm() (
+    readonly helm_version="3.19.0"
+    if [[ -x .venv/bin/helm && "$(.venv/bin/helm version --template '{{.Version}}')" == "v${helm_version}" ]]; then
+        exit 0
+    fi
+
+    case "$(uname -m)" in
+        x86_64)
+            arch=amd64
+            checksum=a7f81ce08007091b86d8bd696eb4d86b8d0f2e1b9f6c714be62f82f96a594496
+            ;;
+        aarch64)
+            arch=arm64
+            checksum=440cf7add0aee27ebc93fada965523c1dc2e0ab340d4348da2215737fc0d76ad
+            ;;
+        *)
+            echo "Unsupported Helm architecture: $(uname -m)" >&2
+            exit 1
+            ;;
+    esac
+    scratch="$(mktemp -d)"
+    trap 'rm -rf "$scratch"' EXIT
+    archive="$scratch/helm.tar.gz"
+    curl -q --fail --silent --show-error --location --retry 2 \
+        --proto '=https' --proto-redir '=https' \
+        "https://get.helm.sh/helm-v${helm_version}-linux-${arch}.tar.gz" --output "$archive"
+    printf '%s  %s\n' "$checksum" "$archive" | sha256sum --check --strict -
+    tar -xzf "$archive" -C "$scratch" "linux-${arch}/helm"
+    install -m 0755 "$scratch/linux-${arch}/helm" .venv/bin/helm
+)
+
+if [[ "${1:-}" == --cursor ]]; then
+    export UV_PROJECT_ENVIRONMENT=.venv
+    setup_python --compile-bytecode
+    install_cursor_helm
+    exit 0
+fi
+
 mkdir -p "${USER_BIN}"
 export PATH="${USER_BIN}:${PATH}"
 
@@ -47,8 +90,7 @@ if [[ "${installed_just_version}" != "${JUST_VERSION}" ]]; then
 fi
 
 echo "Installing Python ${PYTHON_VERSION} and locked development dependencies..."
-uv python install "${PYTHON_VERSION}"
-uv sync --all-extras --locked --python "${PYTHON_VERSION}"
+setup_python
 
 # Fail during setup rather than leaving an agent with a partial environment.
 uv run python --version

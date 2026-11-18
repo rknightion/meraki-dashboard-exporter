@@ -27,6 +27,13 @@ setup:
     uv python install {{ py_version }}
     uv sync --all-extras --locked
 
+# prepare locked dependencies and local check tools for Cursor Cloud
+[group('dev')]
+cloud-bootstrap:
+    bash scripts/cloud-environment-setup.sh --cursor
+    if ! fnm exec --using=.node-version -- node --version >/dev/null 2>&1; then fnm install "$(cat .node-version)"; fi
+    fnm exec --using=.node-version -- npx -y "groma.md@{{ groma_version }}" plugin install
+
 # format Python sources and this justfile in place
 [group('check')]
 fmt:
