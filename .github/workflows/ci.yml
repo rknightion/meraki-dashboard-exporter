@@ -182,19 +182,37 @@ jobs:
       contents: read
     uses: rknightion/.github/.github/workflows/privacy-sweep.yml@8f00b7fb896191e598f12ed565395697c539add1 # v1.26.9
 
-  # The Backlog.md board is retired: issues are the queue. A pull request may delete files under
-  # backlog/ or move them out, never add or change one there. Reads the file list from the API, so
-  # no pull request code is checked out.
-  backlog-freeze:
-    name: backlog/ is frozen
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  # zizmor fails a pull request on any finding (enforce); push runs upload SARIF instead.
+  zizmor:
     permissions:
       contents: read
+      security-events: write
+      actions: read
+    uses: rknightion/.github/.github/workflows/zizmor.yml@e5b9f15bc8ccafdbad75e623bbd0dbb27127f049 # v1.28.0
+    with:
+      enforce: true
+
+  # ci-success aggregates the CI jobs that branch protection and Renovate depend on.
+  ci-success:
+    name: ci-success
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [test, docker-build-test, helm-lint-kubeconform, ac-evidence, privacy-sweep, zizmor]
+    permissions:
       pull-requests: read
     steps:
+      - name: Fail if any required job did not pass
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        env:
+          RESULTS: ${{ join(needs.*.result, ', ') }}
+        run: |
+          echo "A required job failed or was cancelled: ${RESULTS}"
+          exit 1
+      # Read the frozen backlog's file list without checking out the pull request.
       - name: Refuse additions and changes under backlog/
+        id: backlog-freeze
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        timeout-minutes: 5
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -220,41 +238,13 @@ jobs:
           fi
           echo "No file under backlog/ is added or changed."
 
-  # Single required status check (the branch ruleset requires only this). if: always() + an explicit
-  # failure check so a failed/cancelled leg fails the gate. Renovate automerge waits for this to go
-  # green.
-  # zizmor fails a pull request on any finding (enforce); push runs upload SARIF instead.
-  zizmor:
-    permissions:
-      contents: read
-      security-events: write
-      actions: read
-    uses: rknightion/.github/.github/workflows/zizmor.yml@e5b9f15bc8ccafdbad75e623bbd0dbb27127f049 # v1.28.0
-    with:
-      enforce: true
-
-  ci-success:
-    name: ci-success
-    runs-on: ubuntu-latest
-    if: always()
-    needs: [test, docker-build-test, helm-lint-kubeconform, ac-evidence, privacy-sweep, backlog-freeze, zizmor]
-    steps:
-      - name: Fail if any required job did not pass
-        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
-        env:
-          RESULTS: ${{ join(needs.*.result, ', ') }}
-        run: |
-          echo "A required job failed or was cancelled: ${RESULTS}"
-          exit 1
-      # ac-evidence, privacy-sweep and backlog-freeze are skipped off a pull request (push, schedule, dispatch), which
-      # counts as passing there. On a pull request a skipped job reports success, so they must have
-      # actually run and passed.
+      # These checks must have succeeded on a pull request. Other events skip them.
       - name: Fail if a pull request check did not run
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ always() && github.event_name == 'pull_request' }}
         env:
           AC_EVIDENCE: ${{ needs.ac-evidence.result }}
           PRIVACY_SWEEP: ${{ needs.privacy-sweep.result }}
-          BACKLOG_FREEZE: ${{ needs.backlog-freeze.result }}
+          BACKLOG_FREEZE: ${{ steps.backlog-freeze.outcome }}
         run: |
           if [[ "$AC_EVIDENCE" != "success" || "$PRIVACY_SWEEP" != "success" || "$BACKLOG_FREEZE" != "success" ]]; then
             echo "ac-evidence: ${AC_EVIDENCE}, privacy-sweep: ${PRIVACY_SWEEP}, backlog-freeze: ${BACKLOG_FREEZE}; all must pass on a pull request"
