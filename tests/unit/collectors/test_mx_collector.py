@@ -566,6 +566,72 @@ class TestMXCollector:
         mock_api.appliance.getDeviceAppliancePerformance.assert_not_called()
         mock_parent._set_metric.assert_not_called()
 
+    async def test_collect_skips_performance_score_for_warm_spare(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+    ) -> None:
+        """A warm-spare MX must not trigger getDeviceAppliancePerformance.
+
+        The API answers 400 "Feature not supported" for the spare of an HA pair.
+        The primary is still collected, and DHCP subnets are still collected on both.
+        """
+        mock_api.appliance.getOrganizationApplianceUplinkStatuses = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2AA-0001",
+                    "networkId": "N_111",
+                    "model": "MX85",
+                    "highAvailability": {"enabled": True, "role": "primary"},
+                    "uplinks": [],
+                },
+                {
+                    "serial": "Q2AA-0002",
+                    "networkId": "N_111",
+                    "model": "MX85",
+                    "highAvailability": {"enabled": True, "role": "spare"},
+                    "uplinks": [],
+                },
+            ]
+        )
+        mock_api.appliance.getDeviceAppliancePerformance = MagicMock(return_value={"perfScore": 87})
+        mock_api.appliance.getDeviceApplianceDhcpSubnets = MagicMock(return_value=[])
+
+        await mx_collector.collect_uplink_statuses("org1", "Test Org", {})
+        for serial in ("Q2AA-0001", "Q2AA-0002"):
+            await mx_collector.collect({"serial": serial, "model": "MX85", "networkId": "N_111"})
+
+        mock_api.appliance.getDeviceAppliancePerformance.assert_called_once()
+        assert mock_api.appliance.getDeviceAppliancePerformance.call_args[0][0] == "Q2AA-0001"
+        assert mock_api.appliance.getDeviceApplianceDhcpSubnets.call_count == 2
+
+    async def test_collect_performance_score_resumes_when_spare_becomes_primary(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+    ) -> None:
+        """After a role change the former spare must be collected again."""
+        row = {
+            "serial": "Q2AA-0002",
+            "networkId": "N_111",
+            "model": "MX85",
+            "highAvailability": {"enabled": True, "role": "spare"},
+            "uplinks": [],
+        }
+        mock_api.appliance.getOrganizationApplianceUplinkStatuses = MagicMock(return_value=[row])
+        mock_api.appliance.getDeviceAppliancePerformance = MagicMock(return_value={"perfScore": 87})
+        mock_api.appliance.getDeviceApplianceDhcpSubnets = MagicMock(return_value=[])
+        device = {"serial": "Q2AA-0002", "model": "MX85", "networkId": "N_111"}
+
+        await mx_collector.collect_uplink_statuses("org1", "Test Org", {})
+        await mx_collector.collect(device)
+        mock_api.appliance.getDeviceAppliancePerformance.assert_not_called()
+
+        row["highAvailability"] = {"enabled": True, "role": "primary"}
+        await mx_collector.collect_uplink_statuses("org1", "Test Org", {})
+        await mx_collector.collect(device)
+        mock_api.appliance.getDeviceAppliancePerformance.assert_called_once()
+
     async def test_collect_performance_score_api_error_handled_gracefully(
         self,
         mx_collector: MXCollector,

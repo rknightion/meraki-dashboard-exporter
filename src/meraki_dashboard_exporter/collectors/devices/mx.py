@@ -68,6 +68,9 @@ class MXCollector(BaseDeviceCollector):
         # group-global run gate).
         self._last_dhcp_subnets_collection: dict[str, float] = {}
 
+        # Warm-spare MX serials, refreshed from getOrganizationApplianceUplinkStatuses.
+        self._ha_spare_serials: set[str] = set()
+
         self._mx_uplink_info = self.parent._create_gauge(
             MXMetricName.MX_UPLINK_INFO,
             "MX appliance uplink status info (1 = present)",
@@ -195,6 +198,13 @@ class MXCollector(BaseDeviceCollector):
         """Record that DHCP subnets were just collected for this serial."""
         self._last_dhcp_subnets_collection[serial] = time.time()
 
+    def _record_ha_role(self, serial: str, ha: dict[str, Any]) -> None:
+        """Track whether this MX is reported as the spare of a warm-spare pair."""
+        if ha.get("enabled") and ha.get("role") == "spare":
+            self._ha_spare_serials.add(serial)
+        else:
+            self._ha_spare_serials.discard(serial)
+
     @property
     def inventory(self) -> Any:
         """Expose the parent DeviceCollector's inventory cache to sub-collectors."""
@@ -235,7 +245,9 @@ class MXCollector(BaseDeviceCollector):
 
         """
         if self._is_physical_mx_hardware(device):
-            await self._collect_performance_score(device)
+            # The API answers 400 "Feature not supported" for a warm-spare unit.
+            if device.get("serial", "") not in self._ha_spare_serials:
+                await self._collect_performance_score(device)
             await self._collect_dhcp_subnets(device)
 
     @staticmethod
@@ -479,6 +491,7 @@ class MXCollector(BaseDeviceCollector):
 
         for appliance in uplink_statuses:
             serial = appliance.get("serial", "")
+            self._record_ha_role(serial, appliance.get("highAvailability") or {})
             device_info = device_lookup.get(serial, {})
             network_id = appliance.get("networkId", device_info.get("network_id", ""))
 

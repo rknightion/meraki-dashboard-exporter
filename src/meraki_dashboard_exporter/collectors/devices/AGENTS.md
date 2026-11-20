@@ -46,7 +46,8 @@ label series after a status transition are removed by the metric expiration mana
 - **MX performance score**: `mx.py` records each physical MX's request attempt before calling
   `getDeviceAppliancePerformance`. Errors, including an unsupported-feature response, must remain
   gated by the scheduler-solved `mx_performance` interval (floor 1800s), or they retry every device
-  collection cycle.
+  collection cycle. A warm-spare unit answers 400 "Feature not supported", so `mx.py` skips the
+  serials whose `highAvailability.role` is `spare` in `getOrganizationApplianceUplinkStatuses`.
 - **MT**: `MTCollector` has two constructors, `as_subcollector` (under `DeviceCollector`) and
   `as_standalone` (used by `../mt_sensor.py`), so a change to `mt.py` lands in two collectors.
   Responses can carry both `temperature` and `rawTemperature`. Only `temperature` is used;
