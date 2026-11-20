@@ -47,6 +47,9 @@ label series after a status transition are removed by the metric expiration mana
   `getDeviceAppliancePerformance`. Errors, including an unsupported-feature response, must remain
   gated by the scheduler-solved `mx_performance` interval (floor 1800s), or they retry every device
   collection cycle.
+- **MX VLAN/static-route config**: `mx_firewall.py` records each network's attempt before calling
+  `getNetworkApplianceVlans` and `getNetworkApplianceStaticRoutes`. Both answer 400 for a network
+  outside routed (NAT) mode, so a failure must stay gated by the `mx_vlan_config` interval too.
 - **MT**: `MTCollector` has two constructors, `as_subcollector` (under `DeviceCollector`) and
   `as_standalone` (used by `../mt_sensor.py`), so a change to `mt.py` lands in two collectors.
   Responses can carry both `temperature` and `rawTemperature`. Only `temperature` is used;

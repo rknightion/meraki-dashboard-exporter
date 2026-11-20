@@ -1618,6 +1618,63 @@ class TestMXFirewallCollector:
 
         mock_parent._set_metric.assert_not_called()
 
+    async def test_vlan_config_not_routed_mode_is_debug_skip_and_throttled(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A network outside routed (NAT) mode must not retry every device cycle.
+
+        Both endpoints answer 400 for such a network (passthrough or VPN
+        concentrator). The collector must skip quietly and wait for the
+        mx_vlan_config interval before asking again.
+        """
+        from meraki.exceptions import APIError
+
+        def bad_request(operation: str, message: str) -> APIError:
+            response = MagicMock()
+            response.status_code = 400
+            response.reason = "Bad Request"
+            response.json.return_value = {"errors": [message]}
+            return APIError({"tags": ["configure"], "operation": operation}, response)
+
+        mock_api.appliance.getNetworkApplianceVlans = MagicMock(
+            side_effect=bad_request(
+                "getNetworkApplianceVlans", "VLANs are not enabled for this network"
+            )
+        )
+        mock_api.appliance.getNetworkApplianceStaticRoutes = MagicMock(
+            side_effect=bad_request(
+                "getNetworkApplianceStaticRoutes",
+                "Unsupported for networks without routed mode (NAT) enabled",
+            )
+        )
+
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+
+        mock_parent._set_metric.assert_not_called()
+        assert mock_api.appliance.getNetworkApplianceVlans.call_count == 1
+        assert mock_api.appliance.getNetworkApplianceStaticRoutes.call_count == 1
+
+    async def test_vlan_config_failure_waits_for_interval(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A failed static-route fetch must not be retried within the group interval."""
+        mock_api.appliance.getNetworkApplianceVlans = MagicMock(return_value=[])
+        mock_api.appliance.getNetworkApplianceStaticRoutes = MagicMock(
+            side_effect=Exception("connection reset")
+        )
+
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+
+        assert mock_api.appliance.getNetworkApplianceStaticRoutes.call_count == 1
+
     # ------------------------------------------------------------------
     # collect_for_network dispatches the three new config-drift domains
     # ------------------------------------------------------------------
