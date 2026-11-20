@@ -624,8 +624,10 @@ class MXFirewallCollector(SubCollectorMixin):
         ``getNetworkApplianceVlans`` returns HTTP 400 when VLANs are not
         enabled for the network (single-LAN mode) -- that is caught locally
         and debug-logged, not raised, so the static-route counts below are
-        still collected. Only aggregate counts are emitted, never per-VLAN or
-        per-route series (unbounded cardinality).
+        still collected. Both endpoints return HTTP 400 for a network that is
+        not in routed (NAT) mode, such as a passthrough or VPN-concentrator
+        appliance; that is debug-logged too. Only aggregate counts are
+        emitted, never per-VLAN or per-route series (unbounded cardinality).
 
         Parameters
         ----------
@@ -642,6 +644,9 @@ class MXFirewallCollector(SubCollectorMixin):
                 network_id=network_id,
             )
             return
+        # Count the attempt before awaiting the SDK calls. Unsupported networks
+        # and transient failures otherwise retry on every device collection cycle.
+        self._mark_vlan_config_collected(network_id)
 
         base_labels = {
             LabelName.ORG_ID: org_id,
@@ -679,11 +684,22 @@ class MXFirewallCollector(SubCollectorMixin):
                 raise
 
         self._track_api_call("getNetworkApplianceStaticRoutes")
-        routes_response = await facade_for(self).call(
-            "getNetworkApplianceStaticRoutes",
-            self.api.appliance.getNetworkApplianceStaticRoutes,
-            network_id,
-        )
+        try:
+            routes_response = await facade_for(self).call(
+                "getNetworkApplianceStaticRoutes",
+                self.api.appliance.getNetworkApplianceStaticRoutes,
+                network_id,
+            )
+        except APIError as e:
+            if e.status in {400, 404}:
+                logger.debug(
+                    "Static routes unavailable for this network (not in routed mode)",
+                    org_id=org_id,
+                    network_id=network_id,
+                    status=e.status,
+                )
+                return
+            raise
         routes_data = validate_response_format(
             routes_response,
             expected_type=list,
@@ -702,8 +718,6 @@ class MXFirewallCollector(SubCollectorMixin):
             float(sum(1 for r in routes if r.enabled)),
             ttl_seconds=ttl_seconds,
         )
-
-        self._mark_vlan_config_collected(network_id)
 
     async def _appliance_network_by_mac(self, org_id: str) -> dict[str, str]:
         """Map lower-case device MAC to network ID from the cached org device inventory."""
