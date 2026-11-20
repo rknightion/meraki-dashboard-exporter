@@ -10,8 +10,12 @@ or coding agent working in this repository. `CONTRIBUTING.md` has the longer ver
 
 - Work on a branch of this repository, or a branch of your fork. Changes land through a pull
   request.
-- Run `just setup` once, then `just check` with stdin from `/dev/null` before you push. Say in the
-  pull request what you ran and what you could not run.
+- Run `just setup` once. Before you push, run the gate this repository's own section names for a
+  push, with stdin from `/dev/null`: `just check-fast` where the `justfile` has that recipe (`just
+  setup` installs a pre-push hook that runs it), otherwise `just check`. Say in the pull request
+  what you ran and what you left to CI.
+- After changing a pull request's base branch, push a commit or run `gh pr update-branch`: the
+  required workflow does not restart for a base change, so its check stays missing or stale.
 - The pull request title is a Conventional Commit subject (`fix: ...`, `feat: ...`), using one of
   the types `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`, `build` or `perf`, or another
   type the repository's release configuration lists. Mark a breaking change with `!` (`feat!: ...`).
@@ -150,6 +154,21 @@ Recipes marked `[confirm]` push a multi-arch image to ghcr.io or prune the machi
 cache. Stop and ask; never pass `--yes` or `JUST_YES=1`. Run `just` with stdin from `/dev/null`.
 
 Commits are Conventional Commits: release-please and Renovate parse the subject. Cite the issue as `#N`.
+
+## Cursor Cloud specific instructions
+
+Cursor runs `just cloud-bootstrap </dev/null` on the pinned image. The recipe
+prepares the locked Python 3.14 environment, bytecode cache and the Helm binary
+that pytest uses through `.venv/bin`. It also prepares the Groma scanner with the
+Node version selected by `.node-version`. The standalone Codex and Claude
+provisioner remains a separate end-user entry point.
+
+- Fast check: `just fmt-check lint typecheck </dev/null`.
+- Source gate: `just check </dev/null && fnm exec --using=.node-version -- just groma-check </dev/null`.
+  The source gate uses synthetic data and the vendored API specification.
+- Use hosted CI for the image and chart checks. Local image checks use
+  `just ci </dev/null` and require Docker and `container-structure-test`. Live
+  Meraki verification requires a separate authorised environment.
 
 ## Tracking work
 

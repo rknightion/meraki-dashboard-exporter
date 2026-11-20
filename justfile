@@ -10,7 +10,7 @@ py_version := "3.14"
 # renovate: datasource=npm depName=groma.md
 groma_version := "0.7.8"
 # renovate: datasource=git-refs depName=https://github.com/rknightion/fleet-review currentValue=main
-fleet_review_rev := "5352a064f4140509b58c679162ecb6cc17642040" # pragma: allowlist secret
+fleet_review_rev := "30229825aa02e08aec1a3ee58881d382e332b67a" # pragma: allowlist secret
 meraki_spec_url := "https://raw.githubusercontent.com/meraki/openapi/master/openapi/spec3.json"
 
 # Every path a scripts/generate_*.py writes. `gen-check` diffs exactly these.
@@ -26,6 +26,14 @@ default:
 setup:
     uv python install {{ py_version }}
     uv sync --all-extras --locked
+
+# prepare locked dependencies and local check tools for Cursor Cloud
+[group('dev')]
+cloud-bootstrap:
+    UV_PYTHON={{ py_version }} UV_PROJECT_ENVIRONMENT=.venv UV_COMPILE_BYTECODE=1 just setup
+    bash .cursor/install-helm.sh
+    if ! fnm exec --using=.node-version -- node --version >/dev/null 2>&1; then fnm install "$(cat .node-version)"; fi
+    fnm exec --using=.node-version -- npx -y "groma.md@{{ groma_version }}" plugin install
 
 # format Python sources and this justfile in place
 [group('check')]
