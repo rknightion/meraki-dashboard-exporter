@@ -771,6 +771,20 @@ class ApplianceStaticRoute(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class ApplianceSettings(BaseModel):
+    """Appliance settings for a network.
+
+    Source: ``getNetworkApplianceSettings``. ``deploymentMode`` is ``routed`` or
+    ``passthrough``; VLANs and static routes exist only in routed mode.
+    """
+
+    __meraki_op__ = "getNetworkApplianceSettings"
+
+    deploymentMode: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
 # Sensor overview / gateway-connection Models (M3 new-signal fetchers, F-023)
 
 

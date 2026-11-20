@@ -316,6 +316,14 @@ class DeviceCollector(MetricCollector):
             cost_fn=lambda s: 2 * s.appliance_network_count,
             self_paced=True,  # per-key timestamp throttle (#789)
         ),
+        # deploymentMode gate for mx_vlan_config: 1 call/appliance network
+        EndpointGroup(
+            name=EndpointGroupName.MX_APPLIANCE_SETTINGS,
+            priority=4,
+            floor_seconds=86400,
+            cost_fn=lambda s: float(s.appliance_network_count),
+            self_paced=True,  # per-key timestamp throttle (#789)
+        ),
         # Phase 4 (#290): L3+L7 firewall rules per enabled SSID (2 calls/SSID). OrgShape
         # has no SSID count; estimate ~4 enabled SSIDs/network -> 2*4*wireless_network_count.
         # This is an estimate refined at runtime by the enabled-only filter.
