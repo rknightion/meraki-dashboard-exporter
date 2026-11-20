@@ -124,7 +124,7 @@ jobs:
       # grant a tailnet join to every pull request on every rknightion repo.
       - name: Mint a scoped push token
         id: bao
-        uses: rknightion/.github/.github/actions/broker-token@18c5119e3b14f88ba77d773a8bddd8b05b7b5dac # v1.30.12
+        uses: rknightion/.github/.github/actions/broker-token@0e637bfda82f83329a87463eb9f56037a4fff773 # v1.30.14
         with:
           permission-set: lockfile-meraki-dashboard-exporter
           role: lockfile-meraki-dashboard-exporter
