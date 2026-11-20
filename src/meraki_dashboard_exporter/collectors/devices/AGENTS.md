@@ -54,6 +54,8 @@ label series after a status transition are removed by the metric expiration mana
 - **MX VLAN/static-route config**: `mx_firewall.py` records each network's attempt before calling
   `getNetworkApplianceVlans` and `getNetworkApplianceStaticRoutes`. Both answer 400 for a network
   outside routed (NAT) mode, so a failure must stay gated by the `mx_vlan_config` interval too.
+  Neither is requested when `getNetworkApplianceSettings` reports `deploymentMode: passthrough`;
+  that mode is read per network once per `mx_appliance_settings` interval (floor 24h).
 - **MT**: `MTCollector` has two constructors, `as_subcollector` (under `DeviceCollector`) and
   `as_standalone` (used by `../mt_sensor.py`), so a change to `mt.py` lands in two collectors.
   Responses can carry both `temperature` and `rawTemperature`. Only `temperature` is used;

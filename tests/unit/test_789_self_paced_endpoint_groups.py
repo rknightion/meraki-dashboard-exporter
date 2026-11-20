@@ -35,6 +35,7 @@ _DEVICE_SELF_PACED = {
     EndpointGroupName.MX_SECURITY_CONFIG,
     EndpointGroupName.MX_NAT_CONFIG,
     EndpointGroupName.MX_VLAN_CONFIG,
+    EndpointGroupName.MX_APPLIANCE_SETTINGS,
     EndpointGroupName.MS_PACKET_STATS,
     EndpointGroupName.MS_STP,
     EndpointGroupName.MV_ANALYTICS,

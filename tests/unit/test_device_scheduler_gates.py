@@ -63,6 +63,7 @@ _EXPECTED_DEVICE_GROUPS = {
     EndpointGroupName.MX_VPN_CONFIG,
     EndpointGroupName.MX_NAT_CONFIG,
     EndpointGroupName.MX_VLAN_CONFIG,
+    EndpointGroupName.MX_APPLIANCE_SETTINGS,
     EndpointGroupName.MR_SSID_FIREWALL,
     EndpointGroupName.MR_RF_PROFILES,
     EndpointGroupName.MS_DHCP_SECURITY,

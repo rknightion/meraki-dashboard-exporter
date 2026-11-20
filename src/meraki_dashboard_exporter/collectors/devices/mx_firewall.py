@@ -18,6 +18,7 @@ from ...core.domain_models import (
     ApplianceSecurityEvent,
     ApplianceSecurityIntrusionSettings,
     ApplianceSecurityMalwareSettings,
+    ApplianceSettings,
     ApplianceStaticRoute,
     ApplianceVlan,
 )
@@ -84,6 +85,8 @@ class MXFirewallCollector(SubCollectorMixin):
         # is not re-exported for a second window.
         self._seen_security_event_types: dict[str, set[str]] = {}
         self._seen_security_events_by_network: dict[str, set[tuple[str, str, str, str]]] = {}
+        self._last_appliance_settings_collection: dict[str, float] = {}
+        self._deployment_modes: dict[str, str] = {}
         self._initialize_metrics()
 
     def _should_collect_firewall_rules(self, network_id: str) -> bool:
@@ -141,6 +144,42 @@ class MXFirewallCollector(SubCollectorMixin):
     def _mark_vlan_config_collected(self, network_id: str) -> None:
         """Record that VLAN/static-route config was just collected for this network."""
         self._last_vlan_config_collection[network_id] = time.time()
+
+    async def _deployment_mode(self, network_id: str) -> str | None:
+        """Return the network's appliance deploymentMode, refreshed per mx_appliance_settings.
+
+        A failed fetch keeps the last known mode (``None`` if never read), so the
+        VLAN/static-route calls fall back to being attempted.
+        """
+        interval = float(self.parent._group_interval(EndpointGroupName.MX_APPLIANCE_SETTINGS))
+        last = self._last_appliance_settings_collection.get(network_id)
+        if last is not None and (time.time() - last) < interval:
+            return self._deployment_modes.get(network_id)
+        self._last_appliance_settings_collection[network_id] = time.time()
+
+        self._track_api_call("getNetworkApplianceSettings")
+        try:
+            response = await facade_for(self).call(
+                "getNetworkApplianceSettings",
+                self.api.appliance.getNetworkApplianceSettings,
+                network_id,
+            )
+        except APIError as e:
+            logger.debug(
+                "Appliance settings unavailable; VLAN/static-route calls not gated",
+                network_id=network_id,
+                status=e.status,
+            )
+            return self._deployment_modes.get(network_id)
+        data = validate_response_format(
+            response,
+            expected_type=dict,
+            operation="getNetworkApplianceSettings",
+        )
+        mode = ApplianceSettings.model_validate(data).deploymentMode
+        if mode:
+            self._deployment_modes[network_id] = mode
+        return self._deployment_modes.get(network_id)
 
     def _initialize_metrics(self) -> None:
         """Initialize firewall-related Prometheus gauge metrics."""
@@ -681,6 +720,14 @@ class MXFirewallCollector(SubCollectorMixin):
         # Count the attempt before awaiting the SDK calls. Unsupported networks
         # and transient failures otherwise retry on every device collection cycle.
         self._mark_vlan_config_collected(network_id)
+
+        if await self._deployment_mode(network_id) == "passthrough":
+            logger.debug(
+                "Skipping VLAN config collection (appliance in passthrough mode)",
+                org_id=org_id,
+                network_id=network_id,
+            )
+            return
 
         base_labels = {
             LabelName.ORG_ID: org_id,
