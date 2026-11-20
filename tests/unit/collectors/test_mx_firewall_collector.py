@@ -1632,20 +1632,23 @@ class TestMXFirewallCollector:
         """
         from meraki.exceptions import APIError
 
-        def not_routed(operation: str) -> APIError:
+        def bad_request(operation: str, message: str) -> APIError:
             response = MagicMock()
             response.status_code = 400
             response.reason = "Bad Request"
-            response.json.return_value = {
-                "errors": ["Unsupported for networks without routed mode (NAT) enabled"]
-            }
+            response.json.return_value = {"errors": [message]}
             return APIError({"tags": ["configure"], "operation": operation}, response)
 
         mock_api.appliance.getNetworkApplianceVlans = MagicMock(
-            side_effect=not_routed("getNetworkApplianceVlans")
+            side_effect=bad_request(
+                "getNetworkApplianceVlans", "VLANs are not enabled for this network"
+            )
         )
         mock_api.appliance.getNetworkApplianceStaticRoutes = MagicMock(
-            side_effect=not_routed("getNetworkApplianceStaticRoutes")
+            side_effect=bad_request(
+                "getNetworkApplianceStaticRoutes",
+                "Unsupported for networks without routed mode (NAT) enabled",
+            )
         )
 
         await firewall_collector.collect_vlan_config("org1", "N_1")
