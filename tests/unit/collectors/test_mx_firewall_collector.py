@@ -1675,6 +1675,50 @@ class TestMXFirewallCollector:
 
         assert mock_api.appliance.getNetworkApplianceStaticRoutes.call_count == 1
 
+    @pytest.mark.parametrize(
+        ("status", "reason", "tracked"),
+        [
+            (400, "Bad Request", False),
+            (403, "Forbidden", True),
+            (500, "Internal Server Error", True),
+        ],
+    )
+    async def test_vlan_config_static_route_error_tracked_unless_not_routed(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        status: int,
+        reason: str,
+        tracked: bool,
+    ) -> None:
+        """Only the not-routed-mode 400 is a quiet skip for static routes (#1071).
+
+        Any other APIError from getNetworkApplianceStaticRoutes must reach the
+        error handler and be counted, so a real authorization or server error
+        is never hidden as "network not in routed mode".
+        """
+        from meraki.exceptions import APIError
+
+        response = MagicMock()
+        response.status_code = status
+        response.reason = reason
+        response.json.return_value = {"errors": [reason]}
+        mock_api.appliance.getNetworkApplianceVlans = MagicMock(return_value=[])
+        mock_api.appliance.getNetworkApplianceStaticRoutes = MagicMock(
+            side_effect=APIError(
+                {"tags": ["configure"], "operation": "getNetworkApplianceStaticRoutes"},
+                response,
+            )
+        )
+
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+
+        assert mock_parent._track_error.called is tracked
+        # The VLAN count is emitted before the static-route call either way.
+        called_gauges = {c[0][0] for c in mock_parent._set_metric.call_args_list}
+        assert called_gauges == {firewall_collector._vlans_total}
+
     # ------------------------------------------------------------------
     # collect_for_network dispatches the three new config-drift domains
     # ------------------------------------------------------------------

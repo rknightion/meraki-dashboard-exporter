@@ -46,7 +46,11 @@ label series after a status transition are removed by the metric expiration mana
 - **MX performance score**: `mx.py` records each physical MX's request attempt before calling
   `getDeviceAppliancePerformance`. Errors, including an unsupported-feature response, must remain
   gated by the scheduler-solved `mx_performance` interval (floor 1800s), or they retry every device
-  collection cycle.
+  collection cycle. A warm-spare unit answers 400 "Feature not supported", so `mx.py` skips the
+  serials whose `highAvailability.role` is `spare` in `getOrganizationApplianceUplinkStatuses`.
+  That role is the configured designation and does not follow the active unit: during a failover
+  the designated spare stays `spare` and the endpoint still answers 400 for it while it is master.
+  Do not make the skip track the active unit, or the failing calls come back.
 - **MX VLAN/static-route config**: `mx_firewall.py` records each network's attempt before calling
   `getNetworkApplianceVlans` and `getNetworkApplianceStaticRoutes`. Both answer 400 for a network
   outside routed (NAT) mode, so a failure must stay gated by the `mx_vlan_config` interval too.
