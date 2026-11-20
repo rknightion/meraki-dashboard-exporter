@@ -68,6 +68,14 @@ class MXCollector(BaseDeviceCollector):
         # group-global run gate).
         self._last_dhcp_subnets_collection: dict[str, float] = {}
 
+        # Serials of HA warm-spare MXs, read from the highAvailability object of
+        # getOrganizationApplianceUplinkStatuses in collect_uplink_statuses().
+        # getDeviceAppliancePerformance answers 400 "Feature not supported" for a
+        # spare, so collect() skips the perf call for these. Updated per row
+        # (add/discard) rather than replaced, because collect_uplink_statuses runs
+        # once per org concurrently and serials are unique across orgs.
+        self._ha_spare_serials: set[str] = set()
+
         self._mx_uplink_info = self.parent._create_gauge(
             MXMetricName.MX_UPLINK_INFO,
             "MX appliance uplink status info (1 = present)",
@@ -228,6 +236,12 @@ class MXCollector(BaseDeviceCollector):
 
         Uplink statuses are collected separately via collect_uplink_statuses().
 
+        The performance score is skipped for HA warm spares, which the endpoint
+        does not support. Spares are learned from the org-wide uplink statuses
+        call, which runs after this per-device fan-out, so a spare can still be
+        polled once (then throttled by the mx_performance interval) before the
+        first uplink-status pass has seen it.
+
         Parameters
         ----------
         device : dict[str, Any]
@@ -235,7 +249,8 @@ class MXCollector(BaseDeviceCollector):
 
         """
         if self._is_physical_mx_hardware(device):
-            await self._collect_performance_score(device)
+            if device.get("serial", "") not in self._ha_spare_serials:
+                await self._collect_performance_score(device)
             await self._collect_dhcp_subnets(device)
 
     @staticmethod
@@ -479,6 +494,12 @@ class MXCollector(BaseDeviceCollector):
 
         for appliance in uplink_statuses:
             serial = appliance.get("serial", "")
+            ha = appliance.get("highAvailability") or {}
+            if ha.get("enabled") and ha.get("role") == "spare":
+                self._ha_spare_serials.add(serial)
+            else:
+                self._ha_spare_serials.discard(serial)
+
             device_info = device_lookup.get(serial, {})
             network_id = appliance.get("networkId", device_info.get("network_id", ""))
 

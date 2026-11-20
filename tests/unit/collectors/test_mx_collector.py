@@ -566,6 +566,91 @@ class TestMXCollector:
         mock_api.appliance.getDeviceAppliancePerformance.assert_not_called()
         mock_parent._set_metric.assert_not_called()
 
+    @staticmethod
+    def _ha_pair_uplink_statuses(spare_role: str) -> list[dict[str, object]]:
+        """Uplink-status rows for an HA pair: a primary and its warm spare."""
+        return [
+            {
+                "serial": "Q2HA-PRIM",
+                "networkId": "N_111",
+                "model": "MX67",
+                "highAvailability": {"enabled": True, "role": "primary"},
+                "uplinks": [{"interface": "wan1", "status": "active"}],
+            },
+            {
+                "serial": "Q2HA-SPAR",
+                "networkId": "N_111",
+                "model": "MX67",
+                "highAvailability": {"enabled": True, "role": spare_role},
+                "uplinks": [{"interface": "wan1", "status": "active"}],
+            },
+        ]
+
+    @staticmethod
+    def _ha_device(serial: str) -> dict[str, str]:
+        return {
+            "serial": serial,
+            "model": "MX67",
+            "networkId": "N_111",
+            "orgId": "org1",
+            "orgName": "Test Org",
+        }
+
+    async def test_collect_skips_performance_score_for_ha_warm_spare(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+    ) -> None:
+        """An HA warm spare must not trigger getDeviceAppliancePerformance.
+
+        Meraki answers 400 "Feature not supported" for a warm spare, so each
+        call is wasted budget and an error log. The spare's DHCP subnets are
+        still collected: that endpoint does answer for a spare.
+        """
+        mock_api.appliance.getOrganizationApplianceUplinkStatuses = MagicMock(
+            return_value=self._ha_pair_uplink_statuses("spare")
+        )
+        mock_api.appliance.getDeviceAppliancePerformance = MagicMock(return_value={"perfScore": 87})
+        mock_api.appliance.getDeviceApplianceDhcpSubnets = MagicMock(return_value=[])
+
+        await mx_collector.collect_uplink_statuses("org1", "Test Org", {})
+        await mx_collector.collect(self._ha_device("Q2HA-PRIM"))
+        await mx_collector.collect(self._ha_device("Q2HA-SPAR"))
+
+        perf_serials = [
+            c.args[0] for c in mock_api.appliance.getDeviceAppliancePerformance.call_args_list
+        ]
+        dhcp_serials = [
+            c.args[0] for c in mock_api.appliance.getDeviceApplianceDhcpSubnets.call_args_list
+        ]
+        assert perf_serials == ["Q2HA-PRIM"]
+        assert dhcp_serials == ["Q2HA-PRIM", "Q2HA-SPAR"]
+
+    async def test_collect_resumes_performance_score_when_spare_role_changes(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+    ) -> None:
+        """A device that stops being reported as a spare is polled again."""
+        mock_api.appliance.getDeviceAppliancePerformance = MagicMock(return_value={"perfScore": 87})
+        mock_api.appliance.getDeviceApplianceDhcpSubnets = MagicMock(return_value=[])
+
+        mock_api.appliance.getOrganizationApplianceUplinkStatuses = MagicMock(
+            return_value=self._ha_pair_uplink_statuses("spare")
+        )
+        await mx_collector.collect_uplink_statuses("org1", "Test Org", {})
+        await mx_collector.collect(self._ha_device("Q2HA-SPAR"))
+        mock_api.appliance.getDeviceAppliancePerformance.assert_not_called()
+
+        mock_api.appliance.getOrganizationApplianceUplinkStatuses = MagicMock(
+            return_value=self._ha_pair_uplink_statuses("primary")
+        )
+        await mx_collector.collect_uplink_statuses("org1", "Test Org", {})
+        await mx_collector.collect(self._ha_device("Q2HA-SPAR"))
+        assert [
+            c.args[0] for c in mock_api.appliance.getDeviceAppliancePerformance.call_args_list
+        ] == ["Q2HA-SPAR"]
+
     async def test_collect_performance_score_api_error_handled_gracefully(
         self,
         mx_collector: MXCollector,
