@@ -326,10 +326,14 @@ class MXMetricName(StrEnum):
     MX_HA_ROLE = "meraki_mx_ha_role"
 
     # VPN history stats (org-wide vpn/stats endpoint; complements point-in-time vpn statuses)
-    # Usage emitted in bytes (Meraki KB x1024); latency in seconds (ms / 1000)
+    # Usage emitted in bytes (Meraki KB x1024); latency and jitter in seconds (ms / 1000);
+    # loss in percent (0-100, as the API reports it); MOS unitless (1-5)
     MX_VPN_USAGE_SENT_BYTES = "meraki_mx_vpn_usage_sent_bytes"
     MX_VPN_USAGE_RECV_BYTES = "meraki_mx_vpn_usage_recv_bytes"
     MX_VPN_STATS_AVG_LATENCY_SECONDS = "meraki_mx_vpn_stats_avg_latency_seconds"
+    MX_VPN_STATS_AVG_LOSS_PERCENT = "meraki_mx_vpn_stats_avg_loss_percent"
+    MX_VPN_STATS_AVG_JITTER_SECONDS = "meraki_mx_vpn_stats_avg_jitter_seconds"
+    MX_VPN_STATS_AVG_MOS = "meraki_mx_vpn_stats_avg_mos"
 
     # Phase 4 (#618)
     MX_CONTENT_FILTERING_BLOCKED_CATEGORIES = "meraki_mx_content_filtering_blocked_categories"

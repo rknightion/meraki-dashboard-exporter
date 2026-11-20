@@ -95,6 +95,24 @@ class MXVpnCollector(SubCollectorMixin):
             "sender/receiver uplink combinations",
             labelnames=vpn_stats_labelnames,
         )
+        self._vpn_stats_avg_loss_percent = self.parent._create_gauge(
+            MXMetricName.MX_VPN_STATS_AVG_LOSS_PERCENT,
+            "Average VPN packet loss in percent (0-100) to a peer network (15-min avg), averaged "
+            "across all sender/receiver uplink combinations",
+            labelnames=vpn_stats_labelnames,
+        )
+        self._vpn_stats_avg_jitter_seconds = self.parent._create_gauge(
+            MXMetricName.MX_VPN_STATS_AVG_JITTER_SECONDS,
+            "Average VPN jitter in seconds to a peer network (15-min avg), averaged across all "
+            "sender/receiver uplink combinations",
+            labelnames=vpn_stats_labelnames,
+        )
+        self._vpn_stats_avg_mos = self.parent._create_gauge(
+            MXMetricName.MX_VPN_STATS_AVG_MOS,
+            "Average VPN mean opinion score (1-5) to a peer network (15-min avg), averaged across "
+            "all sender/receiver uplink combinations",
+            labelnames=vpn_stats_labelnames,
+        )
 
         # Phase 4 (#287): site-to-site VPN topology config drift.
         self._vpn_site_to_site_mode = self.parent._create_gauge(
@@ -344,15 +362,15 @@ class MXVpnCollector(SubCollectorMixin):
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
     async def collect_vpn_stats(self, org_id: str, org_name: str, *, due: bool = True) -> None:
-        """Collect historical VPN usage and latency stats for an organization.
+        """Collect historical VPN usage and path quality stats for an organization.
 
         Complements :meth:`collect`'s point-in-time VPN peer status with historical
-        per-peer-network usage volume (sent/received kilobytes) and average latency
-        using the getOrganizationApplianceVpnStats endpoint. To keep cardinality
-        bounded, data is aggregated to one series per (network, peer network) pair —
-        the sender/receiver uplink cross-product within ``latencySummaries`` is never
-        used as a label; instead the average latency across all uplink combinations
-        is emitted.
+        per-peer-network usage volume (sent/received kilobytes) and average latency,
+        packet loss, jitter and MOS using the getOrganizationApplianceVpnStats
+        endpoint. To keep cardinality bounded, data is aggregated to one series per
+        (network, peer network) pair: the sender/receiver uplink cross-product within
+        the ``*Summaries`` lists is never used as a label; instead the average across
+        all uplink combinations is emitted.
 
         Parameters
         ----------
@@ -451,17 +469,42 @@ class MXVpnCollector(SubCollectorMixin):
                     )
                     emitted += 1
 
-                latency_values = [
-                    float(summary.avgLatencyMs)
-                    for summary in peer.latencySummaries
-                    if summary.avgLatencyMs is not None
-                ]
-                if latency_values:
-                    self.parent._set_metric(
+                # Latency and jitter arrive in ms and are emitted in seconds.
+                path_quality = (
+                    (
                         self._vpn_stats_avg_latency_seconds,
+                        MXMetricName.MX_VPN_STATS_AVG_LATENCY_SECONDS,
+                        [s.avgLatencyMs for s in peer.latencySummaries],
+                        1 / 1000,
+                    ),
+                    (
+                        self._vpn_stats_avg_loss_percent,
+                        MXMetricName.MX_VPN_STATS_AVG_LOSS_PERCENT,
+                        [s.avgLossPercentage for s in peer.lossPercentageSummaries],
+                        1.0,
+                    ),
+                    (
+                        self._vpn_stats_avg_jitter_seconds,
+                        MXMetricName.MX_VPN_STATS_AVG_JITTER_SECONDS,
+                        [s.avgJitter for s in peer.jitterSummaries],
+                        1 / 1000,
+                    ),
+                    (
+                        self._vpn_stats_avg_mos,
+                        MXMetricName.MX_VPN_STATS_AVG_MOS,
+                        [s.avgMos for s in peer.mosSummaries],
+                        1.0,
+                    ),
+                )
+                for gauge, metric_name, raw_values, scale in path_quality:
+                    values = [float(v) for v in raw_values if v is not None]
+                    if not values:
+                        continue
+                    self.parent._set_metric(
+                        gauge,
                         labels,
-                        (sum(latency_values) / len(latency_values)) / 1000,
-                        MXMetricName.MX_VPN_STATS_AVG_LATENCY_SECONDS.value,
+                        (sum(values) / len(values)) * scale,
+                        metric_name.value,
                         ttl_seconds=ttl_seconds,
                     )
                     emitted += 1

@@ -488,6 +488,42 @@ class ApplianceVpnLatencySummary(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class ApplianceVpnLossSummary(BaseModel):
+    """VPN packet loss summary for one sender/receiver uplink combination."""
+
+    # apidrift: nested sub-object of ApplianceVpnStatsPeer.lossPercentageSummaries; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
+
+    avgLossPercentage: float | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceVpnJitterSummary(BaseModel):
+    """VPN jitter summary (milliseconds) for one sender/receiver uplink combination."""
+
+    # apidrift: nested sub-object of ApplianceVpnStatsPeer.jitterSummaries; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
+
+    avgJitter: float | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceVpnMosSummary(BaseModel):
+    """VPN mean opinion score summary for one sender/receiver uplink combination."""
+
+    # apidrift: nested sub-object of ApplianceVpnStatsPeer.mosSummaries; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
+
+    avgMos: float | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
 class ApplianceVpnStatsPeer(BaseModel):
     """A single peer-network entry within a VPN stats row."""
 
@@ -498,6 +534,9 @@ class ApplianceVpnStatsPeer(BaseModel):
     networkId: str = ""
     usageSummary: ApplianceVpnUsageSummary | None = None
     latencySummaries: list[ApplianceVpnLatencySummary] = Field(default_factory=list)
+    lossPercentageSummaries: list[ApplianceVpnLossSummary] = Field(default_factory=list)
+    jitterSummaries: list[ApplianceVpnJitterSummary] = Field(default_factory=list)
+    mosSummaries: list[ApplianceVpnMosSummary] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="allow")
 
