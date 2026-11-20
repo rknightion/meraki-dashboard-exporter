@@ -5,6 +5,24 @@ description: Review Meraki Dashboard Exporter releases, including new collectors
 
 # Changelog
 
+## [3.0.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.3.1...v3.0.0) (2026-11-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* correct collection, configuration, dashboards and CI ([#1037](https://github.com/rknightion/meraki-dashboard-exporter/issues/1037))
+
+### Features
+
+* **mx:** export VPN peer loss, jitter and MOS from vpn stats ([#1045](https://github.com/rknightion/meraki-dashboard-exporter/issues/1045)) ([f55d7f1](https://github.com/rknightion/meraki-dashboard-exporter/commit/f55d7f10d05a566ba8a5fa214ed613761719ba58))
+
+
+### Bug Fixes
+
+* correct collection, configuration, dashboards and CI ([#1037](https://github.com/rknightion/meraki-dashboard-exporter/issues/1037)) ([535b9af](https://github.com/rknightion/meraki-dashboard-exporter/commit/535b9afd89d1b6fe5d37a6ddb52cbeb9038ad54a))
+* **mx:** skip warm spares for the appliance performance score ([#1044](https://github.com/rknightion/meraki-dashboard-exporter/issues/1044)) ([76908c6](https://github.com/rknightion/meraki-dashboard-exporter/commit/76908c6128bd991df2ebe47933631e12e1fb7351))
+* **mx:** throttle failed VLAN and static-route requests ([#1059](https://github.com/rknightion/meraki-dashboard-exporter/issues/1059)) ([cce37c5](https://github.com/rknightion/meraki-dashboard-exporter/commit/cce37c57047ec704a22dfd9437e7555b80085459))
+
 ## [2.3.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.3.0...v2.3.1) (2026-11-11)
 
 
