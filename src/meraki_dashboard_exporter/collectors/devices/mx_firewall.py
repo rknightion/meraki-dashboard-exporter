@@ -724,8 +724,13 @@ class MXFirewallCollector(SubCollectorMixin):
             ttl_seconds=ttl_seconds,
         )
 
-    async def _appliance_network_by_mac(self, org_id: str) -> dict[str, str]:
-        """Map lower-case device MAC to network ID from the cached org device inventory."""
+    async def _appliance_network_by_mac(self, org_id: str) -> dict[str, str] | None:
+        """Map lower-case device MAC to network ID from the cached org device inventory.
+
+        Returns None when the inventory read failed, so the caller can tell "no
+        attribution available" from "no devices" and avoid writing a zero for keys it
+        simply could not resolve this pass (#992, F-015).
+        """
         if self.parent.inventory is None:
             return {}
         try:
@@ -738,7 +743,7 @@ class MXFirewallCollector(SubCollectorMixin):
                 org_id=org_id,
                 error_type=type(e).__name__,
             )
-            return {}
+            return None
         return {
             str(d["mac"]).lower(): str(d["networkId"])
             for d in devices
@@ -807,7 +812,11 @@ class MXFirewallCollector(SubCollectorMixin):
             if self.parent.inventory is not None
             else None
         )
-        network_by_mac = await self._appliance_network_by_mac(org_id)
+        resolved_by_mac = await self._appliance_network_by_mac(org_id)
+        # A failed device-inventory read is a failed fetch (F-015): events cannot be
+        # attributed to networks, so this pass must not zero or replace the seen keys.
+        attribution_ok = resolved_by_mac is not None
+        network_by_mac = resolved_by_mac or {}
         skipped = 0
         counts: dict[str, int] = {}
         by_network: dict[tuple[str, str, str, str], int] = {}
@@ -831,11 +840,14 @@ class MXFirewallCollector(SubCollectorMixin):
         # _metrics.clear() would wipe every other org's series mid-cycle. Instead, keys
         # emitted by the previous successful window and absent from this one are written
         # once as 0 (#992), then the stored sets are replaced. A failed fetch raised
-        # above, so it writes nothing and leaves the stored sets as they were (F-015).
+        # above, so it writes nothing and leaves the stored sets as they were (F-015);
+        # a failed device-inventory read does the same for the zeroing and the stored
+        # sets. Stale by-network keys for a network the NetworkFilter now excludes are
+        # dropped without a sample (F-173).
 
         ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_SECURITY_EVENTS)
         seen_event_types = self._seen_security_event_types.setdefault(org_id, set())
-        for stale_event_type in seen_event_types - counts.keys():
+        for stale_event_type in (seen_event_types - counts.keys()) if attribution_ok else ():
             self.parent._set_metric(
                 self._security_events_count,
                 {
@@ -846,7 +858,9 @@ class MXFirewallCollector(SubCollectorMixin):
                 ttl_seconds=ttl_seconds,
             )
         seen_by_network = self._seen_security_events_by_network.setdefault(org_id, set())
-        for stale_key in seen_by_network - by_network.keys():
+        for stale_key in (seen_by_network - by_network.keys()) if attribution_ok else ():
+            if allowed_network_ids is not None and stale_key[0] not in allowed_network_ids:
+                continue
             self.parent._set_metric(
                 self._security_events_by_network_count,
                 create_labels(
@@ -883,10 +897,11 @@ class MXFirewallCollector(SubCollectorMixin):
                 ttl_seconds=ttl_seconds,
             )
 
-        seen_event_types.clear()
-        seen_event_types.update(counts.keys())
-        seen_by_network.clear()
-        seen_by_network.update(by_network.keys())
+        if attribution_ok:
+            seen_event_types.clear()
+            seen_event_types.update(counts.keys())
+            seen_by_network.clear()
+            seen_by_network.update(by_network.keys())
 
         # Mark after a successful org-wide fetch (failures retry next cycle).
         self.parent._mark_group_ran(EndpointGroupName.MX_SECURITY_EVENTS)

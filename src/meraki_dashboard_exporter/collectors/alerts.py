@@ -535,6 +535,8 @@ class AlertsCollector(MetricCollector):
         # combination and reaps series for alerts that have since resolved (F-059).
         seen_alert_keys = self._seen_alert_keys.setdefault(org_id, set())
         for stale_key in seen_alert_keys - alert_counts.keys():
+            if allowed_network_ids is not None and stale_key[0] not in allowed_network_ids:
+                continue  # F-173: no series for a network the filter now excludes
             self._set_metric(
                 self._alerts_active,
                 {
@@ -592,6 +594,8 @@ class AlertsCollector(MetricCollector):
         # Set network summary metrics
         seen_network_ids = self._seen_alert_network_ids.setdefault(org_id, set())
         for stale_network_id in seen_network_ids - network_counts.keys():
+            if allowed_network_ids is not None and stale_network_id not in allowed_network_ids:
+                continue
             self._set_metric(
                 self._alerts_by_network,
                 {
@@ -623,6 +627,8 @@ class AlertsCollector(MetricCollector):
         for stale_network_id, stale_category, stale_severity in (
             seen_health_keys - health_alert_counts.keys()
         ):
+            if allowed_network_ids is not None and stale_network_id not in allowed_network_ids:
+                continue
             self._set_metric(
                 self._network_health_alerts_total,
                 {

@@ -787,6 +787,64 @@ class TestMXFirewallCollector:
             ("org1", "N_1", "File Scanned", "false", "3"): 0.0,
         }
 
+    async def test_failed_inventory_read_does_not_zero_or_replace_seen_keys(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A device-inventory failure is a failed fetch: no zero, stored keys unchanged (#992)."""
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
+            return_value=self._LIVE_EVENTS
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value=None)
+        mock_parent.inventory.get_devices = AsyncMock(return_value=self._DEVICES)
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        seen_types = set(firewall_collector._seen_security_event_types["org1"])
+        seen_by_network = set(firewall_collector._seen_security_events_by_network["org1"])
+        assert seen_types == {"IDS Alert", "File Scanned"}
+        assert seen_by_network
+
+        # Pass 2 has events, but the MAC to network lookup cannot be read.
+        mock_parent._set_metric.reset_mock()
+        mock_parent.inventory.get_devices = AsyncMock(side_effect=RuntimeError("boom"))
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        zero_writes = [c for c in mock_parent._set_metric.call_args_list if c[0][2] == 0.0]
+        assert zero_writes == []
+        assert self._by_network_calls(firewall_collector, mock_parent) == {}
+        assert firewall_collector._seen_security_event_types["org1"] == seen_types
+        assert firewall_collector._seen_security_events_by_network["org1"] == seen_by_network
+
+    async def test_security_events_zero_skips_network_now_excluded_by_filter(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A stale by-network key for a newly excluded network gets no sample (F-173, #992)."""
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
+            return_value=self._LIVE_EVENTS
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"N_1", "N_2"})
+        mock_parent.inventory.get_devices = AsyncMock(return_value=self._DEVICES)
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        # N_2 is now excluded; its events are dropped before counting.
+        mock_parent._set_metric.reset_mock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"N_1"})
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        by_network = self._by_network_calls(firewall_collector, mock_parent)
+        assert not any(key[0] == "N_2" for key in by_network)
+        assert by_network[("N_1", "IDS Alert", "true", "1")] == 2.0
+        assert all(
+            key[0] != "N_2" for key in firewall_collector._seen_security_events_by_network["org1"]
+        )
+
     async def test_failed_fetch_does_not_zero(
         self,
         firewall_collector: MXFirewallCollector,

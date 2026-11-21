@@ -292,6 +292,36 @@ class TestAlertsCollector(BaseCollectorTest):
             severity="critical",
         )
 
+    async def test_zero_fill_skips_network_now_excluded_by_filter(self, collector):
+        """A stale key for a newly excluded network gets no sample at all (F-173, #992)."""
+        net_1 = NetworkFactory.create(network_id="N_1", name="Kept")
+        net_2 = NetworkFactory.create(network_id="N_2", name="Excluded later")
+
+        def _alert(alert_id: str, network: dict[str, Any]) -> dict[str, Any]:
+            return AlertFactory.create(
+                alert_id=alert_id,
+                alert_type="connectivity",
+                categoryType="connectivity",
+                severity="critical",
+                deviceType="MR",
+                network=network,
+                dismissedAt=None,
+                resolvedAt=None,
+            )
+
+        collector._process_alerts([_alert("a1", net_1), _alert("a2", net_2)], "123", "Org", None)
+
+        spy = MagicMock(wraps=collector._set_metric)
+        collector._set_metric = spy
+        # N_2 is now excluded and its alert still active upstream.
+        collector._process_alerts([_alert("a1", net_1), _alert("a2", net_2)], "123", "Org", {"N_1"})
+
+        assert spy.call_args_list
+        assert all(c.args[1].get("network_id") != "N_2" for c in spy.call_args_list)
+        assert collector._seen_alert_network_ids["123"] == {"N_1"}
+        assert {k[0] for k in collector._seen_alert_keys["123"]} == {"N_1"}
+        assert {k[0] for k in collector._seen_health_alert_keys["123"]} == {"N_1"}
+
     async def test_failed_fetch_does_not_zero(self, collector, mock_api_builder, metrics):
         """A failed alerts fetch writes nothing and leaves earlier values untouched (#992)."""
         org = OrganizationFactory.create(org_id="123", name="Test Org")
