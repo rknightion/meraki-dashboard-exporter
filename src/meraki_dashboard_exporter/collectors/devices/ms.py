@@ -921,6 +921,13 @@ class MSCollector(BaseDeviceCollector):
         devices: list[dict[str, Any]],
     ) -> bool:
         """Collect port status metrics using the org-level switch endpoint."""
+        # #971: register every switch seen this cycle before any gate can return.
+        # collect() never runs on this path, so without this the coordinator's
+        # end-of-cycle eviction empties the per-serial throttle timestamps and
+        # every switch is refetched on every wake.
+        self._active_serials.update(
+            serial for device in devices if (serial := device.get("serial"))
+        )
         if not self.settings.api.ms_port_metrics_enabled:
             # The coordinator treats ``False`` as an org-endpoint failure and
             # falls back to the per-switch dense collection path. Mark the
