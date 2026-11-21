@@ -391,7 +391,8 @@ class EndpointScheduler:
         # Monotonic timestamp of the last should_run()==True (attempt), whether
         # or not it then succeeded. Drives failure-retry spacing (#631): when the
         # most recent attempt failed (last_attempt > last_ran, or never ran), the
-        # next attempt is spaced by failure_retry_seconds to avoid a hot loop.
+        # next attempt is spaced by min(failure_retry_seconds, the group's own
+        # interval) to avoid a hot loop without outlasting the series TTL (#1005).
         self._last_attempt: dict[EndpointGroupName, float] = {}
         self._attempts: dict[EndpointGroupName, int] = {}
         self._failed_attempt: dict[EndpointGroupName, float] = {}
@@ -600,6 +601,15 @@ class EndpointScheduler:
     def _failure_retry_seconds(self) -> float:
         return float(self._sched("failure_retry_seconds"))
 
+    def _failure_spacing_seconds(self, group: EndpointGroupName) -> float:
+        """Wait after a failed attempt: ``failure_retry_seconds`` capped at the group's interval.
+
+        A failure must never slow a group below its own solved cadence, or a fast
+        group's series would expire before the retry (#1005). A slow group keeps the
+        shorter ``failure_retry_seconds`` retry.
+        """
+        return min(self._failure_retry_seconds(), self.interval_for(group))
+
     @staticmethod
     def _last_attempt_failed(last_ran: float | None, last_attempt: float | None) -> bool:
         """True when the most recent attempt did not produce a success.
@@ -618,9 +628,10 @@ class EndpointScheduler:
 
         Due when ``interval×0.9`` has elapsed since the last SUCCESS (or the
         group never succeeded). If the most recent attempt FAILED (open gate),
-        retries are additionally spaced by ``failure_retry_seconds`` so a
-        persistently-failing group cannot hot-loop (#631). The normal successful
-        cadence is never delayed by ``failure_retry_seconds``. Ungated and
+        retries are additionally spaced by the smaller of ``failure_retry_seconds``
+        and the group's own interval so a persistently-failing group cannot hot-loop
+        (#631) yet is never retried later than its own cadence (#1005). The normal
+        successful cadence is never delayed by the failure spacing. Ungated and
         unregistered groups always run (fail-open).
         """
         declared = self._groups.get(group)
@@ -644,7 +655,7 @@ class EndpointScheduler:
         # If the last attempt failed, space retries so failures don't hot-loop.
         if self._last_attempt_failed(last_ran, last_attempt):
             assert last_attempt is not None
-            if (now - last_attempt) < self._failure_retry_seconds():
+            if (now - last_attempt) < self._failure_spacing_seconds(group):
                 return False
         if not self.profile_allows(group) or group in self._shed_groups:
             skips = type(self)._group_skips
@@ -662,7 +673,7 @@ class EndpointScheduler:
         """Absolute monotonic time the group next becomes due (fail-open ⇒ now).
 
         ``next_due = last_ran + interval×0.9``, floored at
-        ``last_attempt + failure_retry_seconds`` when the last attempt failed.
+        ``last_attempt + min(failure_retry_seconds, interval)`` when the last attempt failed.
         Never-succeeded groups are due now (subject to the failure-retry floor).
         """
         if now is None:
@@ -675,7 +686,7 @@ class EndpointScheduler:
         base = now if last_ran is None else last_ran + self.interval_for(group) * _GATE_TOLERANCE
         if self._last_attempt_failed(last_ran, last_attempt):
             assert last_attempt is not None
-            base = max(base, last_attempt + self._failure_retry_seconds())
+            base = max(base, last_attempt + self._failure_spacing_seconds(group))
         return base
 
     def seconds_until_due(

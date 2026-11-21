@@ -116,7 +116,9 @@ collector's series.
 `should_run` also tracks *attempts*, not just successes: it records `last_attempt` whenever it
 returns `True`. If the most recent attempt did not produce a success (`last_attempt >
 last_ran`, or the group has never succeeded), the group's next attempt is additionally spaced
-by `scheduler.failure_retry_seconds` (default 300s) instead of hot-looping on every wake. A
+by the smaller of `scheduler.failure_retry_seconds` (default 300s) and the group's own interval,
+instead of hot-looping on every wake. A 60s group that fails is retried 60s later, not 300s later,
+so a single failure does not outlast its series TTL; a 1800s group is retried after 300s. A
 group's *normal*, successful cadence is never delayed by this — a 60s-floor group like MT sensor
 readings still runs roughly every 54s (interval × 0.9) as long as it keeps succeeding; only a
 persistently-failing group backs off. `mark_ran(group)` is only called after at least one
