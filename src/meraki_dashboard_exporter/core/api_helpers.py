@@ -357,6 +357,7 @@ class APIHelper:
             process_func,
             batch_size=resolved_batch_size,
             delay_between_batches=delay_between_batches,
+            max_concurrency=self.settings.api.concurrency_limit,
             item_description=description,
         )
 

@@ -255,6 +255,7 @@ class AlertsCollector(MetricCollector):
                 lambda org_id: self._collect_org_alerts(org_id, org_names.get(org_id, "unknown")),
                 batch_size=self.settings.api.network_batch_size,
                 delay_between_batches=self.settings.api.batch_delay,
+                max_concurrency=self.settings.api.concurrency_limit,
                 item_description="organization alerts",
                 error_context_func=lambda org_id: {
                     "org_id": org_id,
@@ -322,6 +323,7 @@ class AlertsCollector(MetricCollector):
                     self._collect_network_sensor_alerts,
                     batch_size=self.settings.api.network_batch_size,
                     delay_between_batches=self.settings.api.batch_delay,
+                    max_concurrency=self.settings.api.concurrency_limit,
                     item_description="sensor alert network",
                     error_context_func=lambda network: {
                         "org_id": network.get("orgId"),

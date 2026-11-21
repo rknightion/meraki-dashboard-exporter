@@ -209,6 +209,7 @@ class ConfigCollector(MetricCollector):
             self._collect_org_config,
             batch_size=self.settings.api.concurrency_limit,
             delay_between_batches=0.0,
+            max_concurrency=self.settings.api.concurrency_limit,
             item_description="organization",
             error_context_func=lambda org: {
                 "org_id": org.get("id"),

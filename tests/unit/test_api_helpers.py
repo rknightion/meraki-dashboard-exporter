@@ -24,6 +24,7 @@ def mock_collector():
     collector.settings.api = MagicMock()
     collector.settings.api.batch_size = 10
     collector.settings.api.batch_delay = 0.0
+    collector.settings.api.concurrency_limit = 5
     # Inactive network filter so the direct-fetch fallback returns the
     # raw API list unchanged. NetworkFilterSettings() is inactive by default.
     from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
@@ -253,6 +254,29 @@ class TestAPIHelper:
 
         assert len(results) == 25
         assert results == [i * 2 for i in range(25)]
+
+    async def test_process_in_batches_honours_concurrency_limit(self, api_helper):
+        """Batch fan-outs through the helper are capped at api.concurrency_limit (#1000)."""
+        api_helper.settings.api.concurrency_limit = 2
+        running = 0
+        peak = 0
+
+        async def process_item(item: int) -> int:
+            nonlocal running, peak
+            running += 1
+            peak = max(peak, running)
+            try:
+                await asyncio.sleep(0.01)
+            finally:
+                running -= 1
+            return item
+
+        results = await api_helper.process_in_batches(
+            list(range(10)), process_item, batch_size=10, description="numbers"
+        )
+
+        assert results == list(range(10))
+        assert peak == 2
 
     async def test_process_in_batches_with_errors(self, api_helper):
         """Test batch processing with some items failing."""

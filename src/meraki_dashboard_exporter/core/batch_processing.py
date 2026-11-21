@@ -31,6 +31,7 @@ async def process_in_batches_with_errors[T, R](
     item_description: str = "item",
     error_context_func: Callable[[T], dict[str, Any]] | None = None,
     on_error: Callable[[Exception], None] | None = None,
+    max_concurrency: int | None = None,
 ) -> list[tuple[T, R | Exception]]:
     """Process items in batches with error handling and logging.
 
@@ -61,6 +62,11 @@ async def process_in_batches_with_errors[T, R](
         Callers typically bind this to their collector's ``_track_error`` so
         per-item batch failures surface in ``meraki_exporter_collector_errors_total``.
         Control flow is unchanged — partial results are still returned.
+    max_concurrency : int | None
+        Maximum number of items in flight at once (#1000). When set, one
+        semaphore per call gates every item's ``process_func``, so a batch larger
+        than the bound starts at most this many items at a time. Callers pass
+        ``settings.api.concurrency_limit``. ``None`` starts the whole batch at once.
 
     Returns
     -------
@@ -68,7 +74,22 @@ async def process_in_batches_with_errors[T, R](
         List of (item, result) tuples where result is either the return value
         or an exception if processing failed.
 
+    Raises
+    ------
+    ValueError
+        If ``max_concurrency`` is set and is not at least 1.
+
     """
+    if max_concurrency is not None and max_concurrency < 1:
+        raise ValueError(f"max_concurrency must be at least 1, got {max_concurrency}")
+
+    semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency is not None else None
+
+    async def run_item(item: T) -> R:
+        assert semaphore is not None
+        async with semaphore:
+            return await process_func(item)
+
     if initial_delay > 0:
         await asyncio.sleep(initial_delay)
 
@@ -101,7 +122,7 @@ async def process_in_batches_with_errors[T, R](
         )
 
         # Create tasks for batch
-        tasks = [process_func(item) for item in batch]
+        tasks = [process_func(item) if semaphore is None else run_item(item) for item in batch]
 
         # Process batch concurrently
         batch_results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -148,6 +169,7 @@ async def process_grouped_items[T, R](
     item_description: str = "item",
     error_context_func: Callable[[T], dict[str, Any]] | None = None,
     skip_groups: set[str] | None = None,
+    max_concurrency: int | None = None,
 ) -> dict[str, list[tuple[T, R | Exception]]]:
     """Process grouped items in batches.
 
@@ -169,6 +191,9 @@ async def process_grouped_items[T, R](
         Optional function to extract error context from item.
     skip_groups : set[str] | None
         Groups to skip processing.
+    max_concurrency : int | None
+        Maximum number of items in flight at once within each group; see
+        ``process_in_batches_with_errors``.
 
     Returns
     -------
@@ -200,6 +225,7 @@ async def process_grouped_items[T, R](
             delay_between_batches=delay_between_batches,
             item_description=f"{group_key} {item_description}",
             error_context_func=error_context_func,
+            max_concurrency=max_concurrency,
         )
 
         results[group_key] = group_results
