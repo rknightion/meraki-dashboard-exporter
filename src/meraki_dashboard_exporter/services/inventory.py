@@ -42,7 +42,7 @@ class OrganizationInventory:
     The general cache TTL is fixed at ``TTL_MEDIUM`` (900s) for every reader --
     there is no per-collector TTL wiring (a prior ``set_ttl_for_tier`` method had
     zero callers and was removed; see #275). Device availability data has its own
-    shorter, always-applied ``TTL_AVAILABILITY`` (120s) since it is more dynamic.
+    shorter, always-applied ``TTL_AVAILABILITY`` (60s) since it is more dynamic.
 
     Examples
     --------
@@ -61,8 +61,13 @@ class OrganizationInventory:
     # General inventory cache TTL in seconds (the single, tier-independent TTL).
     TTL_MEDIUM = 900  # 15 minutes
 
-    # Shorter TTL for availability data (more dynamic than inventory)
-    TTL_AVAILABILITY = 120  # 2 minutes
+    # Shorter TTL for availability data (more dynamic than inventory).
+    # Must stay below the availability scheduler gate (120 s floor x 0.9 = 108 s) even at
+    # maximum jitter (60 x 1.1 = 66 s), so a due group always triggers a real fetch. Must stay
+    # above zero so the device and organisation collectors share one response when both are due
+    # together (minimum jitter 60 x 0.9 = 54 s). Half the floor satisfies both with margin;
+    # force_refresh=True on the two readers was rejected because it would fetch twice per cycle.
+    TTL_AVAILABILITY = 60  # 1 minute
 
     # Longer TTL for slow-changing configuration data
     TTL_LICENSE = 1800  # 30 minutes - license data rarely changes
@@ -616,7 +621,7 @@ class OrganizationInventory:
     ) -> list[dict[str, Any]]:
         """Get device availabilities for an organization with caching.
 
-        Uses a shorter TTL (2 minutes) than other inventory data since
+        Uses a shorter TTL (1 minute) than other inventory data since
         availability status is more dynamic.
 
         Parameters

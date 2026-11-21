@@ -236,6 +236,38 @@ async def test_successful_cache_write_timestamp_is_after_slow_fetch(
     assert fetcher.call_count == 1
 
 
+async def test_availability_cache_expires_before_the_scheduler_gate(
+    inventory: OrganizationInventory,
+    mock_api: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A due availability group always reads a fresh response, never the previous one.
+
+    The two availability groups are gated at 108 s (120 s floor x 0.9). The cache entry
+    must therefore expire by then at every jitter value, yet still be shared by two
+    consumers that are due within the same minute.
+    """
+    from meraki_dashboard_exporter.services import inventory as inventory_module
+
+    clock = _FakeClock()
+    monkeypatch.setattr(inventory_module, "time", SimpleNamespace(time=clock.time))
+    fetcher = mock_api.organizations.getOrganizationDevicesAvailabilities
+    fetcher.return_value = [{"serial": "SERIAL", "status": "online"}]
+
+    await inventory.get_device_availabilities("ORG")
+    assert fetcher.call_count == 1
+
+    # Two consumers due in the same minute share the one response.
+    clock.now += 30.0
+    await inventory.get_device_availabilities("ORG")
+    assert fetcher.call_count == 1
+
+    # The gate opens 108 s after the write: that read must hit the API again.
+    clock.now = 100.0 + 108.0
+    await inventory.get_device_availabilities("ORG")
+    assert fetcher.call_count == 2
+
+
 @pytest.mark.parametrize(
     ("family", "method_name", "api_method", "timestamp_store", "response"),
     _CACHE_CASES,

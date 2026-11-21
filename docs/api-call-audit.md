@@ -114,7 +114,7 @@ The `OrganizationInventory` service (`services/inventory.py`) caches the followi
 | `getOrganizations` | 15 min (MEDIUM) | `alerts.py`, `config.py`, `device.py`, `organization.py`, `network_health.py` |
 | `getOrganizationNetworks` | 15 min (MEDIUM) | `alerts.py`, `device.py` |
 | `getOrganizationDevices` | 15 min (MEDIUM) | `device.py` |
-| `getOrganizationDevicesAvailabilities` | 2 min (dynamic) | `device.py`, `organization.py` |
+| `getOrganizationDevicesAvailabilities` | 1 min (dynamic) | `device.py`, `organization.py` |
 | `getOrganizationLicensesOverview` | 30 min (SLOW) | `organization_collectors/license.py` |
 | `getOrganizationLoginSecurity` | 60 min (CONFIG) | `config.py` |
 

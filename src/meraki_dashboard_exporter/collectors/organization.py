@@ -1164,7 +1164,7 @@ class OrganizationCollector(MetricCollector):
     async def _collect_device_availability_metrics(self, org_id: str, org_name: str) -> None:
         """Collect device availability metrics.
 
-        Uses inventory cache if available (2-min TTL), otherwise falls back to direct API call.
+        Uses inventory cache if available (1-min TTL), otherwise falls back to direct API call.
 
         Parameters
         ----------

@@ -1892,7 +1892,7 @@ class DeviceCollector(MetricCollector):
     async def _fetch_device_availabilities(self, org_id: str) -> list[dict[str, Any]] | None:
         """Fetch device availabilities for an organization.
 
-        Uses inventory cache if available (2-min TTL), otherwise falls back to direct API call.
+        Uses inventory cache if available (1-min TTL), otherwise falls back to direct API call.
 
         Parameters
         ----------
