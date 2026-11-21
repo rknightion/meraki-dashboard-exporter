@@ -66,15 +66,18 @@ the standard-library validator can enforce a strict schema:
   "vulnerabilities": [
     {
       "id": "CVE-YYYY-NNNN",
+      "purls": ["pkg:pypi/example"],
       "statement": "Specific reviewed reason the published image accepts this risk",
-      "expired_at": "YYYY-MM-DD"
+      "expired_at": "YYYY-MM-DDT00:00:00Z"
     }
   ]
 }
 ```
 
-Every entry requires exactly those three fields, a non-empty rationale, a unique identifier, and a
-future ISO date. An exception expiring today is already invalid: `just security-exceptions` and the
+Every entry requires exactly four fields: a unique `id`, a non-empty `purls` list naming the
+packages reviewed against the exception, a non-empty `statement`, and a future `expired_at` in
+RFC3339 UTC form. Trivy aborts the scan on a bare date. An exception expiring today is already
+invalid: `just security-exceptions` and the
 publication policy job fail before scanning or registry authentication. Findings do not disappear
 from the policy merely because a later scan stops reporting them; remove an entry in a reviewed
 change. The committed policy currently accepts no vulnerabilities.
