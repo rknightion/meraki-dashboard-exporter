@@ -17,7 +17,7 @@ Each collector owns one or more scheduler endpoint groups and runs its own group
 | `DeviceCollector` | Collector for device-level metrics. | 6 |  |
 | `InsightCollector` | Collector for Meraki Insight application-health metrics (#613). | 10 |  |
 | `MTSensorAlertsCollector` | Collector for network-wide currently-alerting MT sensor counts. | 3 |  |
-| `MTSensorCollector` | Collector for fast-moving sensor metrics (MT devices). | 24 |  |
+| `MTSensorCollector` | Collector for fast-moving sensor metrics (MT devices). | 25 |  |
 | `NetworkHealthCollector` | Collector for medium-moving network health metrics. | 11 |  |
 | `OrganizationCollector` | Collector for organization-level metrics. | 39 |  |
 

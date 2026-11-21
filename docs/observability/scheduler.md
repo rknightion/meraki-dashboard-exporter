@@ -75,7 +75,9 @@ Profiles bound the priorities included in the solved plan: `availability` includ
 `standard` includes priorities 1–3, and `full` includes every group. An explicitly selected profile
 is always solved before startup completes; selecting one does not merely silence a warning. If the
 selected profile is still over budget, the scheduler sheds due priority 3/4 groups while preserving
-priority 1/2 floors and exposes the result through diagnostics and metrics.
+priority 1/2 floors and exposes the result through diagnostics and metrics. Shedding applies in
+adaptive mode only: fixed mode never sheds, and reports the over-budget condition without dropping
+any group.
 
 When no profile is configured, an affordable deployment preserves the full endpoint-group surface.
 Before the server lifespan yields, adaptive mode computes the organization shape and solves the
@@ -128,7 +130,7 @@ success within a fetch, so a partial success still advances the clock.
 
 | Setting | Default | Effect |
 | --- | --- | --- |
-| `MERAKI_EXPORTER_SCHEDULER__MODE` | `adaptive` | `adaptive` (default): solver stretches groups to fit budget. `fixed`: floors/pins only, no stretching, no AIMD — a transition/debugging fallback, not the normal mode. |
+| `MERAKI_EXPORTER_SCHEDULER__MODE` | `adaptive` | `adaptive` (default): solver stretches groups to fit budget. `fixed`: floors/pins only, no stretching, no shedding, no AIMD; `over_budget` is still reported. A transition/debugging fallback, not the normal mode. |
 | `MERAKI_EXPORTER_SCHEDULER__TARGET_UTILIZATION` | `0.7` | Fraction of the effective budget the solver plans to; the rest is headroom for bursts. |
 | `MERAKI_EXPORTER_SCHEDULER__MAX_STRETCH_FACTOR` | `4.0` | Per-group interval cap as a multiple of its floor. |
 | `MERAKI_EXPORTER_SCHEDULER__MAX_INTERVAL_SECONDS` | `3600` | Absolute per-group interval cap, regardless of stretch factor. |

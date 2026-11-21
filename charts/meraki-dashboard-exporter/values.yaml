@@ -362,7 +362,7 @@ config: {}
   # networkFilterExcludeIds: ""
   # -- Network tags to exclude.
   # networkFilterExcludeTags: ""
-  # -- 'adaptive' (default): solver stretches endpoint-group intervals to fit the API budget. 'fixed': floors/pins only, no stretching, no AIMD (transition fallback).
+  # -- 'adaptive' (default): solver stretches endpoint-group intervals to fit the API budget. 'fixed': floors/pins only, no stretching, no shedding, no AIMD (transition fallback).
   # schedulerMode: "adaptive"
   # -- Fraction of the effective budget the solver plans to; headroom absorbs bursts. (min: 0.1, max: 1.0)
   # schedulerTargetUtilization: "0.7"

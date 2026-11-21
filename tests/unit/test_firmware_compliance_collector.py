@@ -19,6 +19,12 @@ class _MockParent:
         self.settings = None
         self.inventory = MagicMock()
         self._metrics: dict[tuple[str, tuple[tuple[str, str], ...]], float] = {}
+        self._device_firmware_info = None
+
+    def _expire_metric_series(
+        self, metric: object, labels: dict[str, str], metric_name: str | None = None
+    ) -> None:
+        pass
 
     def _should_run_group(self, group: object) -> bool:
         return True

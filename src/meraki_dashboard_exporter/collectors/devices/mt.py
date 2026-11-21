@@ -628,12 +628,15 @@ class MTCollector(BaseDeviceCollector):
                     value = self._extract_metric_value(metric_type, metric_data)
                     if value is not None:
                         measurement = SensorMeasurement(metric=metric_type, value=value)
-                        measurements.append(measurement)
+                        measurements.append((measurement, reading))
 
                 if measurements:
                     # Process validated measurements
-                    for measurement in measurements:
+                    for measurement, reading in measurements:
                         self._process_validated_metric(device, measurement, ttl_seconds=ttl_seconds)
+                        self._process_reading_timestamp(
+                            device, reading, measurement.metric, ttl_seconds=ttl_seconds
+                        )
             except Exception as e:
                 logger.debug(
                     "Failed to parse sensor data to domain model", serial=serial, error=str(e)
@@ -649,12 +652,17 @@ class MTCollector(BaseDeviceCollector):
                     if not metric_data:
                         continue
 
-                    self._process_metric(
+                    # The timestamp follows the value (#993): only a reading the
+                    # fallback actually emitted a value for gets one.
+                    if self._process_metric(
                         device=device,
                         metric_type=metric_type,
                         metric_data=metric_data,
                         ttl_seconds=ttl_seconds,
-                    )
+                    ):
+                        self._process_reading_timestamp(
+                            device, reading, metric_type, ttl_seconds=ttl_seconds
+                        )
 
     def _extract_metric_value(self, metric_type: str, metric_data: dict[str, Any]) -> float | None:
         """Extract metric value from raw API data.
@@ -808,6 +816,44 @@ class MTCollector(BaseDeviceCollector):
             ttl_seconds=ttl_seconds,
         )
 
+    def _process_reading_timestamp(
+        self,
+        device: dict[str, Any],
+        reading: dict[str, Any],
+        metric_type: str,
+        ttl_seconds: float | None = None,
+    ) -> None:
+        """Expose the reading's own ``ts`` as epoch seconds (#993).
+
+        The API re-serves a sensor's last reading however old it is, so the value
+        gauges never reveal a sensor that stopped reporting. Only metrics the
+        collector emits as values (keys of ``_METRIC_ATTR_BY_TYPE``) get a
+        timestamp; a missing or unparseable ``ts`` sets nothing.
+
+        Parameters
+        ----------
+        device : dict[str, Any]
+            Device data with org/network info.
+        reading : dict[str, Any]
+            A single raw reading entry (one ``metric``/``ts`` pair).
+        metric_type : str
+            The reading's metric, used as the ``metric`` label.
+        ttl_seconds : float | None
+            Fully-resolved per-series TTL for the ``mt_sensor_readings`` group.
+
+        """
+        if metric_type not in self._METRIC_ATTR_BY_TYPE:
+            return
+        ts = reading.get("ts")
+        epoch = self._parse_iso_timestamp(ts) if isinstance(ts, str) else None
+        if epoch is None:
+            return
+
+        org_id = device.get("orgId", "")
+        org_name = device.get("orgName", org_id)
+        labels = create_device_labels(device, org_id=org_id, org_name=org_name, metric=metric_type)
+        self._set_metric_value("_sensor_reading_timestamp", labels, epoch, ttl_seconds=ttl_seconds)
+
     def _process_validated_metric(
         self,
         device: dict[str, Any],
@@ -849,7 +895,7 @@ class MTCollector(BaseDeviceCollector):
         metric_type: str,
         metric_data: dict[str, Any],
         ttl_seconds: float | None = None,
-    ) -> None:
+    ) -> bool:
         """Process a single metric reading (fallback when domain validation fails).
 
         Parameters
@@ -864,11 +910,17 @@ class MTCollector(BaseDeviceCollector):
             Fully-resolved per-series TTL for the ``mt_sensor_readings`` group
             (#617 §1f). ``None`` ⇒ tier-derived TTL.
 
+        Returns
+        -------
+        bool
+            True when a value gauge was set for this reading, so the caller can
+            attach the reading timestamp (#993) to exactly the emitted readings.
+
         """
         # Validate parent exists (skip check in standalone mode)
         if not self.parent:
             logger.error("Parent collector not set for MTCollector")
-            return
+            return False
 
         # Extract org info from device data
         org_id = device.get("orgId", "")
@@ -880,7 +932,7 @@ class MTCollector(BaseDeviceCollector):
         try:
             # Skip undocumented rawTemperature to avoid duplicate processing
             if metric_type == "rawTemperature":
-                return
+                return False
 
             metric_attr = self._METRIC_ATTR_BY_TYPE.get(metric_type)
             if metric_attr is None:
@@ -890,13 +942,13 @@ class MTCollector(BaseDeviceCollector):
                     metric_type=metric_type,
                     metric_data=metric_data,
                 )
-                return
+                return False
 
             # Reuse the shared extractor so value semantics match the validated
             # path exactly (door/water/downstream/lockout coercions included).
             value = self._extract_metric_value(metric_type, metric_data)
             if value is None:
-                return
+                return False
 
             self._set_metric_value(
                 metric_attr,
@@ -904,6 +956,7 @@ class MTCollector(BaseDeviceCollector):
                 value,
                 ttl_seconds=ttl_seconds,
             )
+            return True
 
         except Exception:
             logger.exception(
@@ -913,3 +966,4 @@ class MTCollector(BaseDeviceCollector):
             )
             if self.parent is not None:
                 self.parent._track_error(ErrorCategory.UNKNOWN)
+            return False

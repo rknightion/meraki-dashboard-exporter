@@ -12,13 +12,14 @@ Covers:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from prometheus_client import Gauge
 
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.collectors.devices.mg import MGCollector
+from meraki_dashboard_exporter.core.error_handling import ErrorCategory
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import (
@@ -234,6 +235,16 @@ class TestDeviceAvailabilityGate(BaseCollectorTest):
         collector._fetch_device_availabilities = _stub  # type: ignore[method-assign]
         return calls
 
+    @staticmethod
+    def _device_status_samples(registry) -> list[str]:
+        """Names of every device_up / device_status_info sample in the registry."""
+        return [
+            sample.name
+            for family in registry.collect()
+            for sample in family.samples
+            if sample.name in {"meraki_device_up", "meraki_device_status_info"}
+        ]
+
     async def test_skips_fetch_and_mark_when_not_due(
         self, mock_api_builder, settings, isolated_registry, inventory
     ) -> None:
@@ -287,6 +298,37 @@ class TestDeviceAvailabilityGate(BaseCollectorTest):
         assert calls == ["org1"]  # fetch was attempted
         marked = [c.args[0] for c in sched.mark_ran.call_args_list]
         assert EndpointGroupName.DEVICE_AVAILABILITY not in marked
+        # #974: a failed fetch must not rewrite every device as offline.
+        assert self._device_status_samples(isolated_registry) == []
+
+    async def test_fetch_exception_keeps_other_families_running(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ) -> None:
+        """#974: a raising availability fetch must not cancel the other families."""
+        sched = MagicMock()
+        sched.should_run.return_value = True
+        sched.ttl_seconds_for.return_value = 600.0
+        sched.interval_for.return_value = 300.0
+
+        collector = self._build(mock_api_builder, settings, isolated_registry, inventory, sched)
+
+        async def _boom(org_id: str):
+            raise RuntimeError("boom")
+
+        collector._fetch_device_availabilities = _boom  # type: ignore[method-assign]
+        mr_mock = AsyncMock()
+        collector._collect_mr_specific_metrics = mr_mock  # type: ignore[method-assign]
+        track_error = MagicMock()
+        collector._track_error = track_error  # type: ignore[method-assign]
+
+        await collector.collect()
+
+        mr_mock.assert_awaited()
+        marked = [c.args[0] for c in sched.mark_ran.call_args_list]
+        assert EndpointGroupName.DEVICE_AVAILABILITY not in marked
+        # RuntimeError categorises as UNKNOWN; other families may add their own errors.
+        track_error.assert_any_call(ErrorCategory.UNKNOWN)
+        assert self._device_status_samples(isolated_registry) == []
 
     async def test_marks_when_fetch_returns_empty(
         self, mock_api_builder, settings, isolated_registry, inventory
@@ -305,6 +347,8 @@ class TestDeviceAvailabilityGate(BaseCollectorTest):
         assert calls == ["org1"]  # fetch happened once
         marked = [c.args[0] for c in sched.mark_ran.call_args_list]
         assert EndpointGroupName.DEVICE_AVAILABILITY in marked
+        # Positive control: a successful fetch does write the status series.
+        assert "meraki_device_up" in self._device_status_samples(isolated_registry)
 
 
 class TestDeviceMemoryGate:

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import ast
+import asyncio
 import importlib
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,6 +13,9 @@ from typing import Literal, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from meraki.api.organizations import Organizations
+from meraki.exceptions import APIError
+from meraki.session.sync import RestSession
 from prometheus_client import Counter
 
 from meraki_dashboard_exporter.api.client import AsyncMerakiClient
@@ -357,3 +362,249 @@ async def test_non_http_exception_is_an_attempt_outcome_not_an_http_status(
     assert requests is not None
     assert attempts.labels(operation="getOrganizationDevices", status="exception")._value.get() == 1
     assert requests.collect()[0].samples == []
+
+
+class _FakePageResponse:
+    """The slice of ``httpx.Response`` the SDK page loop and ``APIError`` read."""
+
+    def __init__(self, status_code: int, body: object, links: dict[str, dict[str, str]]) -> None:
+        self.status_code = status_code
+        self.reason_phrase = "Too Many Requests" if status_code == 429 else "OK"
+        self.headers: dict[str, str] = {}
+        self.links = links
+        self.content = b"x"
+        self._body = body
+        self.closed = False
+
+    def json(self) -> object:
+        return self._body
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _FakePagedSession(RestSession):
+    """A real SDK ``RestSession`` whose transport serves numbered pages.
+
+    Only ``request`` is replaced, so on the unpaginated path the SDK's own
+    ``get_pages`` loop runs unchanged. Each page is one HTTP request; a page
+    listed in ``throttle_once`` answers 429 the first time it is requested, as
+    the SDK does with ``wait_on_rate_limit=False``.
+    """
+
+    def __init__(
+        self,
+        pages: int,
+        *,
+        throttle_once: frozenset[int] = frozenset(),
+        items_shape: bool = False,
+        page_delay: dict[int, float] | None = None,
+    ) -> None:
+        self._logger = None
+        self._validate_kwargs = False
+        self._use_iterator_for_get_pages = False
+        self._pages = pages
+        self._throttle_once = set(throttle_once)
+        self._items_shape = items_shape
+        self._page_delay = page_delay or {}
+        self.requested_pages: list[int] = []
+        self.first_params: object = None
+
+    def request(self, metadata, method, url, **kwargs):  # type: ignore[no-untyped-def]
+        assert method == "GET"
+        page = int(url.rsplit("page=", 1)[1]) if "page=" in url else 1
+        if page == 1:
+            self.first_params = kwargs.get("params")
+        self.requested_pages.append(page)
+        time.sleep(self._page_delay.get(page, 0.0))
+        if page in self._throttle_once:
+            self._throttle_once.discard(page)
+            raise APIError(metadata, _FakePageResponse(429, {"errors": ["throttled"]}, {}))
+        items = [{"serial": f"Q2XX-PAGE-{page:04d}"}]
+        links = (
+            {
+                "next": {
+                    "url": f"https://api.meraki.com/api/v1/organizations/o/devices?page={page + 1}"
+                }
+            }
+            if page < self._pages
+            else {}
+        )
+        body: object = items
+        if self._items_shape:
+            body = {
+                "items": items,
+                "meta": {
+                    "counts": {"items": {"total": self._pages, "remaining": self._pages - page}}
+                },
+            }
+        return _FakePageResponse(200, body, links)
+
+
+def _paged_facade(limiter: SimpleNamespace, *, deadline: float = 30) -> MerakiApiFacade:
+    return MerakiApiFacade(
+        settings=SimpleNamespace(
+            api=SimpleNamespace(
+                max_retries=3,
+                per_fetch_deadline_seconds=deadline,
+                retry_after_max_seconds=7,
+            )
+        ),
+        rate_limiter=limiter,
+    )
+
+
+def _counting_limiter() -> SimpleNamespace:
+    return SimpleNamespace(acquire=AsyncMock(return_value=0.0), record_throttle_event=MagicMock())
+
+
+@pytest.mark.asyncio
+async def test_paginated_fetch_paces_and_retries_per_page(
+    monkeypatch: pytest.MonkeyPatch, metric_facade: MerakiApiFacade
+) -> None:
+    """Five pages with one 429 on page 3: six page requests, six tokens, six attempts.
+
+    The pages before the throttled one are not fetched again, and the result is
+    the same five-device list the SDK's own page loop would have returned.
+    """
+    sleep = AsyncMock()
+    monkeypatch.setattr("meraki_dashboard_exporter.core.api_facade.asyncio.sleep", sleep)
+    session = _FakePagedSession(5, throttle_once=frozenset({3}))
+    sdk = Organizations(session)
+
+    result = await metric_facade.call(
+        "getOrganizationDevices",
+        sdk.getOrganizationDevices,
+        "org-id",
+        org_id="org-id",
+        total_pages="all",
+        perPage=1000,
+    )
+
+    assert result == [{"serial": f"Q2XX-PAGE-{page:04d}"} for page in range(1, 6)]
+    assert session.requested_pages == [1, 2, 3, 3, 4, 5]
+    assert session.first_params == {"perPage": 1000}
+    limiter = metric_facade._rate_limiter
+    assert limiter.acquire.await_count == 6
+    assert all(
+        c.args == ("org-id", "getOrganizationDevices") for c in limiter.acquire.await_args_list
+    )
+    attempts = MerakiApiFacade._attempts_total
+    requests = MerakiApiFacade._requests_total
+    assert attempts is not None
+    assert requests is not None
+    assert attempts.labels(operation="getOrganizationDevices", status="200")._value.get() == 5
+    assert attempts.labels(operation="getOrganizationDevices", status="429")._value.get() == 1
+    assert (
+        requests.labels(
+            endpoint="getOrganizationDevices", method="GET", status_code="200"
+        )._value.get()
+        == 5
+    )
+    retries = AsyncMerakiClient._api_retry_attempts
+    assert retries is not None
+    assert (
+        retries.labels(
+            endpoint="getOrganizationDevices", retry_reason="http_429_rate_limit"
+        )._value.get()
+        == 1
+    )
+    sleep.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("items_shape", [False, True], ids=["list", "items"])
+@pytest.mark.parametrize("total_pages", ["all", 3, "2"])
+async def test_paginated_fetch_returns_the_sdk_page_loop_shape(
+    items_shape: bool, total_pages: object
+) -> None:
+    """The facade's page loop returns exactly what the SDK's own loop returns."""
+    sdk_session = _FakePagedSession(4, items_shape=items_shape)
+    expected = Organizations(sdk_session).getOrganizationDevices(
+        "org-id", total_pages=total_pages, perPage=3
+    )
+    session = _FakePagedSession(4, items_shape=items_shape)
+    limiter = _counting_limiter()
+
+    result = await _paged_facade(limiter).call(
+        "getOrganizationDevices",
+        Organizations(session).getOrganizationDevices,
+        "org-id",
+        total_pages=total_pages,
+        perPage=3,
+    )
+
+    assert result == expected
+    assert session.requested_pages == sdk_session.requested_pages
+    assert limiter.acquire.await_count == len(session.requested_pages)
+
+
+@pytest.mark.asyncio
+async def test_single_page_sdk_call_takes_one_token_and_one_attempt(
+    metric_facade: MerakiApiFacade,
+) -> None:
+    """``total_pages=1`` and unpaginated calls stay one paced SDK call."""
+    session = _FakePagedSession(5)
+
+    result = await metric_facade.call(
+        "getOrganizationDevices",
+        Organizations(session).getOrganizationDevices,
+        "org-id",
+        total_pages=1,
+    )
+
+    assert result == [{"serial": "Q2XX-PAGE-0001"}]
+    assert session.requested_pages == [1]
+    metric_facade._rate_limiter.acquire.assert_awaited_once_with("org-id", "getOrganizationDevices")
+    attempts = MerakiApiFacade._attempts_total
+    assert attempts is not None
+    assert attempts.labels(operation="getOrganizationDevices", status="200")._value.get() == 1
+
+
+@pytest.mark.asyncio
+async def test_paginated_fetch_exhausts_retries_on_the_throttled_page_only(
+    monkeypatch: pytest.MonkeyPatch, metric_facade: MerakiApiFacade
+) -> None:
+    """The retry budget applies to the failing page; earlier pages are never refetched."""
+    from meraki_dashboard_exporter.core.api_facade import FacadeRateLimitExhaustedError
+
+    monkeypatch.setattr("meraki_dashboard_exporter.core.api_facade.asyncio.sleep", AsyncMock())
+
+    class AlwaysThrottledSession(_FakePagedSession):
+        def request(self, metadata, method, url, **kwargs):  # type: ignore[no-untyped-def]
+            if "page=2" in url:
+                self._throttle_once.add(2)
+            return super().request(metadata, method, url, **kwargs)
+
+    session = AlwaysThrottledSession(5)
+
+    with pytest.raises(FacadeRateLimitExhaustedError):
+        await metric_facade.call(
+            "getOrganizationDevices",
+            Organizations(session).getOrganizationDevices,
+            "org-id",
+            total_pages="all",
+        )
+
+    # metric_facade allows max_retries=1: page 1 once, page 2 twice, nothing after.
+    assert session.requested_pages == [1, 2, 2]
+    assert metric_facade._rate_limiter.acquire.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_paginated_fetch_deadline_leaves_no_worker_thread_paging() -> None:
+    """After the deadline no further page is requested by an abandoned worker thread."""
+    session = _FakePagedSession(5, page_delay={2: 0.3})
+    facade = _paged_facade(_counting_limiter(), deadline=0.1)
+
+    with pytest.raises(TimeoutError):
+        await facade.call(
+            "getOrganizationDevices",
+            Organizations(session).getOrganizationDevices,
+            "org-id",
+            total_pages="all",
+        )
+
+    # Give an abandoned SDK page loop ample time to reach the later pages.
+    await asyncio.sleep(0.6)
+    assert session.requested_pages == [1, 2]

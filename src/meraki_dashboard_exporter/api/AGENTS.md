@@ -5,7 +5,16 @@
   synchronous SDK: it acquires the per-org limiter, runs the call on the loop default executor
   (`app.py` installs `AsyncMerakiClient.executor` as it), bounds the whole logical fetch - every
   `total_pages="all"` page included - by `APISettings.per_fetch_deadline_seconds`, meters attempts
-  and owns 429 retries. A collector calling `asyncio.to_thread()` or `run_in_executor()` on an SDK
+  and owns 429 retries.
+- **A paginated fetch is paced per page** (#999, superseding standing decision D4 for paginated
+  calls). When a bound SDK list method is called with `total_pages` other than 1, the facade runs
+  the method against a capture session to learn its first URL and query, then requests one page per
+  executor hop through the SDK session's `request` and follows the `Link` header. Each page takes
+  one limiter token, records one attempt in both request counters and retries a 429 on its own,
+  keeping the pages already fetched; the retry budget is per page and the deadline still covers the
+  whole fetch, so no worker thread keeps paging after it. The result is the SDK's own shape (a list,
+  or a dict with `items` and `meta`). `getNetworkEvents`, iterator-mode sessions and callables
+  that are not bound SDK methods (test doubles) keep the single-call path. A collector calling `asyncio.to_thread()` or `run_in_executor()` on an SDK
   method itself bypasses all of that and is forbidden.
 - Rate limiting is two independent layers, neither hardcoded to 5/s:
   - **429 retries have a single owner.** `_create_api_client()` passes `wait_on_rate_limit=False`,

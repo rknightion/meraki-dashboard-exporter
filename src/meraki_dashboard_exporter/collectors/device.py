@@ -850,19 +850,32 @@ class DeviceCollector(MetricCollector):
                 # the device_up/status_info series ride on their (stretched) TTL
                 # rather than re-emitting them with stale/default statuses.
                 availability_due = self._should_run_group(EndpointGroupName.DEVICE_AVAILABILITY)
+                availabilities: list[dict[str, Any]] = []
                 if availability_due:
-                    # #629 Gap 1: _fetch_device_availabilities returns None on
-                    # failure (it's @with_error_handling(continue_on_error=True)).
-                    # Only mark the group ran when the fetch actually succeeded
-                    # (non-None, including a successful-empty []); a None return
-                    # must leave the gate open so the next cycle retries instead of
-                    # suppressing the refetch for the full solved interval.
-                    fetched = await self._fetch_device_availabilities(org_id)
-                    availabilities = fetched or []
-                    if fetched is not None:
+                    # #629 / #974: the two fetch paths fail differently and both are
+                    # handled here. The inventory path (always taken in production)
+                    # raises on an API error, rate-limit exhaustion or timeout; the
+                    # direct path (no inventory) returns None instead. Either way
+                    # the failure must not cancel the other device families, and
+                    # must not be written as "every device is offline".
+                    # Only mark the group ran when the fetch succeeded (a list,
+                    # including a successful-empty []). On failure the group is
+                    # left unmarked so the scheduler spaces the retry, and
+                    # availability_due is cleared so this pass skips device_up and
+                    # device_status_info and those series ride their TTL.
+                    # Only Exception is caught: cancellation must propagate.
+                    fetched: list[dict[str, Any]] | None
+                    try:
+                        fetched = await self._fetch_device_availabilities(org_id)
+                    except Exception as exc:
+                        logger.exception("Failed to fetch device availabilities", org_id=org_id)
+                        self._track_error(categorize_error(exc))
+                        fetched = None
+                    if fetched is None:
+                        availability_due = False
+                    else:
+                        availabilities = fetched
                         self._mark_group_ran(EndpointGroupName.DEVICE_AVAILABILITY)
-                else:
-                    availabilities = []
 
                 logger.debug(
                     "Processing devices",

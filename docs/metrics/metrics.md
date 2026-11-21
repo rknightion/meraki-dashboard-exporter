@@ -5,8 +5,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 372
-- **Gauges:** 332
+- **Total metrics:** 373
+- **Gauges:** 333
 - **Counters:** 35
 - **Histograms:** 4
 - **Info metrics:** 1
@@ -307,6 +307,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_mt_pm10_ug_m3` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | PM10 particulate matter in micrograms per cubic meter |  |
 | `meraki_mt_pm25_ug_m3` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | PM2.5 particulate matter in micrograms per cubic meter |  |
 | `meraki_mt_power_factor_percent` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | Power factor percentage |  |
+| `meraki_mt_reading_timestamp_seconds` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `metric` | Unix timestamp (seconds) of the latest reading the API holds for this sensor and metric; alert on time() minus this value to detect a sensor that stopped reporting |  |
 | `meraki_mt_real_power_watts` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | Real power in watts |  |
 | `meraki_mt_remote_lockout_status` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | Remote lockout switch status (1 = locked, 0 = unlocked) |  |
 | `meraki_mt_temperature_celsius` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | Temperature reading in Celsius |  |
@@ -534,8 +535,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_exporter_api_request_attempts_total` | counter | `operation`, `status` | Total outbound Meraki SDK request attempts by operation and outcome. |  |
-| `meraki_exporter_api_requests_total` | counter | `endpoint`, `method`, `status_code` | Total outbound Meraki SDK request attempts made by this exporter process. |  |
+| `meraki_exporter_api_request_attempts_total` | counter | `operation`, `status` | Total outbound Meraki API request attempts by operation and outcome, one per page of a paginated fetch. |  |
+| `meraki_exporter_api_requests_total` | counter | `endpoint`, `method`, `status_code` | Total outbound Meraki API request attempts made by this exporter process, one per page of a paginated fetch. |  |
 
 ### MetricCollector
 

@@ -448,6 +448,8 @@ class MRClientLogsCollector:
                 self.api.networks.getNetworkClients,
                 network_id,
                 total_pages="all",
+                # Endpoint max is 5000 (default 10) (#978).
+                perPage=5000,
                 timespan=ACTIVE_CLIENTS_WINDOW_SECONDS,
             )
         clients = validate_response_format(

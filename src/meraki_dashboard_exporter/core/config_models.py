@@ -464,7 +464,7 @@ class SchedulerSettings(BaseModel):
         "adaptive",
         description=(
             "'adaptive' (default): solver stretches endpoint-group intervals to fit the API "
-            "budget. 'fixed': floors/pins only, no stretching, no AIMD (transition fallback)."
+            "budget. 'fixed': floors/pins only, no stretching, no shedding, no AIMD (transition fallback)."
         ),
     )
     target_utilization: float = Field(

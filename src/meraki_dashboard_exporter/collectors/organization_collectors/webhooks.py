@@ -75,6 +75,8 @@ class WebhookLogsCollector(BaseOrganizationCollector):
             org_id,
             timespan=_WEBHOOK_LOG_TIMESPAN,
             total_pages="all",
+            # Endpoint max is 1000 (default 50) (#978).
+            perPage=1000,
         )
         return cast(
             list[dict[str, Any]],

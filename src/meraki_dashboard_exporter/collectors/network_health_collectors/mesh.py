@@ -109,6 +109,8 @@ class MeshCollector(BaseNetworkHealthCollector):
             self.api.wireless.getNetworkWirelessMeshStatuses,
             network_id,
             total_pages="all",
+            # Endpoint max is 500 (default 50) (#978).
+            perPage=500,
         )
         result: list[dict[str, Any]] = validate_response_format(
             response,

@@ -598,6 +598,15 @@ class TestEndpointSchedulerResolve:
             else:
                 assert g["stretch_factor"] == 1.0
 
+    def test_fixed_mode_reports_over_budget_without_shedding(self) -> None:
+        """Fixed mode keeps every declared floor: over budget is reported, nothing is shed."""
+        sched = _make_scheduler(settings=_make_settings(mode="fixed"))
+        sched.resolve(LARGE_SHAPE)
+        assert sched.diagnostics()["over_budget"] is True
+        names = [g.name for g in _representative_groups()]
+        assert names
+        assert [name for name in names if sched.is_shed(name)] == []
+
     def test_setting_pin_applies_when_operator_set(self) -> None:
         """A legacy APISettings gate explicitly set by the operator pins the group."""
         settings = _make_settings(

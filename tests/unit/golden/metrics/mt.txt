@@ -55,6 +55,9 @@ meraki_mt_pm25_ug_m3 gauge
 meraki_mt_power_factor_percent gauge
   help: Power factor percentage
   labels: device_type,model,network_id,org_id,serial
+meraki_mt_reading_timestamp_seconds gauge
+  help: Unix timestamp (seconds) of the latest reading the API holds for this sensor and metric; alert on time() minus this value to detect a sensor that stopped reporting
+  labels: device_type,metric,model,network_id,org_id,serial
 meraki_mt_real_power_watts gauge
   help: Real power in watts
   labels: device_type,model,network_id,org_id,serial

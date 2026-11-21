@@ -88,7 +88,7 @@ class TestMRPowerModeCollection:
         await collector.collect_power_mode("org1", "Org", {})
 
         mock_api.wireless.getOrganizationWirelessDevicesPowerModeHistory.assert_called_once_with(
-            "org1", total_pages="all", timespan=86400
+            "org1", total_pages="all", perPage=20, timespan=86400
         )
         pm_calls = [
             c
