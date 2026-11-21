@@ -15,7 +15,7 @@ from ...core.scheduler import EndpointGroupName
 from .base import BaseNetworkHealthCollector
 
 if TYPE_CHECKING:
-    pass
+    from ..network_health import NetworkHealthCollector
 
 logger = get_logger(__name__)
 
@@ -27,6 +27,21 @@ class SSIDPerformanceCollector(BaseNetworkHealthCollector):
     failure step (assoc, auth, dhcp, dns) using the Meraki
     getNetworkWirelessFailedConnections API endpoint.
     """
+
+    def __init__(self, parent: NetworkHealthCollector) -> None:
+        """Initialize the collector and its per-network seen-key store.
+
+        Parameters
+        ----------
+        parent : NetworkHealthCollector
+            Parent collector that owns the failed-connections gauge.
+
+        """
+        super().__init__(parent)
+        # (ssid, failure_step) pairs emitted for each network on the previous
+        # successful pass (#992). A pair absent from the next successful response is
+        # written once as 0. Failed fetches never touch this store.
+        self._seen_failure_keys: dict[str, set[tuple[str, str]]] = {}
 
     @log_api_call("getNetworkWirelessFailedConnections")
     async def _fetch_failed_connections(
@@ -83,9 +98,6 @@ class SSIDPerformanceCollector(BaseNetworkHealthCollector):
             with LogContext(network_id=network_id, network_name=network_name, org_id=org_id):
                 failed_connections = await self._fetch_failed_connections(network_id, org_id=org_id)
 
-            if not failed_connections:
-                return
-
             # Aggregate failed connections by SSID number and failure step.
             # getNetworkWirelessFailedConnections returns one row per failure EVENT
             # (fields: ssidNumber, vlan, clientMac, serial, radio, failureStep, type,
@@ -108,6 +120,18 @@ class SSIDPerformanceCollector(BaseNetworkHealthCollector):
             # Per-series TTL from the group's solved interval (#617 §1f) — this
             # 3600s-windowed series must not flap under a stretched interval.
             ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.NH_FAILED_CONNECTIONS)
+            seen_keys = self._seen_failure_keys.setdefault(network_id, set())
+            for stale_ssid, stale_step in seen_keys - failure_counts.keys():
+                self._set_metric_value(
+                    "_ssid_failed_connections",
+                    {
+                        **base_labels,
+                        LabelName.SSID: stale_ssid,
+                        LabelName.FAILURE_STEP: stale_step,
+                    },
+                    0,
+                    ttl_seconds=ttl_seconds,
+                )
             for (ssid, failure_step), count in failure_counts.items():
                 labels = {
                     **base_labels,
@@ -120,6 +144,8 @@ class SSIDPerformanceCollector(BaseNetworkHealthCollector):
                     count,
                     ttl_seconds=ttl_seconds,
                 )
+            seen_keys.clear()
+            seen_keys.update(failure_counts.keys())
 
         except Exception as e:
             error_str = str(e)

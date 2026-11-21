@@ -208,7 +208,11 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
     async def test_collect_empty_failed_connections(
         self, collector, mock_api_builder, metrics
     ) -> None:
-        """Test that empty API response is handled gracefully."""
+        """A first-pass empty response is handled gracefully and writes no series.
+
+        Nothing was emitted before, so there is no key to zero; see
+        test_failed_connections_zeroed_when_window_is_empty for the two-pass case.
+        """
         org = OrganizationFactory.create(org_id="org_1", name="Test Org")
         network = NetworkFactory.create(
             network_id="N_1",
@@ -237,6 +241,142 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
 
         # No failed connections metrics should be set
         self.verify_no_metrics_set(metrics, ["meraki_mr_ssid_failed_connections_count"])
+
+    def _failed_connections_api(self, mock_api_builder, org, network, rows) -> MagicMock:
+        """Build a mock API whose failed-connections call returns ``rows``."""
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_devices([], org_id=org["id"])
+            .with_custom_response("getNetworkNetworkHealthChannelUtilization", [])
+            .with_custom_response("getNetworkWirelessConnectionStats", {})
+            .with_custom_response("getNetworkWirelessDataRateHistory", [])
+            .with_custom_response("getNetworkWirelessBluetoothClients", [])
+            .build()
+        )
+        api.wireless.getNetworkWirelessFailedConnections = MagicMock(return_value=rows)
+        return api
+
+    async def test_failed_connections_zeroed_when_window_is_empty(
+        self, collector, mock_api_builder, metrics
+    ) -> None:
+        """A burst followed by a successful empty window reads 0 for that network (#992)."""
+        org = OrganizationFactory.create(org_id="org_1", name="Test Org")
+        network = NetworkFactory.create(
+            network_id="N_1",
+            name="Wireless Network",
+            product_types=["wireless"],
+            org_id=org["id"],
+        )
+        rows = [
+            {"ssidNumber": 0, "failureStep": "auth", "ts": "2024-01-01T12:00:00Z"},
+            {"ssidNumber": 0, "failureStep": "auth", "ts": "2024-01-01T12:00:05Z"},
+            {"ssidNumber": 1, "failureStep": "dhcp", "ts": "2024-01-01T12:00:10Z"},
+        ]
+        api = self._failed_connections_api(mock_api_builder, org, network, rows)
+        self._update_all_subcollector_apis(collector, api)
+
+        await self.run_collector(collector)
+        labels = {"org_id": org["id"], "network_id": network["id"]}
+        metrics.assert_gauge_value(
+            "meraki_mr_ssid_failed_connections_count", 2, ssid="0", failure_step="auth", **labels
+        )
+        metrics.assert_gauge_value(
+            "meraki_mr_ssid_failed_connections_count", 1, ssid="1", failure_step="dhcp", **labels
+        )
+
+        api.wireless.getNetworkWirelessFailedConnections.return_value = []
+        await self.run_collector(collector)
+
+        metrics.assert_gauge_value(
+            "meraki_mr_ssid_failed_connections_count", 0, ssid="0", failure_step="auth", **labels
+        )
+        metrics.assert_gauge_value(
+            "meraki_mr_ssid_failed_connections_count", 0, ssid="1", failure_step="dhcp", **labels
+        )
+
+    async def test_failed_connections_zeroes_only_pairs_that_disappeared(
+        self, collector, mock_api_builder, metrics
+    ) -> None:
+        """A smaller successful window keeps present pairs and zeroes the missing one (#992)."""
+        org = OrganizationFactory.create(org_id="org_1", name="Test Org")
+        network = NetworkFactory.create(
+            network_id="N_1",
+            name="Wireless Network",
+            product_types=["wireless"],
+            org_id=org["id"],
+        )
+        api = self._failed_connections_api(
+            mock_api_builder,
+            org,
+            network,
+            [
+                {"ssidNumber": 0, "failureStep": "auth", "ts": "2024-01-01T12:00:00Z"},
+                {"ssidNumber": 1, "failureStep": "dhcp", "ts": "2024-01-01T12:00:10Z"},
+            ],
+        )
+        self._update_all_subcollector_apis(collector, api)
+        await self.run_collector(collector)
+
+        api.wireless.getNetworkWirelessFailedConnections.return_value = [
+            {"ssidNumber": 0, "failureStep": "auth", "ts": "2024-01-01T13:00:00Z"}
+        ]
+        await self.run_collector(collector)
+
+        labels = {"org_id": org["id"], "network_id": network["id"]}
+        metrics.assert_gauge_value(
+            "meraki_mr_ssid_failed_connections_count", 1, ssid="0", failure_step="auth", **labels
+        )
+        metrics.assert_gauge_value(
+            "meraki_mr_ssid_failed_connections_count", 0, ssid="1", failure_step="dhcp", **labels
+        )
+
+    async def test_failed_fetch_does_not_zero(self, collector, mock_api_builder, metrics) -> None:
+        """A failed fetch writes nothing, keeps earlier values and the seen keys (#992)."""
+        org = OrganizationFactory.create(org_id="org_1", name="Test Org")
+        network = NetworkFactory.create(
+            network_id="N_1",
+            name="Wireless Network",
+            product_types=["wireless"],
+            org_id=org["id"],
+        )
+        api = self._failed_connections_api(
+            mock_api_builder,
+            org,
+            network,
+            [{"ssidNumber": 0, "failureStep": "auth", "ts": "2024-01-01T12:00:00Z"}],
+        )
+        self._update_all_subcollector_apis(collector, api)
+        await self.run_collector(collector)
+
+        labels = {"org_id": org["id"], "network_id": network["id"]}
+        fetch = api.wireless.getNetworkWirelessFailedConnections
+        sub = collector.ssid_performance_collector
+        network_row = {**network, "orgId": org["id"], "orgName": org["name"]}
+
+        # A "not available" 404 and a generic failure both leave the value untouched.
+        for error in (Exception("404 Not Found"), Exception("Connection error")):
+            fetch.side_effect = error
+            try:
+                await sub.collect(network_row)
+            except Exception:
+                pass
+            metrics.assert_gauge_value(
+                "meraki_mr_ssid_failed_connections_count",
+                1,
+                ssid="0",
+                failure_step="auth",
+                **labels,
+            )
+
+        # The failures did not consume the stored pair: a later empty success zeroes it.
+        fetch.side_effect = None
+        fetch.return_value = []
+        await sub.collect(network_row)
+        metrics.assert_gauge_value(
+            "meraki_mr_ssid_failed_connections_count", 0, ssid="0", failure_step="auth", **labels
+        )
 
     async def test_collect_failed_connections_api_error_handled(
         self, collector, mock_api_builder, metrics

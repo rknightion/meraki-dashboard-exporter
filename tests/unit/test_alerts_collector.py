@@ -127,10 +127,215 @@ class TestAlertsCollector(BaseCollectorTest):
         # directly by the collector. Only the alerts API call is tracked.
         self.assert_api_call_tracked(collector, metrics, "getOrganizationAssuranceAlerts")
 
-        # Verify no alerts metrics were set
-        # The collector doesn't set a metric for 0 alerts, it clears them
-        # So we should check that the metric is not set
+        # On a first pass nothing was emitted before, so there is no key to zero and no
+        # per-combination series is written. The by-severity buckets are the
+        # deliberate zero-fill and are covered by the next test.
         metrics.assert_metric_not_set(AlertMetricName.ALERTS_ACTIVE)
+
+    async def test_empty_first_pass_zero_fills_every_severity_bucket(
+        self, collector, mock_api_builder, metrics
+    ):
+        """A successful empty response writes 0 for all four severity buckets (#992)."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_devices([], org_id="123")
+            .with_custom_response("getOrganizationAssuranceAlerts", [])
+            .build()
+        )
+        collector.api = api
+
+        await self.run_collector(collector)
+
+        for severity in ("critical", "warning", "informational", "other"):
+            metrics.assert_gauge_value(
+                AlertMetricName.ALERTS_BY_SEVERITY, 0, org_id="123", severity=severity
+            )
+
+    async def test_alerts_resolved_are_zeroed(self, collector, mock_api_builder, metrics):
+        """After alerts clear, every emitted combination and severity bucket reads 0 (#992)."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        other_org = OrganizationFactory.create(org_id="456", name="Other Org")
+        net_a = NetworkFactory.create(network_id="N_A", name="A")
+        net_b = NetworkFactory.create(network_id="N_B", name="B")
+        alerts = [
+            AlertFactory.create(
+                alert_id="a1",
+                alert_type="connectivity",
+                categoryType="connectivity",
+                severity="critical",
+                deviceType="MR",
+                network=net_a,
+                dismissedAt=None,
+                resolvedAt=None,
+            ),
+            AlertFactory.create(
+                alert_id="a2",
+                alert_type="performance",
+                categoryType="wireless",
+                severity="warning",
+                deviceType="MS",
+                network=net_b,
+                dismissedAt=None,
+                resolvedAt=None,
+            ),
+        ]
+        api = (
+            mock_api_builder
+            .with_organizations([org, other_org])
+            .with_devices([], org_id="123")
+            .with_devices([], org_id="456")
+            .with_custom_response("getOrganizationAssuranceAlerts", alerts, org_id="123")
+            .with_custom_response("getOrganizationAssuranceAlerts", [], org_id="456")
+            .build()
+        )
+        collector.api = api
+        await self.run_collector(collector)
+
+        active_a = {
+            "org_id": "123",
+            "network_id": "N_A",
+            "alert_type": "connectivity",
+            "category_type": "connectivity",
+            "severity": "critical",
+            "device_type": "MR",
+        }
+        health_a = {
+            "org_id": "123",
+            "network_id": "N_A",
+            "category": "connectivity",
+            "severity": "critical",
+        }
+        metrics.assert_gauge_value(AlertMetricName.ALERTS_ACTIVE, 1, **active_a)
+        metrics.assert_gauge_value(
+            AlertMetricName.ALERTS_BY_NETWORK, 1, org_id="123", network_id="N_A"
+        )
+        metrics.assert_gauge_value(AlertMetricName.NETWORK_HEALTH_ALERTS, 1, **health_a)
+        metrics.assert_gauge_value(
+            AlertMetricName.ALERTS_BY_SEVERITY, 1, org_id="123", severity="critical"
+        )
+
+        # Second pass: org 123 succeeds with an empty list.
+        api.organizations.getOrganizationAssuranceAlerts.side_effect = lambda *a, **k: []
+        await self.run_collector(collector)
+
+        metrics.assert_gauge_value(AlertMetricName.ALERTS_ACTIVE, 0, **active_a)
+        metrics.assert_gauge_value(
+            AlertMetricName.ALERTS_ACTIVE,
+            0,
+            org_id="123",
+            network_id="N_B",
+            alert_type="performance",
+            category_type="wireless",
+            severity="warning",
+            device_type="MS",
+        )
+        for network_id in ("N_A", "N_B"):
+            metrics.assert_gauge_value(
+                AlertMetricName.ALERTS_BY_NETWORK, 0, org_id="123", network_id=network_id
+            )
+        metrics.assert_gauge_value(AlertMetricName.NETWORK_HEALTH_ALERTS, 0, **health_a)
+        for severity in ("critical", "warning", "informational", "other"):
+            metrics.assert_gauge_value(
+                AlertMetricName.ALERTS_BY_SEVERITY, 0, org_id="123", severity=severity
+            )
+
+    async def test_partially_resolved_alerts_zero_only_the_missing_combination(
+        self, collector, mock_api_builder, metrics
+    ):
+        """One resolved combination reads 0 while a still-active one keeps its count (#992)."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        net_a = NetworkFactory.create(network_id="N_A", name="A")
+        net_b = NetworkFactory.create(network_id="N_B", name="B")
+
+        def _alert(alert_id: str, network: dict[str, Any]) -> dict[str, Any]:
+            return AlertFactory.create(
+                alert_id=alert_id,
+                alert_type="connectivity",
+                categoryType="connectivity",
+                severity="critical",
+                deviceType="MR",
+                network=network,
+                dismissedAt=None,
+                resolvedAt=None,
+            )
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_devices([], org_id="123")
+            .with_custom_response(
+                "getOrganizationAssuranceAlerts", [_alert("a1", net_a), _alert("a2", net_b)]
+            )
+            .build()
+        )
+        collector.api = api
+        await self.run_collector(collector)
+
+        remaining = [_alert("a1", net_a)]
+        api.organizations.getOrganizationAssuranceAlerts.side_effect = lambda *a, **k: remaining
+        await self.run_collector(collector)
+
+        metrics.assert_gauge_value(
+            AlertMetricName.ALERTS_BY_NETWORK, 1, org_id="123", network_id="N_A"
+        )
+        metrics.assert_gauge_value(
+            AlertMetricName.ALERTS_BY_NETWORK, 0, org_id="123", network_id="N_B"
+        )
+        metrics.assert_gauge_value(
+            AlertMetricName.NETWORK_HEALTH_ALERTS,
+            0,
+            org_id="123",
+            network_id="N_B",
+            category="connectivity",
+            severity="critical",
+        )
+
+    async def test_failed_fetch_does_not_zero(self, collector, mock_api_builder, metrics):
+        """A failed alerts fetch writes nothing and leaves earlier values untouched (#992)."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_A", name="A")
+        alert = AlertFactory.create(
+            alert_id="a1",
+            alert_type="connectivity",
+            categoryType="connectivity",
+            severity="critical",
+            deviceType="MR",
+            network=network,
+            dismissedAt=None,
+            resolvedAt=None,
+        )
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_devices([], org_id="123")
+            .with_custom_response("getOrganizationAssuranceAlerts", [alert])
+            .build()
+        )
+        collector.api = api
+        await self.run_collector(collector)
+
+        api.organizations.getOrganizationAssuranceAlerts.side_effect = Exception("Connection error")
+        exc = await self.run_collector(collector, expect_success=False)
+        assert isinstance(exc, NothingCollectedError)
+
+        metrics.assert_gauge_value(
+            AlertMetricName.ALERTS_BY_NETWORK, 1, org_id="123", network_id="N_A"
+        )
+        metrics.assert_gauge_value(
+            AlertMetricName.ALERTS_BY_SEVERITY, 1, org_id="123", severity="critical"
+        )
+        metrics.assert_gauge_value(
+            AlertMetricName.ALERTS_ACTIVE,
+            1,
+            org_id="123",
+            network_id="N_A",
+            alert_type="connectivity",
+            category_type="connectivity",
+            severity="critical",
+            device_type="MR",
+        )
 
     async def test_collect_with_active_alerts(self, collector, mock_api_builder, metrics):
         """Test collection with active alerts."""
@@ -1137,15 +1342,15 @@ class TestAlertsCollector(BaseCollectorTest):
         )
 
         # Cycle 2: the alert has resolved and no longer appears in the response.
-        api.organizations.getOrganizationAssuranceAlerts.return_value = []
+        api.organizations.getOrganizationAssuranceAlerts.side_effect = lambda *a, **k: []
         await self.run_collector(collector)
 
-        # The stale series is still present immediately after the resolved cycle
-        # (no per-cycle clear -- see the comment in _collect_org_alerts) but is no
-        # longer being refreshed, so it is now eligible for TTL-based expiration.
+        # The resolved cycle writes an explicit 0 for the key emitted last pass (#992)
+        # instead of leaving the old count exposed; the zero series then ages out by
+        # TTL since it is no longer refreshed.
         metrics.assert_gauge_value(
             AlertMetricName.ALERTS_ACTIVE,
-            1,
+            0,
             org_id="123",
             network_id="N_123",
             alert_type="connectivity",

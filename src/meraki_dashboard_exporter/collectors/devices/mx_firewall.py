@@ -79,6 +79,11 @@ class MXFirewallCollector(SubCollectorMixin):
         self._last_security_config_collection: dict[str, float] = {}
         self._last_nat_config_collection: dict[str, float] = {}
         self._last_vlan_config_collection: dict[str, float] = {}
+        # Keys emitted by the previous successful security-event pass, per org (#992).
+        # A key absent from the next successful window is written once as 0 so a burst
+        # is not re-exported for a second window.
+        self._seen_security_event_types: dict[str, set[str]] = {}
+        self._seen_security_events_by_network: dict[str, set[tuple[str, str, str, str]]] = {}
         self._initialize_metrics()
 
     def _should_collect_firewall_rules(self, network_id: str) -> bool:
@@ -823,11 +828,37 @@ class MXFirewallCollector(SubCollectorMixin):
 
         # NB: do NOT clear the gauge here. collect_org_security_events runs once per
         # org (concurrently across orgs, sharing one gauge instance), so a global
-        # _metrics.clear() would wipe every other org's series mid-cycle. Event types
-        # with zero events this cycle are reclaimed by the metric expiration manager
-        # via parent._set_metric tracking instead.
+        # _metrics.clear() would wipe every other org's series mid-cycle. Instead, keys
+        # emitted by the previous successful window and absent from this one are written
+        # once as 0 (#992), then the stored sets are replaced. A failed fetch raised
+        # above, so it writes nothing and leaves the stored sets as they were (F-015).
 
         ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_SECURITY_EVENTS)
+        seen_event_types = self._seen_security_event_types.setdefault(org_id, set())
+        for stale_event_type in seen_event_types - counts.keys():
+            self.parent._set_metric(
+                self._security_events_count,
+                {
+                    LabelName.ORG_ID: org_id,
+                    LabelName.EVENT_TYPE: stale_event_type,
+                },
+                0.0,
+                ttl_seconds=ttl_seconds,
+            )
+        seen_by_network = self._seen_security_events_by_network.setdefault(org_id, set())
+        for stale_key in seen_by_network - by_network.keys():
+            self.parent._set_metric(
+                self._security_events_by_network_count,
+                create_labels(
+                    org_id=org_id,
+                    network_id=stale_key[0],
+                    event_type=stale_key[1],
+                    blocked=stale_key[2],
+                    priority=stale_key[3],
+                ),
+                0.0,
+                ttl_seconds=ttl_seconds,
+            )
         for event_type, count in counts.items():
             self.parent._set_metric(
                 self._security_events_count,
@@ -851,6 +882,11 @@ class MXFirewallCollector(SubCollectorMixin):
                 float(count),
                 ttl_seconds=ttl_seconds,
             )
+
+        seen_event_types.clear()
+        seen_event_types.update(counts.keys())
+        seen_by_network.clear()
+        seen_by_network.update(by_network.keys())
 
         # Mark after a successful org-wide fetch (failures retry next cycle).
         self.parent._mark_group_ran(EndpointGroupName.MX_SECURITY_EVENTS)
