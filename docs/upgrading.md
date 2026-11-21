@@ -82,18 +82,6 @@ longer expire for that reason. `meraki_exporter_scheduler_over_budget` still rep
 A fixed-mode deployment that is over budget now sends more requests and relies on the rate limiter
 to pace them. Adaptive mode is unchanged.
 
-## Changes after 2.3.0
-
-The following previously accepted configurations now prevent startup:
-
-- Set `MERAKI_EXPORTER_API__MAX_RETRIES` to at least 1. A value of 1 makes a single SDK attempt.
-- Remove any zero legacy interval pin or give it a positive value.
-- When the webhook receiver requires a secret, set `MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET`.
-
-`prometheusRule.job` now defaults to the release's Service name and is matched as a regular
-expression. If a static scrape configuration uses another job name and relied on the old default
-`meraki-dashboard-exporter`, set `prometheusRule.job` to match that job.
-
 ### A device with no availability row is no longer reported offline
 
 When the organisation availability response has no row for a device in the inventory, or its row
@@ -105,6 +93,18 @@ longer reads as every missing device going down at once. A device with an explic
 listing now goes absent instead of reading 0, so an alert written only as `meraki_device_up == 0`
 does not fire for it. If that case matters, alert on absence as well, for example with `absent()`
 or a staleness rule.
+
+## Changes after 2.3.0
+
+The following previously accepted configurations now prevent startup:
+
+- Set `MERAKI_EXPORTER_API__MAX_RETRIES` to at least 1. A value of 1 makes a single SDK attempt.
+- Remove any zero legacy interval pin or give it a positive value.
+- When the webhook receiver requires a secret, set `MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET`.
+
+`prometheusRule.job` now defaults to the release's Service name and is matched as a regular
+expression. If a static scrape configuration uses another job name and relied on the old default
+`meraki-dashboard-exporter`, set `prometheusRule.job` to match that job.
 
 ### Helm chart Ingress routes only the webhook receiver
 
