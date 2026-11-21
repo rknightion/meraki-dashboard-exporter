@@ -343,21 +343,21 @@
       "status_code": 200
     },
     {
-      "captured_at_utc": "2026-09-02T06:54:37.972335+00:00",
-      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "captured_at_utc": "2026-11-21T20:43:25.184561+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-11-21",
       "evidence_status": "LIVE-VERIFIED",
       "fixture": "get-organization-wireless-devices-power-mode-history-01.json",
       "method": "GET",
       "path": "/api/v1/organizations/org_001/wireless/devices/power/mode/history",
       "product_family": "wireless",
-      "query": "timespan=86400",
+      "query": "perPage=20&timespan=86400",
       "sanitizer": {
         "method": "shared payload-path-query placeholders with raw-value collision avoidance",
         "name": "failure-harness",
         "version": "4"
       },
       "sdk_operation": "getOrganizationWirelessDevicesPowerModeHistory",
-      "sha256": "82a8fafeccdf8875d00cd54d2c5ba7f977e1395068856b19548e7df02359105e",
+      "sha256": "ecf8c154c1b9c194dd26ae2ae75a0593473ce2459e61d6d8a83ad7d42d96109f",
       "status_code": 200
     },
     {
@@ -867,14 +867,14 @@
       "status_code": 200
     },
     {
-      "captured_at_utc": "2026-09-02T06:54:45.182737+00:00",
-      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "captured_at_utc": "2026-11-21T20:43:26.298055+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-11-21",
       "evidence_status": "LIVE-VERIFIED",
       "fixture": "get-organization-webhooks-logs-01.json",
       "method": "GET",
       "path": "/api/v1/organizations/org_001/webhooks/logs",
       "product_family": "organizations",
-      "query": "timespan=3600",
+      "query": "perPage=1000&timespan=3600",
       "sanitizer": {
         "method": "shared payload-path-query placeholders with raw-value collision avoidance",
         "name": "failure-harness",
@@ -1227,21 +1227,21 @@
       "status_code": 200
     },
     {
-      "captured_at_utc": "2026-09-02T06:55:19.810440+00:00",
-      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "captured_at_utc": "2026-11-21T20:43:27.447249+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-11-21",
       "evidence_status": "LIVE-VERIFIED",
       "fixture": "get-network-wireless-mesh-statuses-01.json",
       "method": "GET",
       "path": "/api/v1/networks/network_001/wireless/meshStatuses",
       "product_family": "wireless",
-      "query": "",
+      "query": "perPage=500",
       "sanitizer": {
         "method": "shared payload-path-query placeholders with raw-value collision avoidance",
         "name": "failure-harness",
         "version": "4"
       },
       "sdk_operation": "getNetworkWirelessMeshStatuses",
-      "sha256": "a8f7dd44d156a21a0b7d57f96b68d8661a388927c120a108e387dde980aa888d",
+      "sha256": "317749d795f3c18cadad9afaa6a864bfe4477edf99ac4ce78b2abee8a1404e47",
       "status_code": 404
     },
     {

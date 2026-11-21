@@ -3,11 +3,15 @@
     {
       "events": [
         {
-          "powerMode": "value_108",
+          "powerMode": "value_1108",
           "ts": "2026-01-01T00:00:00Z"
         },
         {
-          "powerMode": "value_108",
+          "powerMode": "value_1108",
+          "ts": "2026-01-01T00:00:00Z"
+        },
+        {
+          "powerMode": "value_1108",
           "ts": "2026-01-01T00:00:00Z"
         }
       ],
@@ -16,14 +20,14 @@
       "name": "device_name_005",
       "network": {
         "id": "network_001",
-        "name": "device_name_024",
+        "name": "device_name_030",
         "tags": [
-          "tags_value_002"
+          "tags_value_004"
         ]
       },
       "serial": "device_003",
       "tags": [
-        "tags_value_001"
+        "tags_value_003"
       ]
     }
   ]
