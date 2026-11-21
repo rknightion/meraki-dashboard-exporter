@@ -213,7 +213,7 @@ Adaptive budget-aware endpoint scheduler (AIMD, stretch, resolve cadence)
 
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_SCHEDULER__MODE` | `adaptive \| fixed` | `adaptive` | 'adaptive' (default): solver stretches endpoint-group intervals to fit the API budget. 'fixed': floors/pins only, no stretching, no AIMD (transition fallback). |
+| `MERAKI_EXPORTER_SCHEDULER__MODE` | `adaptive \| fixed` | `adaptive` | 'adaptive' (default): solver stretches endpoint-group intervals to fit the API budget. 'fixed': floors/pins only, no stretching, no shedding, no AIMD (transition fallback). |
 | `MERAKI_EXPORTER_SCHEDULER__TARGET_UTILIZATION` | `float` | `0.7` | Fraction of the effective budget the solver plans to; headroom absorbs bursts. (min: 0.1, max: 1.0) |
 | `MERAKI_EXPORTER_SCHEDULER__MAX_STRETCH_FACTOR` | `float` | `4.0` | Per-group interval cap as a multiple of its volatility floor. (min: 1.0, max: 16.0) |
 | `MERAKI_EXPORTER_SCHEDULER__MAX_INTERVAL_SECONDS` | `int` | `3600` | Absolute per-group interval cap. (min: 300, max: 86400) |

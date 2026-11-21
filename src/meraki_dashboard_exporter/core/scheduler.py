@@ -501,7 +501,8 @@ class EndpointScheduler:
         """Recompute intervals from the org shape; emit gauges and log.
 
         Synchronous pure CPU. In ``fixed`` mode only floors + pins apply
-        (the stretch loop is disabled by an infinite budget).
+        (the stretch loop is disabled by an infinite budget) and no group is
+        shed; ``over_budget`` is still computed and reported.
         """
         mode = str(self._sched("mode"))
         target_utilization = float(self._sched("target_utilization"))
@@ -534,9 +535,11 @@ class EndpointScheduler:
         over_budget = bool(solved) and total_demand > effective_budget * target_utilization
         self._shed_groups = set()
         remaining = total_demand
-        if over_budget:
+        if over_budget and mode != "fixed":
             # Shed only protected-last classes.  The order is deterministic and
-            # keeps all priority-1/2 groups at their declared floors.
+            # keeps all priority-1/2 groups at their declared floors.  Fixed mode
+            # never sheds: it runs exactly the declared floors and pins, and
+            # still reports over_budget.
             for name, item in sorted(
                 solved.items(), key=lambda row: (-self._groups[row[0]].priority, str(row[0]))
             ):
