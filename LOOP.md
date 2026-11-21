@@ -77,3 +77,10 @@ The tracker working model is `~/repos/agent-docs/docs/github-tracker.md` (mainta
 - A push to `main` redeploys the soak host (watchtower on `:main`), which resets its counters:
   snapshot or pin a digest before relying on them.
 - `rknightion/.github`: read-only unless the owner grants authority.
+- gate: meraki-check | timeout 1500 bash -euc 'just check </dev/null && just groma-check </dev/null'
+- gate: meraki-image | timeout 2700 bash -euc 'just ci </dev/null'
+
+Use `loop-gate-lock meraki-check` for the source gate and `loop-gate-lock meraki-image` for any change
+to the `Dockerfile`, the entrypoint or the image runtime shape (`just ci` builds the image, runs
+`image-verify`, `image-structure` and `smoke` on port 9099, so one image gate runs at a time). It needs
+Docker and `container-structure-test` on `PATH`.
