@@ -374,6 +374,24 @@ class MTSensorCollector(MetricCollector):
             ],
         )
 
+        # Age of each reading (#993). The API re-serves a sensor's last reading
+        # indefinitely, so the value gauges alone cannot show a dead sensor.
+        # Rides the same getOrganizationSensorReadingsLatest fetch.
+        self._sensor_reading_timestamp = self._create_gauge(
+            MTMetricName.MT_READING_TIMESTAMP_SECONDS,
+            "Unix timestamp (seconds) of the latest reading the API holds for this "
+            "sensor and metric; alert on time() minus this value to detect a sensor "
+            "that stopped reporting",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+                LabelName.SERIAL,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+                LabelName.METRIC,
+            ],
+        )
+
     async def _collect_impl(self) -> None:
         """Collect sensor metrics by delegating to MT collector.
 

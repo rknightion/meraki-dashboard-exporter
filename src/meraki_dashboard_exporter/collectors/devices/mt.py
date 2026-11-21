@@ -629,6 +629,9 @@ class MTCollector(BaseDeviceCollector):
                     if value is not None:
                         measurement = SensorMeasurement(metric=metric_type, value=value)
                         measurements.append(measurement)
+                        self._process_reading_timestamp(
+                            device, reading, metric_type, ttl_seconds=ttl_seconds
+                        )
 
                 if measurements:
                     # Process validated measurements
@@ -807,6 +810,44 @@ class MTCollector(BaseDeviceCollector):
             epoch,
             ttl_seconds=ttl_seconds,
         )
+
+    def _process_reading_timestamp(
+        self,
+        device: dict[str, Any],
+        reading: dict[str, Any],
+        metric_type: str,
+        ttl_seconds: float | None = None,
+    ) -> None:
+        """Expose the reading's own ``ts`` as epoch seconds (#993).
+
+        The API re-serves a sensor's last reading however old it is, so the value
+        gauges never reveal a sensor that stopped reporting. Only metrics the
+        collector emits as values (keys of ``_METRIC_ATTR_BY_TYPE``) get a
+        timestamp; a missing or unparseable ``ts`` sets nothing.
+
+        Parameters
+        ----------
+        device : dict[str, Any]
+            Device data with org/network info.
+        reading : dict[str, Any]
+            A single raw reading entry (one ``metric``/``ts`` pair).
+        metric_type : str
+            The reading's metric, used as the ``metric`` label.
+        ttl_seconds : float | None
+            Fully-resolved per-series TTL for the ``mt_sensor_readings`` group.
+
+        """
+        if metric_type not in self._METRIC_ATTR_BY_TYPE:
+            return
+        ts = reading.get("ts")
+        epoch = self._parse_iso_timestamp(ts) if isinstance(ts, str) else None
+        if epoch is None:
+            return
+
+        org_id = device.get("orgId", "")
+        org_name = device.get("orgName", org_id)
+        labels = create_device_labels(device, org_id=org_id, org_name=org_name, metric=metric_type)
+        self._set_metric_value("_sensor_reading_timestamp", labels, epoch, ttl_seconds=ttl_seconds)
 
     def _process_validated_metric(
         self,

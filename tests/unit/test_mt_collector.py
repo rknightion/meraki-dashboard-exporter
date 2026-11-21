@@ -816,6 +816,101 @@ def test_sensor_gateway_connection_validates_via_domain_model() -> None:
     assert item.gateway.name is None
 
 
+class TestMTReadingTimestamp(BaseCollectorTest):
+    """#993: the age of each sensor reading is exposed as a timestamp gauge."""
+
+    collector_class = MTSensorCollector
+
+    @staticmethod
+    def _device() -> dict[str, str]:
+        return {
+            "serial": "Q2MT-0000-0001",
+            "name": "Sensor1",
+            "model": "MT10",
+            "networkId": "N_123",
+            "networkName": "Test Network",
+            "orgId": "123456",
+            "orgName": "Test Org",
+        }
+
+    async def test_reading_timestamp_emitted_per_metric(self, collector, metrics) -> None:
+        """Two readings with different ts produce two samples with their own epoch and metric."""
+        device = self._device()
+        sensor_readings = [
+            {
+                "serial": device["serial"],
+                "network": {"id": "N_123", "name": "Test Network"},
+                "readings": [
+                    {
+                        "ts": "2024-01-01T00:00:00Z",
+                        "metric": "temperature",
+                        "temperature": {"celsius": 4.5},
+                    },
+                    {
+                        "ts": "2024-01-02T12:00:00Z",
+                        "metric": "humidity",
+                        "humidity": {"relativePercentage": 55},
+                    },
+                ],
+            }
+        ]
+
+        collector.mt_collector.collect_batch(sensor_readings, {device["serial"]: device})
+
+        common = {
+            "org_id": "123456",
+            "network_id": "N_123",
+            "serial": device["serial"],
+            "model": "MT10",
+            "device_type": "MT",
+        }
+        # 2024-01-01T00:00:00Z == 1704067200.0; 2024-01-02T12:00:00Z == 1704196800.0
+        metrics.assert_gauge_value(
+            "meraki_mt_reading_timestamp_seconds", 1704067200.0, metric="temperature", **common
+        )
+        metrics.assert_gauge_value(
+            "meraki_mt_reading_timestamp_seconds", 1704196800.0, metric="humidity", **common
+        )
+        # The value gauges are emitted exactly as before.
+        metrics.assert_gauge_value("meraki_mt_temperature_celsius", 4.5, **common)
+        metrics.assert_gauge_value("meraki_mt_humidity_percent", 55, **common)
+
+    async def test_reading_without_ts_emits_value_but_no_timestamp(
+        self, collector, metrics
+    ) -> None:
+        """A missing or unparseable ts still sets the value gauge and no timestamp sample."""
+        device = self._device()
+        sensor_readings = [
+            {
+                "serial": device["serial"],
+                "network": {"id": "N_123", "name": "Test Network"},
+                "readings": [
+                    {"metric": "temperature", "temperature": {"celsius": 4.5}},
+                    {
+                        "ts": "not-a-timestamp",
+                        "metric": "humidity",
+                        "humidity": {"relativePercentage": 55},
+                    },
+                ],
+            }
+        ]
+
+        collector.mt_collector.collect_batch(sensor_readings, {device["serial"]: device})
+
+        common = {
+            "org_id": "123456",
+            "network_id": "N_123",
+            "serial": device["serial"],
+            "model": "MT10",
+            "device_type": "MT",
+        }
+        metrics.assert_gauge_value("meraki_mt_temperature_celsius", 4.5, **common)
+        metrics.assert_gauge_value("meraki_mt_humidity_percent", 55, **common)
+        # The gauge is registered, but neither reading produced a sample for it.
+        metrics.assert_metric_exists("meraki_mt_reading_timestamp_seconds")
+        metrics.assert_metric_not_set("meraki_mt_reading_timestamp_seconds", **common)
+
+
 class TestMTButtonPresses(BaseCollectorTest):
     """#303: MT20/MT30 button presses ride the existing sensor readings fetch."""
 

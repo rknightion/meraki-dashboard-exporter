@@ -436,6 +436,9 @@ class MTMetricName(StrEnum):
     MT_GATEWAY_RSSI = "meraki_mt_gateway_rssi"
     MT_GATEWAY_LAST_CONNECTED_TIMESTAMP = "meraki_mt_gateway_last_connected_timestamp_seconds"
 
+    # Age of each sensor reading (#993), from the reading's own `ts`
+    MT_READING_TIMESTAMP_SECONDS = "meraki_mt_reading_timestamp_seconds"
+
     # Phase 4 (#618)
     MT_ALERT_PROFILES = "meraki_mt_alert_profiles"
     MT_BUTTON_LAST_PRESS_TIMESTAMP_SECONDS = "meraki_mt_button_last_press_timestamp_seconds"
