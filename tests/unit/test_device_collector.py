@@ -633,6 +633,26 @@ class TestDeviceCollector(BaseCollectorTest):
         # Status is the last label in the labelnames list
         assert label_tuple[-1] == "offline"
 
+    def test_device_status_info_rename_leaves_one_series(self, collector):
+        """A renamed device must not leave a second status info series (#998)."""
+        device = {
+            "serial": "Q2AB-1234",
+            "name": "A",
+            "model": "MR36",
+            "networkId": "N_111",
+            "networkName": "Test Network",
+            "availability_status": "online",
+        }
+        collector._collect_common_metrics(device, org_id="org1", org_name="Test Org")
+        device["name"] = "B"
+        collector._collect_common_metrics(device, org_id="org1", org_name="Test Org")
+
+        gauge = collector._device_status_info
+        assert len(gauge._metrics) == 1
+        labels = dict(zip(gauge._labelnames, next(iter(gauge._metrics)), strict=True))
+        assert labels["name"] == "B"
+        assert labels["serial"] == "Q2AB-1234"
+
     def test_device_up_labels_are_id_only(self, collector):
         """#534: meraki_device_up carries stable IDs only, no mutable names.
 

@@ -83,6 +83,11 @@ class MSCollector(BaseDeviceCollector):
         # (serial, port_id) so a transition can remove the now-stale label
         # series instead of relying on TTL expiration (see F-070).
         self._emitted_stp_states: dict[tuple[str, str], set[str]] = {}
+        # Last emitted meraki_ms_port_info label dict per (serial, port_id), so a
+        # port rename expires the superseded series in the same pass (#998). Not
+        # cleared by _evict_stale_serials (called with an empty active set on the
+        # org-endpoint path); bounded by the number of switch ports seen.
+        self._emitted_port_info: dict[tuple[str, str], dict[str, str]] = {}
         self._emitted_port_status: dict[tuple[str, str], dict[str, str]] = {}
         self._emitted_8021x_statuses: dict[tuple[str, str], set[str]] = {}
         # Timestamp of the last successful STP priority collection, used to
@@ -622,6 +627,12 @@ class MSCollector(BaseDeviceCollector):
             port_id=port_id,
             port_name=port_name,
         )
+        port_key = (info_labels[LabelName.SERIAL.value], port_id)
+        previous = self._emitted_port_info.get(port_key)
+        if previous is not None and previous != info_labels:
+            self.parent._expire_metric_series(
+                self._ms_port_info, previous, MSMetricName.MS_PORT_INFO.value
+            )
         self.parent._set_metric(
             self._ms_port_info,
             info_labels,
@@ -629,6 +640,7 @@ class MSCollector(BaseDeviceCollector):
             MSMetricName.MS_PORT_INFO.value,
             ttl_seconds=ttl_seconds,
         )
+        self._emitted_port_info[port_key] = dict(info_labels)
 
     def _emit_port_error_warning_metrics(
         self,
