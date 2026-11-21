@@ -1262,6 +1262,36 @@ class WirelessRfProfileAssignment(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class WirelessCpuLoadSample(BaseModel):
+    """One 5-minute load sample in a wireless access point's CPU load history.
+
+    ``cpuLoad5`` is the Linux ``sysinfo`` load average, a fixed-point number with
+    16 fractional bits (divide by 65536 for the load).
+    """
+
+    __meraki_derived__ = True
+
+    ts: str | None = None
+    cpuLoad5: int | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class WirelessDeviceCpuLoadHistory(BaseModel):
+    """Per-device CPU load history row.
+
+    Source: ``getOrganizationWirelessDevicesSystemCpuLoadHistory``.
+    """
+
+    __meraki_op__ = "getOrganizationWirelessDevicesSystemCpuLoadHistory"
+
+    serial: str | None = None
+    cpuCount: int | None = None
+    series: list[WirelessCpuLoadSample] | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
 # Helper function to convert raw API responses to domain models
 
 

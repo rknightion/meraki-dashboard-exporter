@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
@@ -13,6 +15,13 @@ from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 
 if TYPE_CHECKING:
     pass
+
+_CPU_LOAD_CORPUS = (
+    Path(__file__).resolve().parents[2]
+    / "harness"
+    / "corpus"
+    / "get-organization-wireless-devices-system-cpu-load-history-01.json"
+)
 
 
 class TestMRCollector:
@@ -413,7 +422,14 @@ class TestMRCollector:
 
         mock_api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory = MagicMock(
             return_value=[
-                {"serial": "Q123", "history": [{"load": 12.0}, {"load": 37.5}]},
+                {
+                    "serial": "Q123",
+                    "cpuCount": 4,
+                    "series": [
+                        {"ts": "2026-01-01T00:00:00Z", "cpuLoad5": 26112},
+                        {"ts": "2026-01-01T00:05:00Z", "cpuLoad5": 65536},
+                    ],
+                },
             ]
         )
 
@@ -430,8 +446,139 @@ class TestMRCollector:
             if c[0][0] is mr_collector._mr_cpu_load_5min
         ]
         assert len(cpu_calls) == 1
-        # Most-recent history reading is used.
-        assert cpu_calls[0][0][2] == 37.5
+        # The newest series sample is used, scaled to percent per core.
+        assert cpu_calls[0][0][2] == pytest.approx(65536 / 65536 / 4 * 100)
+
+    async def test_collect_cpu_load_parses_live_shape(
+        self,
+        mr_collector: MRCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The live-verified corpus row emits cpuLoad5 / 65536 / cpuCount * 100 (#976)."""
+        mock_parent.settings.api.batch_size = 20
+        fixture = json.loads(_CPU_LOAD_CORPUS.read_text())
+        row = fixture["items"][0]
+        devices = [
+            {
+                "serial": row["serial"],
+                "name": "AP1",
+                "model": row["model"],
+                "networkId": "net1",
+            }
+        ]
+        mock_api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory = MagicMock(
+            return_value=fixture
+        )
+
+        await mr_collector.collect_cpu_load("org1", "Test Org", devices)
+
+        cpu_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mr_collector._mr_cpu_load_5min
+        ]
+        assert len(cpu_calls) == 1
+        assert cpu_calls[0][0][2] == pytest.approx(26112 / 65536 / 4 * 100)
+
+    @pytest.mark.parametrize(
+        "row_extra",
+        [
+            {"cpuCount": 0},
+            {"cpuCount": None},
+            {},
+            {"cpuCount": 4, "series": None},
+            {"cpuCount": 4, "series": []},
+            {"cpuCount": 4, "series": [{"ts": "2026-01-01T00:00:00Z", "cpuLoad5": None}]},
+        ],
+    )
+    async def test_collect_cpu_load_unusable_row_emits_nothing(
+        self,
+        mr_collector: MRCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        row_extra: dict[str, object],
+    ) -> None:
+        """A row without a usable cpuCount or non-null sample sets no sample (#976)."""
+        mock_parent.settings.api.batch_size = 20
+        row = {
+            "serial": "Q123",
+            "series": [{"ts": "2026-01-01T00:00:00Z", "cpuLoad5": 26112}],
+            **row_extra,
+        }
+        devices = [{"serial": "Q123", "name": "AP1", "model": "MR46", "networkId": "net1"}]
+        mock_api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory = MagicMock(
+            return_value=[row]
+        )
+
+        await mr_collector.collect_cpu_load("org1", "Test Org", devices)
+
+        cpu_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mr_collector._mr_cpu_load_5min
+        ]
+        assert cpu_calls == []
+
+    async def test_collect_cpu_load_skips_null_newest_sample_for_older_value(
+        self,
+        mr_collector: MRCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The newest non-null sample wins, whatever the series order (#976)."""
+        mock_parent.settings.api.batch_size = 20
+        devices = [{"serial": "Q123", "name": "AP1", "model": "MR46", "networkId": "net1"}]
+        mock_api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q123",
+                    "cpuCount": 2,
+                    "series": [
+                        {"ts": "2026-01-01T00:10:00Z", "cpuLoad5": None},
+                        {"ts": "2026-01-01T00:05:00Z", "cpuLoad5": 32768},
+                        {"ts": "2026-01-01T00:00:00Z", "cpuLoad5": 65536},
+                    ],
+                }
+            ]
+        )
+
+        await mr_collector.collect_cpu_load("org1", "Test Org", devices)
+
+        cpu_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mr_collector._mr_cpu_load_5min
+        ]
+        assert len(cpu_calls) == 1
+        assert cpu_calls[0][0][2] == pytest.approx(32768 / 65536 / 2 * 100)
+
+    async def test_collect_cpu_load_includes_wireless_product_type(
+        self,
+        mr_collector: MRCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A wireless-productType device whose model is not MR* is fetched (#976)."""
+        mock_parent.settings.api.batch_size = 20
+        devices = [
+            {
+                "serial": "C9K1",
+                "name": "AP-cat",
+                "model": "CW9164I-MR",
+                "productType": "wireless",
+                "networkId": "net1",
+            },
+            {"serial": "S1", "name": "SW", "model": "MS120", "productType": "switch"},
+        ]
+        mock_api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory = MagicMock(
+            return_value=[]
+        )
+
+        await mr_collector.collect_cpu_load("org1", "Test Org", devices)
+
+        _, kwargs = mock_api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory.call_args
+        assert kwargs["serials"] == ["C9K1"]
 
     async def test_collect_wireless_clients_respects_network_filter(
         self,
@@ -697,7 +844,13 @@ class TestMRSchedulerGates:
             return_value=[]
         )
         mock_api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory = MagicMock(
-            return_value=[{"serial": "Q1", "history": [{"load": 10.0}]}]
+            return_value=[
+                {
+                    "serial": "Q1",
+                    "cpuCount": 4,
+                    "series": [{"ts": "2026-01-01T00:00:00Z", "cpuLoad5": 26112}],
+                }
+            ]
         )
         mock_api.wireless.getOrganizationWirelessSsidsStatusesByDevice = MagicMock(
             return_value=[

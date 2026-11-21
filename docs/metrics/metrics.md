@@ -164,7 +164,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 |--------|------|--------|-------------|-------|
 | `meraki_mr_aggregation_enabled` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | Access point port aggregation enabled status (1 = enabled, 0 = disabled) |  |
 | `meraki_mr_aggregation_speed_mbps` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | Access point total aggregated port speed in Mbps |  |
-| `meraki_mr_cpu_load_5min` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | Access point CPU load percentage (5-minute average) |  |
+| `meraki_mr_cpu_load_5min` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | Access point 5-minute load average per core, percent (100 = one runnable task per core) |  |
 | `meraki_mr_network_packet_loss_downstream_percent` | gauge | `org_id`, `network_id` | Downstream packet loss percentage for network (5-minute window) |  |
 | `meraki_mr_network_packet_loss_total_percent` | gauge | `org_id`, `network_id` | Total packet loss percentage for network (5-minute window) |  |
 | `meraki_mr_network_packet_loss_upstream_percent` | gauge | `org_id`, `network_id` | Upstream packet loss percentage for network (5-minute window) |  |
