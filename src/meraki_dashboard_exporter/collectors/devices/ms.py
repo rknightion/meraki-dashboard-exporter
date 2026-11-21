@@ -9,7 +9,12 @@ from ...core.api_facade import facade_for
 from ...core.async_utils import ManagedTaskGroup
 from ...core.constants import MSMetricName
 from ...core.constants.api_constants import MERAKI_KB_BYTES
-from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
+from ...core.error_handling import (
+    ErrorCategory,
+    categorize_error,
+    validate_response_format,
+    with_error_handling,
+)
 from ...core.label_helpers import create_device_labels, create_port_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -23,6 +28,11 @@ if TYPE_CHECKING:
     pass
 
 logger = get_logger(__name__)
+
+# Seconds before the STP timestamp gate reopens after every `getNetworkSwitchStp`
+# call failed. Mirrors the scheduler's failure retry spacing for its own groups,
+# so a total outage is retried then rather than after the full interval.
+_STP_FAILURE_RETRY_SECONDS = 300.0
 
 # Label ordering for the STP-state and 802.1X-status gauges, matching the
 # ``labelnames=[...]`` order declared in ``_initialize_metrics``. Used to build
@@ -1809,7 +1819,10 @@ class MSCollector(BaseDeviceCollector):
             # Use provided device lookup or parent's
             devices = device_lookup or getattr(self.parent, "_device_lookup", {})
 
+            answered = 0
+
             async def _collect_network_stp(network: dict[str, Any]) -> None:
+                nonlocal answered
                 network_id = network["id"]
 
                 try:
@@ -1825,6 +1838,7 @@ class MSCollector(BaseDeviceCollector):
                             expected_type=dict,
                             operation="getNetworkSwitchStp",
                         )
+                    answered += 1
 
                     # Parse the STP configuration
                     stp_config = STPConfiguration.model_validate(stp_data)
@@ -1869,7 +1883,9 @@ class MSCollector(BaseDeviceCollector):
                             priority=priority,
                         )
 
-                except Exception:
+                except Exception as exc:
+                    if categorize_error(exc) == ErrorCategory.API_NOT_AVAILABLE:
+                        answered += 1
                     logger.exception(
                         "Failed to collect STP data for network",
                         network_id=network_id,
@@ -1885,7 +1901,15 @@ class MSCollector(BaseDeviceCollector):
                         name=f"stp_{network['id']}",
                     )
 
-            self._mark_stp_priorities_collected()
+            if not switch_networks or answered > 0:
+                self._mark_stp_priorities_collected()
+            else:
+                # Total failure: leave the gate to reopen after the failure
+                # spacing instead of on every collector wake or a full interval.
+                interval = self.parent._group_interval(EndpointGroupName.MS_STP)
+                self._last_stp_collection = time.time() - max(
+                    interval - _STP_FAILURE_RETRY_SECONDS, 0.0
+                )
 
         except Exception:
             logger.exception(
@@ -2326,7 +2350,10 @@ class MSCollector(BaseDeviceCollector):
 
             switch_networks = [n for n in networks if "switch" in n.get("productTypes", [])]
 
+            answered = 0
+
             async def _collect_network_dhcp_security(network: dict[str, Any]) -> None:
+                nonlocal answered
                 network_id = network["id"]
 
                 # Rogue/unauthorized DHCP servers seen (#292).
@@ -2344,6 +2371,7 @@ class MSCollector(BaseDeviceCollector):
                             expected_type=list,
                             operation="getNetworkSwitchDhcpV4ServersSeen",
                         )
+                    answered += 1
 
                     # Aggregate by is_allowed only (never label by the
                     # attacker-influenced server MAC - cardinality/PII risk).
@@ -2375,7 +2403,9 @@ class MSCollector(BaseDeviceCollector):
                         MSMetricName.MS_DHCP_SERVERS_SEEN_COUNT.value,
                         ttl_seconds=ttl,
                     )
-                except Exception:
+                except Exception as exc:
+                    if categorize_error(exc) == ErrorCategory.API_NOT_AVAILABLE:
+                        answered += 1
                     logger.exception(
                         "Failed to collect DHCPv4 servers seen",
                         network_id=network_id,
@@ -2398,6 +2428,7 @@ class MSCollector(BaseDeviceCollector):
                                 "getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice"
                             ),
                         )
+                    answered += 1
 
                     for row in dai_rows:
                         serial = row.get("serial")
@@ -2431,7 +2462,9 @@ class MSCollector(BaseDeviceCollector):
                                 MSMetricName.MS_DAI_TRUSTED_PORT_CONFIGURED.value,
                                 ttl_seconds=ttl,
                             )
-                except Exception:
+                except Exception as exc:
+                    if categorize_error(exc) == ErrorCategory.API_NOT_AVAILABLE:
+                        answered += 1
                     logger.exception(
                         "Failed to collect DAI coverage",
                         network_id=network_id,
@@ -2447,7 +2480,11 @@ class MSCollector(BaseDeviceCollector):
                         name=f"dhcp_security_{network['id']}",
                     )
 
-            self.parent._mark_group_ran(EndpointGroupName.MS_DHCP_SECURITY)
+            # Close the gate only when nothing was asked or a fetch was answered;
+            # otherwise the base collector finalises the group as failed and the
+            # scheduler spaces the retry.
+            if not switch_networks or answered > 0:
+                self.parent._mark_group_ran(EndpointGroupName.MS_DHCP_SECURITY)
 
         except Exception:
             logger.exception(
@@ -2484,7 +2521,10 @@ class MSCollector(BaseDeviceCollector):
 
             switch_networks = [n for n in networks if "switch" in n.get("productTypes", [])]
 
+            answered = 0
+
             async def _collect_network_lags(network: dict[str, Any]) -> None:
+                nonlocal answered
                 network_id = network["id"]
                 try:
                     with LogContext(org_id=org_id, network_id=network_id):
@@ -2499,6 +2539,7 @@ class MSCollector(BaseDeviceCollector):
                             expected_type=list,
                             operation="getNetworkSwitchLinkAggregations",
                         )
+                    answered += 1
 
                     self.parent._set_metric(
                         self._ms_link_aggregations,
@@ -2529,7 +2570,9 @@ class MSCollector(BaseDeviceCollector):
                                 MSMetricName.MS_LINK_AGGREGATION_MEMBER.value,
                                 ttl_seconds=ttl,
                             )
-                except Exception:
+                except Exception as exc:
+                    if categorize_error(exc) == ErrorCategory.API_NOT_AVAILABLE:
+                        answered += 1
                     logger.exception(
                         "Failed to collect link aggregations",
                         network_id=network_id,
@@ -2545,7 +2588,10 @@ class MSCollector(BaseDeviceCollector):
                         name=f"link_agg_{network['id']}",
                     )
 
-            self.parent._mark_group_ran(EndpointGroupName.MS_LINK_AGGREGATIONS)
+            # Same rule as the DHCP security gate: an unanswered fan-out stays
+            # unmarked so it is finalised as a failure and retried on spacing.
+            if not switch_networks or answered > 0:
+                self.parent._mark_group_ran(EndpointGroupName.MS_LINK_AGGREGATIONS)
 
         except Exception:
             logger.exception(

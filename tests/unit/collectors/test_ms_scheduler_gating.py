@@ -382,6 +382,51 @@ class TestMSStpGate(_MSGatingBase):
         ms._last_stp_collection = time.time() - 10_000
         assert ms._should_collect_stp_priorities() is True
 
+    async def test_stp_total_failure_reopens_after_retry_spacing(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """Every STP fetch failing reopens the gate 300s later, not after the interval."""
+        sched = _FakeScheduler(interval_map={EndpointGroupName.MS_STP: 900.0})
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        mock_api.switch.getNetworkSwitchStp.side_effect = Exception("boom")
+        inventory.get_networks = AsyncMock(  # type: ignore[method-assign]
+            return_value=[
+                {"id": "net1", "name": "Net 1", "productTypes": ["switch"]},
+                {"id": "net2", "name": "Net 2", "productTypes": ["switch"]},
+            ]
+        )
+        ms = dc.ms_collector
+        await ms.collect_stp_priorities("org1", "Org")
+        assert mock_api.switch.getNetworkSwitchStp.call_count == 2
+        assert ms._should_collect_stp_priorities() is False
+        assert time.time() - ms._last_stp_collection == pytest.approx(600.0, abs=5.0)
+
+    async def test_stp_success_closes_gate_for_full_interval(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """An answered STP fetch stamps the gate as now."""
+        sched = _FakeScheduler(interval_map={EndpointGroupName.MS_STP: 900.0})
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        mock_api.switch.getNetworkSwitchStp.return_value = {"rstpEnabled": True}
+        inventory.get_networks = AsyncMock(  # type: ignore[method-assign]
+            return_value=[{"id": "net1", "name": "Net 1", "productTypes": ["switch"]}]
+        )
+        ms = dc.ms_collector
+        await ms.collect_stp_priorities("org1", "Org")
+        assert time.time() - ms._last_stp_collection < 5.0
+
+    async def test_stp_no_switch_networks_closes_gate(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """With no switch networks nothing is asked and the gate still closes."""
+        sched = _FakeScheduler(interval_map={EndpointGroupName.MS_STP: 900.0})
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        inventory.get_networks = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        ms = dc.ms_collector
+        await ms.collect_stp_priorities("org1", "Org")
+        mock_api.switch.getNetworkSwitchStp.assert_not_called()
+        assert time.time() - ms._last_stp_collection < 5.0
+
 
 class TestMSPowerGate(_MSGatingBase):
     """MS_POWER single-call gate behaviour."""
@@ -465,6 +510,66 @@ class TestMSDhcpSecurityGate(_MSGatingBase):
         assert EndpointGroupName.MS_DHCP_SECURITY in sched.marked
         assert 777.0 in ttls
 
+    async def test_dhcp_security_total_failure_not_marked(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """Both calls failing for every switch network leaves the group unmarked."""
+        sched = _FakeScheduler({EndpointGroupName.MS_DHCP_SECURITY: True})
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        mock_api.switch.getNetworkSwitchDhcpV4ServersSeen.side_effect = Exception("boom")
+        mock_api.switch.getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice.side_effect = Exception(
+            "boom"
+        )
+        inventory.get_networks = AsyncMock(  # type: ignore[method-assign]
+            return_value=[
+                {"id": "net1", "name": "Net 1", "productTypes": ["switch"]},
+                {"id": "net2", "name": "Net 2", "productTypes": ["switch"]},
+            ]
+        )
+        await dc.ms_collector.collect_dhcp_security("org1", "Org")
+        assert mock_api.switch.getNetworkSwitchDhcpV4ServersSeen.call_count == 2
+        assert EndpointGroupName.MS_DHCP_SECURITY not in sched.marked
+
+    async def test_dhcp_security_partial_success_marks(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """One answered call is enough to close the gate."""
+        sched = _FakeScheduler({EndpointGroupName.MS_DHCP_SECURITY: True})
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        mock_api.switch.getNetworkSwitchDhcpV4ServersSeen.side_effect = Exception("boom")
+        mock_api.switch.getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice.return_value = []
+        inventory.get_networks = AsyncMock(  # type: ignore[method-assign]
+            return_value=[{"id": "net1", "name": "Net 1", "productTypes": ["switch"]}]
+        )
+        await dc.ms_collector.collect_dhcp_security("org1", "Org")
+        assert EndpointGroupName.MS_DHCP_SECURITY in sched.marked
+
+    async def test_dhcp_security_404_counts_as_answered(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """A 404 means not available here, so it answers the fetch."""
+        sched = _FakeScheduler({EndpointGroupName.MS_DHCP_SECURITY: True})
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        not_found = Exception("not available")
+        not_found.status = 404  # type: ignore[attr-defined]
+        mock_api.switch.getNetworkSwitchDhcpV4ServersSeen.side_effect = not_found
+        mock_api.switch.getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice.side_effect = not_found
+        inventory.get_networks = AsyncMock(  # type: ignore[method-assign]
+            return_value=[{"id": "net1", "name": "Net 1", "productTypes": ["switch"]}]
+        )
+        await dc.ms_collector.collect_dhcp_security("org1", "Org")
+        assert EndpointGroupName.MS_DHCP_SECURITY in sched.marked
+
+    async def test_dhcp_security_no_switch_networks_marks(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """With no switch networks nothing is asked and the gate still closes."""
+        sched = _FakeScheduler({EndpointGroupName.MS_DHCP_SECURITY: True})
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        inventory.get_networks = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        await dc.ms_collector.collect_dhcp_security("org1", "Org")
+        assert EndpointGroupName.MS_DHCP_SECURITY in sched.marked
+
 
 class TestMSLinkAggregationsGate(_MSGatingBase):
     """MS_LINK_AGGREGATIONS per-network fan-out gate (#295)."""
@@ -494,6 +599,64 @@ class TestMSLinkAggregationsGate(_MSGatingBase):
         mock_api.switch.getNetworkSwitchLinkAggregations.assert_called_once()
         assert EndpointGroupName.MS_LINK_AGGREGATIONS in sched.marked
         assert 777.0 in ttls
+
+    async def test_link_aggregations_total_failure_not_marked(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """The call failing for every switch network leaves the group unmarked."""
+        sched = _FakeScheduler({EndpointGroupName.MS_LINK_AGGREGATIONS: True})
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        mock_api.switch.getNetworkSwitchLinkAggregations.side_effect = Exception("boom")
+        inventory.get_networks = AsyncMock(  # type: ignore[method-assign]
+            return_value=[
+                {"id": "net1", "name": "Net 1", "productTypes": ["switch"]},
+                {"id": "net2", "name": "Net 2", "productTypes": ["switch"]},
+            ]
+        )
+        await dc.ms_collector.collect_link_aggregations("org1", "Org")
+        assert mock_api.switch.getNetworkSwitchLinkAggregations.call_count == 2
+        assert EndpointGroupName.MS_LINK_AGGREGATIONS not in sched.marked
+
+    async def test_link_aggregations_404_counts_as_answered(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """A 404 means not available here, so it answers the fetch."""
+        sched = _FakeScheduler({EndpointGroupName.MS_LINK_AGGREGATIONS: True})
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        not_found = Exception("not available")
+        not_found.status = 404  # type: ignore[attr-defined]
+        mock_api.switch.getNetworkSwitchLinkAggregations.side_effect = not_found
+        inventory.get_networks = AsyncMock(  # type: ignore[method-assign]
+            return_value=[{"id": "net1", "name": "Net 1", "productTypes": ["switch"]}]
+        )
+        await dc.ms_collector.collect_link_aggregations("org1", "Org")
+        assert EndpointGroupName.MS_LINK_AGGREGATIONS in sched.marked
+
+    async def test_link_aggregations_partial_success_marks(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """One network answering closes the gate even when another fails."""
+        sched = _FakeScheduler({EndpointGroupName.MS_LINK_AGGREGATIONS: True})
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        mock_api.switch.getNetworkSwitchLinkAggregations.side_effect = [Exception("boom"), []]
+        inventory.get_networks = AsyncMock(  # type: ignore[method-assign]
+            return_value=[
+                {"id": "net1", "name": "Net 1", "productTypes": ["switch"]},
+                {"id": "net2", "name": "Net 2", "productTypes": ["switch"]},
+            ]
+        )
+        await dc.ms_collector.collect_link_aggregations("org1", "Org")
+        assert EndpointGroupName.MS_LINK_AGGREGATIONS in sched.marked
+
+    async def test_link_aggregations_no_switch_networks_marks(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """With no switch networks nothing is asked and the gate still closes."""
+        sched = _FakeScheduler({EndpointGroupName.MS_LINK_AGGREGATIONS: True})
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        inventory.get_networks = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        await dc.ms_collector.collect_link_aggregations("org1", "Org")
+        assert EndpointGroupName.MS_LINK_AGGREGATIONS in sched.marked
 
 
 class TestMSPowerSummaryGate(_MSGatingBase):
