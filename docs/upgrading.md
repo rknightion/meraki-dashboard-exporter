@@ -74,6 +74,14 @@ A 429 on one page now retries only that page and keeps the pages already fetched
 restarted the fetch from page 1. Review any alert or panel that compares these counters with a fixed
 request budget or with values recorded before the upgrade.
 
+### Fixed scheduler mode no longer sheds groups
+
+`scheduler.mode=fixed` now runs every registered endpoint group at its declared floor or pin. It no
+longer sheds priority 3 and 4 groups when demand exceeds the budget target, and their series no
+longer expire for that reason. `meraki_exporter_scheduler_over_budget` still reports the condition.
+A fixed-mode deployment that is over budget now sends more requests and relies on the rate limiter
+to pace them. Adaptive mode is unchanged.
+
 ## Changes after 2.3.0
 
 The following previously accepted configurations now prevent startup:
@@ -133,14 +141,6 @@ dashboard. They now match it:
 
 Thresholds set close to a boundary may need a small nudge. Rates (`*_bytes_per_second`) and device
 memory are unchanged.
-
-### Fixed scheduler mode no longer sheds groups
-
-`scheduler.mode=fixed` now runs every registered endpoint group at its declared floor or pin. It no
-longer sheds priority 3 and 4 groups when demand exceeds the budget target, and their series no
-longer expire for that reason. `meraki_exporter_scheduler_over_budget` still reports the condition.
-A fixed-mode deployment that is over budget now sends more requests and relies on the rate limiter
-to pace them. Adaptive mode is unchanged.
 
 ## Changes at 2.0
 
