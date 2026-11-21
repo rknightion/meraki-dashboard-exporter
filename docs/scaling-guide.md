@@ -355,8 +355,9 @@ On `SIGTERM` the exporter drains best-effort: in-flight HTTP requests finish and
 work winds down before exit. Because collector fetches run the synchronous Meraki SDK on a thread
 pool, a thread blocked inside an SDK HTTP call cannot be cancelled mid-flight.
 `per_fetch_deadline_seconds` (default **120 s**) bounds the awaiting coroutine but cannot interrupt a
-synchronous thread already doing HTTP or pagination. Executor joins run off the event loop and share
-one **5-second** drain budget across DNS, SDK and registry-serving pools. If a running thread outlives
+synchronous thread already doing HTTP. A paginated fetch requests one page per thread hop, so when
+the deadline expires at most the page in flight finishes and no further page is requested. Executor
+joins run off the event loop and share one **5-second** drain budget across DNS, SDK and registry-serving pools. If a running thread outlives
 that budget, its cleanup continues in the background while application shutdown proceeds. The chart's
 `terminationGracePeriodSeconds` defaults to **150 s** — `per_fetch_deadline_seconds` plus a 30 s
 margin — so Kubernetes doesn't `SIGKILL` mid-drain. Set a longer deadline with

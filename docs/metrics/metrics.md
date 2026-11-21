@@ -534,8 +534,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_exporter_api_request_attempts_total` | counter | `operation`, `status` | Total outbound Meraki SDK request attempts by operation and outcome. |  |
-| `meraki_exporter_api_requests_total` | counter | `endpoint`, `method`, `status_code` | Total outbound Meraki SDK request attempts made by this exporter process. |  |
+| `meraki_exporter_api_request_attempts_total` | counter | `operation`, `status` | Total outbound Meraki API request attempts by operation and outcome, one per page of a paginated fetch. |  |
+| `meraki_exporter_api_requests_total` | counter | `endpoint`, `method`, `status_code` | Total outbound Meraki API request attempts made by this exporter process, one per page of a paginated fetch. |  |
 
 ### MetricCollector
 

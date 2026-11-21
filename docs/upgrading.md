@@ -47,7 +47,9 @@ honoured. Earlier releases ignored both and used 5 and 30. The default of
 `max_consecutive_failures` is now 5, matching that behaviour, where the reference used to say 10.
 If you set either value, it now takes effect.
 
-## Batch fan-outs are capped at `api.concurrency_limit`
+## Changes after 3.0.0
+
+### Batch fan-outs are capped at `api.concurrency_limit`
 
 The batch fan-outs in the device, network health, alerts, clients and config collectors now honour
 `api.concurrency_limit`. Earlier releases started a whole batch (`api.device_batch_size`, 20 by
@@ -58,6 +60,19 @@ paces request starts, so at normal latency throughput is about the same, but a l
 longer when calls are slow. A deployment that relied on 20 or 30 items in flight should raise
 `api.concurrency_limit` together with `api.executor_workers`, because collector admission is
 `api.executor_workers // api.concurrency_limit`.
+
+### Paginated fetches are paced and counted per page
+
+A paginated Meraki API fetch is now one request per page everywhere the exporter accounts for it.
+Each page takes its own rate-limiter token and counts as one attempt in
+`meraki_exporter_api_requests_total` and `meraki_exporter_api_request_attempts_total`. Earlier
+releases counted a whole paginated fetch as one attempt, however many pages it had, so both counters
+now rise faster for the same work, most on large organisations. The new numbers match the requests
+Meraki counts against the organisation's rate limit. No metric or label is renamed.
+
+A 429 on one page now retries only that page and keeps the pages already fetched; earlier releases
+restarted the fetch from page 1. Review any alert or panel that compares these counters with a fixed
+request budget or with values recorded before the upgrade.
 
 ## Changes after 2.3.0
 
