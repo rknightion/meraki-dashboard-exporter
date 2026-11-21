@@ -254,12 +254,6 @@ class MXFirewallCollector(SubCollectorMixin):
             labelnames=network_labels,
         )
 
-    @log_api_call("getNetworkApplianceFirewallL3FirewallRules")
-    @with_error_handling(
-        operation="Collect MX firewall rules",
-        continue_on_error=True,
-        error_category=ErrorCategory.API_CLIENT_ERROR,
-    )
     async def collect_for_network(
         self,
         org_id: str,
@@ -267,11 +261,11 @@ class MXFirewallCollector(SubCollectorMixin):
         network_id: str,
         network_name: str,
     ) -> None:
-        """Collect firewall rule counts and default policy for a single network.
+        """Collect firewall rules, security, NAT and VLAN config for one network.
 
-        Fetches L3 and L7 firewall rules for the given appliance network.
-        The last rule in the L3 rule list is always the default rule and is
-        excluded from the user-defined rule count.
+        Awaits four independent config families in order: firewall rules,
+        security config, NAT config and VLAN config. Each carries its own
+        error boundary, so a failure in one never blocks the others.
 
         Parameters
         ----------
@@ -283,6 +277,36 @@ class MXFirewallCollector(SubCollectorMixin):
             Network ID for the appliance network.
         network_name : str
             Human-readable network name.
+
+        """
+        # Phase 4 (#285/#288/#289): each family is independently gated/decorated
+        # (own per-network throttle + own error boundary), including the firewall
+        # rules, so a failure in one config-drift domain never blocks the others
+        # for this network/cycle.
+        await self.collect_firewall_rules(org_id, network_id)
+        await self.collect_security_config(org_id, network_id)
+        await self.collect_nat_config(org_id, network_id)
+        await self.collect_vlan_config(org_id, network_id)
+
+    @log_api_call("getNetworkApplianceFirewallL3FirewallRules")
+    @with_error_handling(
+        operation="Collect MX firewall rules",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def collect_firewall_rules(self, org_id: str, network_id: str) -> None:
+        """Collect firewall rule counts and default policy for a single network.
+
+        Fetches L3 and L7 firewall rules for the given appliance network.
+        The last rule in the L3 rule list is always the default rule and is
+        excluded from the user-defined rule count.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        network_id : str
+            Network ID for the appliance network.
 
         """
         if self._should_collect_firewall_rules(network_id):
@@ -366,13 +390,6 @@ class MXFirewallCollector(SubCollectorMixin):
                 interval_seconds=self.parent._group_interval(EndpointGroupName.MX_FIREWALL_CONFIG),
             )
 
-        # Phase 4 (#285/#288/#289): each of these is independently gated/decorated
-        # (own per-network throttle + own error boundary) so a failure in one
-        # config-drift domain never blocks the others for this network/cycle.
-        await self.collect_security_config(org_id, network_id)
-        await self.collect_nat_config(org_id, network_id)
-        await self.collect_vlan_config(org_id, network_id)
-
     @log_api_call("getNetworkApplianceContentFiltering")
     @with_error_handling(
         operation="Collect MX security config (content filtering, malware, IDS/IPS)",
@@ -410,36 +427,48 @@ class MXFirewallCollector(SubCollectorMixin):
         }
         ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_SECURITY_CONFIG)
 
-        # Content filtering (no license gate; always available on MX appliances).
-        cf_response = await facade_for(self).call(
-            "getNetworkApplianceContentFiltering",
-            self.api.appliance.getNetworkApplianceContentFiltering,
-            network_id,
-        )
-        cf_data = validate_response_format(
-            cf_response,
-            expected_type=dict,
-            operation="getNetworkApplianceContentFiltering",
-        )
-        content_filtering = ApplianceContentFiltering.model_validate(cf_data)
-        self.parent._set_metric(
-            self._content_filtering_blocked_categories,
-            base_labels,
-            float(len(content_filtering.blockedUrlCategories)),
-            ttl_seconds=ttl_seconds,
-        )
-        self.parent._set_metric(
-            self._content_filtering_blocked_url_patterns,
-            base_labels,
-            float(len(content_filtering.blockedUrlPatterns)),
-            ttl_seconds=ttl_seconds,
-        )
-        self.parent._set_metric(
-            self._content_filtering_allowed_url_patterns,
-            base_labels,
-            float(len(content_filtering.allowedUrlPatterns)),
-            ttl_seconds=ttl_seconds,
-        )
+        # Content filtering. The 400/404 handler mirrors the malware and intrusion
+        # handlers below; whether this endpoint ever refuses is unconfirmed.
+        try:
+            cf_response = await facade_for(self).call(
+                "getNetworkApplianceContentFiltering",
+                self.api.appliance.getNetworkApplianceContentFiltering,
+                network_id,
+            )
+            cf_data = validate_response_format(
+                cf_response,
+                expected_type=dict,
+                operation="getNetworkApplianceContentFiltering",
+            )
+            content_filtering = ApplianceContentFiltering.model_validate(cf_data)
+            self.parent._set_metric(
+                self._content_filtering_blocked_categories,
+                base_labels,
+                float(len(content_filtering.blockedUrlCategories)),
+                ttl_seconds=ttl_seconds,
+            )
+            self.parent._set_metric(
+                self._content_filtering_blocked_url_patterns,
+                base_labels,
+                float(len(content_filtering.blockedUrlPatterns)),
+                ttl_seconds=ttl_seconds,
+            )
+            self.parent._set_metric(
+                self._content_filtering_allowed_url_patterns,
+                base_labels,
+                float(len(content_filtering.allowedUrlPatterns)),
+                ttl_seconds=ttl_seconds,
+            )
+        except APIError as e:
+            if e.status in {400, 404}:
+                logger.debug(
+                    "Content filtering not available",
+                    org_id=org_id,
+                    network_id=network_id,
+                    status=e.status,
+                )
+            else:
+                raise
 
         # Malware protection -- 400/404 without an Advanced Security license.
         try:

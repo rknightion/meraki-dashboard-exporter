@@ -1993,3 +1993,128 @@ class TestMXFirewallCollector:
         assert mock_api.appliance.getNetworkApplianceFirewallL3FirewallRules.call_count == 1
         # But the new config-drift domains must have run.
         mock_api.appliance.getNetworkApplianceContentFiltering.assert_called_once()
+
+    @staticmethod
+    def _api_error(status: int, reason: str, operation: str) -> Exception:
+        """Build a Meraki APIError the way the malware 400 test does."""
+        from meraki.exceptions import APIError
+
+        response = MagicMock()
+        response.status_code = status
+        response.reason = reason
+        response.json.return_value = {"errors": [reason]}
+        return APIError({"tags": ["configure"], "operation": operation}, response)
+
+    @staticmethod
+    def _valid_cf_payload() -> dict[str, list[str]]:
+        return {
+            "blockedUrlCategories": [],
+            "blockedUrlPatterns": [],
+            "allowedUrlPatterns": [],
+        }
+
+    async def test_content_filtering_400_is_debug_skip_not_error(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A 400 from content filtering is skipped; malware and IDS still collected (#994)."""
+        mock_api.appliance.getNetworkApplianceContentFiltering = MagicMock(
+            side_effect=self._api_error(400, "Bad Request", "getNetworkApplianceContentFiltering")
+        )
+        mock_api.appliance.getNetworkApplianceSecurityMalware = MagicMock(
+            return_value={"mode": "enabled", "allowedUrls": [], "allowedFiles": []}
+        )
+        mock_api.appliance.getNetworkApplianceSecurityIntrusion = MagicMock(
+            return_value={"mode": "prevention", "idsRulesets": "balanced"}
+        )
+
+        await firewall_collector.collect_security_config("org1", "N_1")
+
+        called_gauges = {c[0][0] for c in mock_parent._set_metric.call_args_list}
+        assert firewall_collector._malware_protection_enabled in called_gauges
+        assert firewall_collector._ids_mode in called_gauges
+        assert firewall_collector._content_filtering_blocked_categories not in called_gauges
+        assert firewall_collector._content_filtering_blocked_url_patterns not in called_gauges
+        assert firewall_collector._content_filtering_allowed_url_patterns not in called_gauges
+
+        # The network was marked collected: a second call makes no API call.
+        cf_mock = mock_api.appliance.getNetworkApplianceContentFiltering
+        malware_mock = mock_api.appliance.getNetworkApplianceSecurityMalware
+        intrusion_mock = mock_api.appliance.getNetworkApplianceSecurityIntrusion
+        await firewall_collector.collect_security_config("org1", "N_1")
+        assert cf_mock.call_count == 1
+        assert malware_mock.call_count == 1
+        assert intrusion_mock.call_count == 1
+
+    async def test_content_filtering_500_still_raises_into_handler(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A non-400/404 content filtering error is not swallowed by the new branch (#994)."""
+        mock_api.appliance.getNetworkApplianceContentFiltering = MagicMock(
+            side_effect=self._api_error(
+                500, "Internal Server Error", "getNetworkApplianceContentFiltering"
+            )
+        )
+        mock_api.appliance.getNetworkApplianceSecurityMalware = MagicMock(
+            return_value={"mode": "enabled", "allowedUrls": [], "allowedFiles": []}
+        )
+        mock_api.appliance.getNetworkApplianceSecurityIntrusion = MagicMock(
+            return_value={"mode": "prevention", "idsRulesets": "balanced"}
+        )
+
+        # with_error_handling(continue_on_error=True) absorbs it at the method boundary.
+        await firewall_collector.collect_security_config("org1", "N_1")
+
+        mock_api.appliance.getNetworkApplianceSecurityMalware.assert_not_called()
+        mock_api.appliance.getNetworkApplianceSecurityIntrusion.assert_not_called()
+        mock_parent._set_metric.assert_not_called()
+        assert firewall_collector._should_collect_security_config("N_1") is True
+
+    async def test_rule_fetch_failure_does_not_skip_other_families(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A failing L3 rule fetch must not hide security, NAT or VLAN config (#994)."""
+        mock_api.appliance.getNetworkApplianceFirewallL3FirewallRules = MagicMock(
+            side_effect=Exception("boom")
+        )
+        mock_api.appliance.getNetworkApplianceFirewallL7FirewallRules = MagicMock(
+            return_value={"rules": []}
+        )
+        mock_api.appliance.getNetworkApplianceContentFiltering = MagicMock(
+            return_value=self._valid_cf_payload()
+        )
+        mock_api.appliance.getNetworkApplianceSecurityMalware = MagicMock(
+            return_value={"mode": "enabled", "allowedUrls": [], "allowedFiles": []}
+        )
+        mock_api.appliance.getNetworkApplianceSecurityIntrusion = MagicMock(
+            return_value={"mode": "prevention", "idsRulesets": "balanced"}
+        )
+        mock_api.appliance.getNetworkApplianceFirewallPortForwardingRules = MagicMock(
+            return_value={"rules": []}
+        )
+        mock_api.appliance.getNetworkApplianceFirewallOneToOneNatRules = MagicMock(
+            return_value={"rules": []}
+        )
+        mock_api.appliance.getNetworkApplianceFirewallOneToManyNatRules = MagicMock(
+            return_value={"rules": []}
+        )
+        mock_api.appliance.getNetworkApplianceVlans = MagicMock(return_value=[])
+        mock_api.appliance.getNetworkApplianceStaticRoutes = MagicMock(return_value=[])
+
+        await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
+
+        called_gauges = {c[0][0] for c in mock_parent._set_metric.call_args_list}
+        assert firewall_collector._content_filtering_blocked_categories in called_gauges
+        assert firewall_collector._vlans_total in called_gauges
+        # F-034: an L3 failure still emits no firewall rule series and skips L7.
+        assert firewall_collector._firewall_rules_total not in called_gauges
+        assert firewall_collector._firewall_default_policy not in called_gauges
+        mock_api.appliance.getNetworkApplianceFirewallL7FirewallRules.assert_not_called()
