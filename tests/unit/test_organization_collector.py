@@ -1142,6 +1142,32 @@ class TestOrganizationCollector(BaseCollectorTest):
                     samples.append((frozenset(sample.labels.items()), sample.value))
         return samples
 
+    async def test_org_info_series_replaced_when_name_changes(self, collector, isolated_registry):
+        """#1006: a changed org_name leaves one meraki_org_info series, not two."""
+        collector._run_org_sub_collections = AsyncMock(  # type: ignore[method-assign]
+            return_value=([], 1, [])
+        )
+
+        def _org_info_samples() -> list[dict[str, str]]:
+            # The Info metric exposes meraki_org_info; its label set is org_id and
+            # org_name, and the url / api_enabled values ride along as extra labels.
+            return [
+                {k: v for k, v in sample.labels.items() if k in {"org_id", "org_name"}}
+                for metric in isolated_registry.collect()
+                for sample in metric.samples
+                if sample.name == f"{OrgMetricName.ORG_INFO.value}_info"
+            ]
+
+        await collector._collect_org_metrics({"id": "org-n", "name": "Name A"})
+        assert _org_info_samples() == [{"org_id": "org-n", "org_name": "Name A"}]
+
+        await collector._collect_org_metrics({"id": "org-n", "name": "Name B"})
+        assert _org_info_samples() == [{"org_id": "org-n", "org_name": "Name B"}]
+
+        # An unchanged name stays a single series.
+        await collector._collect_org_metrics({"id": "org-n", "name": "Name B"})
+        assert _org_info_samples() == [{"org_id": "org-n", "org_name": "Name B"}]
+
     async def test_network_tags_emit_distinct_series_without_changing_network_info(
         self, collector, isolated_registry
     ):

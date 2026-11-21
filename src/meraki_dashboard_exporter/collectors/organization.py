@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections.abc import Coroutine
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
@@ -192,6 +193,9 @@ class OrganizationCollector(MetricCollector):
         # Create API helper
         self.api_helper = create_api_helper(self)
         self._last_network_tags: dict[str, set[tuple[str, str]]] = {}
+        # Last meraki_org_info label set per org, so a changed org_name removes the
+        # superseded series instead of leaving two that break `group_left` joins.
+        self._last_org_info_labels: dict[str, dict[str, str]] = {}
         # Keys emitted last pass, per org, so a (status, product_type) combination or a
         # device type that clears is written as 0 instead of freezing and then vanishing.
         self._seen_availability_keys: dict[str, set[tuple[str, str]]] = {}
@@ -648,6 +652,15 @@ class OrganizationCollector(MetricCollector):
                 # org_name rather than via the ID-only create_org_labels helper.
                 if self._org_info:
                     info_labels = create_labels(org_id=org_id, org_name=org_name)
+                    previous_labels = self._last_org_info_labels.get(org_id)
+                    if previous_labels is not None and previous_labels != info_labels:
+                        # Direct remove: this Info series is not tracked by the
+                        # expiration manager, which is typed for Gauge.
+                        with contextlib.suppress(KeyError, ValueError):
+                            self._org_info.remove(
+                                previous_labels["org_id"], previous_labels["org_name"]
+                            )
+                    self._last_org_info_labels[org_id] = dict(info_labels)
                     self._org_info.labels(**info_labels).info({
                         "url": org.get("url", ""),
                         "api_enabled": str(org.get("api", {}).get("enabled", False)),

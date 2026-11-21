@@ -445,84 +445,6 @@ class DeviceCollector(MetricCollector):
         if getattr(self, "_subcollectors_ready", False):
             self._sync_subcollector_api()
 
-    def _set_packet_metric_value(
-        self, metric_name: str, labels: dict[str, str], value: float | None
-    ) -> None:
-        """Set packet metric value with retention logic for total packet counters.
-
-        For packet loss metrics, 0 is a valid value. For total packet counters,
-        we retain the last known value if the API returns None or 0.
-
-        Parameters
-        ----------
-        metric_name : str
-            Name of the metric attribute.
-        labels : dict[str, str]
-            Labels to apply to the metric.
-        value : float | None
-            Value to set. May be None if API returned null.
-
-        """
-        # Create a cache key from metric name and sorted labels
-        cache_key = f"{metric_name}:{':'.join(f'{k}={v}' for k, v in sorted(labels.items()))}"
-
-        # Determine if this is a "total" metric that should retain values
-        is_total_metric = "total" in metric_name and "percent" not in metric_name
-
-        # For total metrics, use cached value if current value is None or 0
-        if is_total_metric and (value is None or value == 0):
-            cached_value = self._packet_metrics_cache.get(cache_key)
-            if cached_value is not None:
-                logger.debug(
-                    "Using cached value for packet metric",
-                    metric_name=metric_name,
-                    labels=labels,
-                    cached_value=cached_value,
-                    original_value=value,
-                )
-                value = cached_value
-            else:
-                # No cached value, skip update to avoid showing 0
-                logger.debug(
-                    "No cached value available for packet metric",
-                    metric_name=metric_name,
-                    labels=labels,
-                    original_value=value,
-                )
-                return
-
-        # Update cache if we have a valid value
-        if value is not None and (not is_total_metric or value > 0):
-            self._packet_metrics_cache[cache_key] = value
-
-        # Record this key as active in the current collection cycle
-        self._active_cache_keys.add(cache_key)
-
-        # Use regular metric setting
-        self._set_metric_value(metric_name, labels, value)
-
-    def _evict_stale_cache_entries(self, active_keys: set[str]) -> None:
-        """Remove packet metric cache entries that were not updated this cycle.
-
-        Parameters
-        ----------
-        active_keys : set[str]
-            Cache keys that were written during the current collection cycle.
-            Any key in ``_packet_metrics_cache`` that is absent from this set
-            belongs to a device (or label combination) no longer present and
-            should be evicted to prevent unbounded memory growth.
-
-        """
-        stale_keys = set(self._packet_metrics_cache) - active_keys
-        for key in stale_keys:
-            del self._packet_metrics_cache[key]
-        if stale_keys:
-            logger.debug(
-                "Evicted stale packet metric cache entries",
-                evicted_count=len(stale_keys),
-                remaining_count=len(self._packet_metrics_cache),
-            )
-
     def __init__(
         self,
         api: DashboardAPI,
@@ -578,11 +500,6 @@ class DeviceCollector(MetricCollector):
             DeviceType.MV: self.mv_collector,
             DeviceType.MX: self.mx_collector,
         }
-
-        # Cache for retaining last known packet metric values
-        self._packet_metrics_cache: dict[str, float] = {}
-        # Tracks which cache keys were touched during the current collection cycle
-        self._active_cache_keys: set[str] = set()
 
         # serial -> exact meraki_device_up label dict (create_device_labels output).
         # Replaced atomically per-org each poll; read by apply_webhook_device_state
@@ -697,9 +614,6 @@ class DeviceCollector(MetricCollector):
         organizations_processed = 0
         api_calls_made = 0
 
-        # Reset active-key tracker for this collection cycle
-        self._active_cache_keys = set()
-
         # Get organizations with error handling
         organizations = await self._fetch_organizations()
         if not organizations:
@@ -757,8 +671,6 @@ class DeviceCollector(MetricCollector):
         # Approximate API calls (actual count may vary)
         api_calls_made += organizations_processed * 10
 
-        # Evict packet metric cache entries for devices no longer seen this cycle
-        self._evict_stale_cache_entries(self._active_cache_keys)
         # Evict MS collector timestamp caches for serials no longer seen this cycle
         self.ms_collector._evict_stale_serials(self.ms_collector._active_serials)
         # Reset MS active serials for next cycle

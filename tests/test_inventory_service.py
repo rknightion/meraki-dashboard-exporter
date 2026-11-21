@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -1097,6 +1097,71 @@ class TestOrganizationInventorySingleOrgName:
         assert result1[0]["name"] == "Cached Org"
         assert result2[0]["name"] == "Cached Org"
         assert mock_api.organizations.getOrganization.call_count == 1
+
+    async def test_single_org_mode_keeps_cached_name_when_refresh_fails(
+        self, mock_api, mock_settings, inventory_service
+    ) -> None:
+        """A failed refresh keeps the last good name and retries after 60 s."""
+        org_id = "112233"
+        mock_settings.meraki.org_id = org_id
+        get_org = mock_api.organizations.getOrganization
+        get_org.return_value = {"id": org_id, "name": "Acme"}
+
+        clock = MagicMock()
+        clock.time.return_value = 1000.0
+        with patch("meraki_dashboard_exporter.services.inventory.time", clock):
+            first = await inventory_service.get_organizations()
+            assert first[0]["name"] == "Acme"
+            assert get_org.call_count == 1
+
+            # Past the maximum jittered TTL (900 x 1.1 = 990 s), the refresh fails.
+            clock.time.return_value = 1000.0 + 1000.0
+            failure_time = clock.time.return_value
+            get_org.side_effect = Exception("Connection error")
+            second = await inventory_service.get_organizations()
+            assert second[0]["name"] == "Acme"
+            assert get_org.call_count == 2
+
+            # Within the retry window no new SDK call is made.
+            clock.time.return_value = failure_time + 30.0
+            third = await inventory_service.get_organizations()
+            assert third[0]["name"] == "Acme"
+            assert get_org.call_count == 2
+
+            # 61 s after the failure the lookup is retried and the new name returned.
+            clock.time.return_value = failure_time + 61.0
+            get_org.side_effect = None
+            get_org.return_value = {"id": org_id, "name": "Acme Renamed"}
+            fourth = await inventory_service.get_organizations()
+            assert fourth[0]["name"] == "Acme Renamed"
+            assert get_org.call_count == 3
+
+    async def test_single_org_mode_first_failure_placeholder_retries_after_60s(
+        self, mock_api, mock_settings, inventory_service
+    ) -> None:
+        """A first fetch that fails returns the org id, then retries after 60 s."""
+        org_id = "445566"
+        mock_settings.meraki.org_id = org_id
+        get_org = mock_api.organizations.getOrganization
+        get_org.side_effect = Exception("Connection error")
+
+        clock = MagicMock()
+        clock.time.return_value = 5000.0
+        with patch("meraki_dashboard_exporter.services.inventory.time", clock):
+            first = await inventory_service.get_organizations()
+            assert first[0]["name"] == org_id
+            assert get_org.call_count == 1
+
+            clock.time.return_value = 5030.0
+            await inventory_service.get_organizations()
+            assert get_org.call_count == 1
+
+            clock.time.return_value = 5061.0
+            get_org.side_effect = None
+            get_org.return_value = {"id": org_id, "name": "Real Name"}
+            again = await inventory_service.get_organizations()
+            assert again[0]["name"] == "Real Name"
+            assert get_org.call_count == 2
 
 
 class TestGetOrgShape:

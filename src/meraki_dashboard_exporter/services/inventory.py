@@ -72,6 +72,10 @@ class OrganizationInventory:
     # Longer TTL for slow-changing configuration data
     TTL_LICENSE = 1800  # 30 minutes - license data rarely changes
 
+    # Retry delay after a failed single-org name lookup. Used as a fixed deadline
+    # (not a back-dated timestamp) because `_is_expired` jitters the TTL by +/-10%.
+    ORG_NAME_RETRY_SECONDS = 60
+
     def __init__(
         self,
         api: DashboardAPI,
@@ -116,6 +120,9 @@ class OrganizationInventory:
 
         # Cache timestamps
         self._org_timestamp: float = 0.0
+        # Wall-clock deadline for retrying a failed single-org name lookup; while set,
+        # it replaces the TTL check for the organisations cache.
+        self._org_retry_at: float | None = None
         self._network_timestamps: dict[str, float] = {}
         self._device_timestamps: dict[str, float] = {}
         self._availability_timestamps: dict[str, float] = {}
@@ -243,6 +250,18 @@ class OrganizationInventory:
         jittered_ttl = ttl * (0.9 + random.random() * 0.2)
         return (time.time() - timestamp) >= jittered_ttl
 
+    def _organizations_fresh(self) -> bool:
+        """Return whether the cached organisations can be served without a fetch.
+
+        After a failed single-org name lookup the cache is fresh only until the
+        retry deadline, so the lookup is retried soon instead of after a full TTL.
+        """
+        if self._organizations is None:
+            return False
+        if self._org_retry_at is not None:
+            return time.time() < self._org_retry_at
+        return not self._is_expired(self._org_timestamp, self._ttl)
+
     async def _make_api_call(
         self,
         endpoint: str,
@@ -305,17 +324,14 @@ class OrganizationInventory:
         current_time = time.time()
 
         # Check cache validity
-        if (
-            not force_refresh
-            and self._organizations is not None
-            and not self._is_expired(self._org_timestamp, self._ttl)
-        ):
+        cached_orgs = self._organizations
+        if not force_refresh and cached_orgs is not None and self._organizations_fresh():
             self._cache_hits += 1
             logger.debug(
                 "Cache hit for organizations",
                 cache_age_seconds=current_time - self._org_timestamp,
             )
-            return self._organizations
+            return cached_orgs
 
         # Cache miss - fetch from API
         self._cache_misses += 1
@@ -323,19 +339,17 @@ class OrganizationInventory:
 
         async with self._lock:
             # Double-check after acquiring lock
-            if (
-                not force_refresh
-                and self._organizations is not None
-                and not self._is_expired(self._org_timestamp, self._ttl)
-            ):
-                return self._organizations
+            cached_orgs = self._organizations
+            if not force_refresh and cached_orgs is not None and self._organizations_fresh():
+                return cached_orgs
 
             # Fetch from API
             if self.settings.meraki.org_id:
                 # Single org mode - fetch the real organization name via
                 # getOrganization so org_name labels aren't just the numeric
-                # ID (F-116). Fall back to the ID as a placeholder if the
-                # lookup fails for any reason (e.g. transient API error).
+                # ID (F-116). If the lookup fails, keep the last good cached name,
+                # or fall back to the ID as a placeholder when nothing is cached,
+                # and retry after ORG_NAME_RETRY_SECONDS.
                 org_id = self.settings.meraki.org_id
                 try:
                     org_result = await self._make_api_call(
@@ -347,18 +361,31 @@ class OrganizationInventory:
                         org_result, expected_type=dict, operation="getOrganization"
                     )
                     organizations = [cast(dict[str, Any], org_result)]
-                except Exception:
-                    logger.debug(
-                        "Failed to fetch organization name; using org_id as placeholder",
+                except Exception as exc:
+                    # Log the type only: the exception text can carry request detail.
+                    logger.warning(
+                        "Failed to fetch organization name; keeping the cached name"
+                        " or the org_id placeholder and retrying shortly",
                         org_id=org_id,
+                        error_type=type(exc).__name__,
                     )
-                    organizations = [
-                        {
-                            "id": org_id,
-                            # Use org_id as a placeholder name when the lookup fails
-                            "name": org_id,
-                        }
-                    ]
+                    if self._organizations is not None:
+                        organizations = self._organizations
+                    else:
+                        organizations = [
+                            {
+                                "id": org_id,
+                                # Use org_id as a placeholder name when nothing is cached
+                                "name": org_id,
+                            }
+                        ]
+                    # The retry deadline, not the timestamp, now governs freshness.
+                    self._organizations = organizations
+                    self._org_retry_at = time.time() + self.ORG_NAME_RETRY_SECONDS
+                    self._cache_size.labels(org_id="global", cache_type="organizations").set(
+                        len(organizations)
+                    )
+                    return organizations
             else:
                 # Multi-org mode
                 orgs_result = await self._make_api_call(
@@ -374,6 +401,7 @@ class OrganizationInventory:
             # Update cache
             self._organizations = organizations
             self._org_timestamp = time.time()
+            self._org_retry_at = None
             self._cache_size.labels(org_id="global", cache_type="organizations").set(
                 len(organizations)
             )
@@ -756,6 +784,7 @@ class OrganizationInventory:
                 self._licenses_overview.clear()
                 self._licenses.clear()
                 self._org_timestamp = 0.0
+                self._org_retry_at = None
                 self._network_timestamps.clear()
                 self._device_timestamps.clear()
                 self._availability_timestamps.clear()

@@ -187,10 +187,120 @@ class TestMRCollector:
         assert labels["serial"] == "Q123"
 
     def test_packet_metric_value_retention(self, mr_collector: MRCollector) -> None:
-        """Test that packet metrics have a cache for retaining values."""
-        # Simply verify the collector has the packet value cache initialized
-        assert hasattr(mr_collector, "_packet_value_cache")
-        assert isinstance(mr_collector._packet_value_cache, dict)
+        """A total packet counter re-emits its last non-zero value for 0 or None."""
+        labels = {
+            "serial": "Q2KD-XXXX",
+            "name": "AP1",
+            "network_id": "N_123",
+            "network_name": "Test Network",
+        }
+        performance = mr_collector.performance
+        mock_set = performance.parent._set_metric
+        mock_set.reset_mock()
+
+        def emitted() -> list[float]:
+            return [c[0][2] for c in mock_set.call_args_list]
+
+        performance._set_packet_metric_value("_mr_packets_downstream_total", labels, 1000)
+        # 0 and None both fall back to the cached non-zero value.
+        performance._set_packet_metric_value("_mr_packets_downstream_total", labels, 0)
+        performance._set_packet_metric_value("_mr_packets_downstream_total", labels, None)
+        assert emitted() == [1000, 1000, 1000]
+
+        # A new non-zero value replaces the cached one.
+        performance._set_packet_metric_value("_mr_packets_downstream_total", labels, 2000)
+        performance._set_packet_metric_value("_mr_packets_downstream_total", labels, 0)
+        assert emitted() == [1000, 1000, 1000, 2000, 2000]
+
+    def test_packet_loss_metric_allows_zero(self, mr_collector: MRCollector) -> None:
+        """A packet-loss counter that is not a total emits 0 as a real value."""
+        labels = {
+            "serial": "Q2KD-XXXX",
+            "name": "AP1",
+            "network_id": "N_123",
+            "network_name": "Test Network",
+        }
+        performance = mr_collector.performance
+        mock_set = performance.parent._set_metric
+        mock_set.reset_mock()
+
+        performance._set_packet_metric_value("_mr_packets_downstream_lost", labels, 10)
+        performance._set_packet_metric_value("_mr_packets_downstream_lost", labels, 0)
+
+        assert [c[0][2] for c in mock_set.call_args_list] == [10, 0]
+        # Only total counters are cached.
+        assert not any("_lost" in key for key in mr_collector._packet_value_cache)
+
+    @staticmethod
+    def _device_packet_row(serial: str, total: int) -> dict:
+        return {
+            "network": {"id": "net1", "name": "Network 1"},
+            "device": {"serial": serial, "name": serial},
+            "downstream": {"total": total, "lost": 1, "lossPercentage": 0.1},
+            "upstream": {"total": total, "lost": 1, "lossPercentage": 0.1},
+        }
+
+    @staticmethod
+    def _network_packet_row(network_id: str, total: int) -> dict:
+        return {
+            "network": {"id": network_id, "name": network_id},
+            "downstream": {"total": total, "lost": 1, "lossPercentage": 0.1},
+            "upstream": {"total": total, "lost": 1, "lossPercentage": 0.1},
+        }
+
+    async def test_packet_value_cache_drops_keys_absent_from_a_successful_run(
+        self, mr_collector: MRCollector
+    ) -> None:
+        """A removed access point or network loses its retained values (#979)."""
+        performance = mr_collector.performance
+        cache = mr_collector._packet_value_cache
+        performance._fetch_network_packet_loss = AsyncMock(
+            side_effect=[
+                [self._network_packet_row("net1", 100), self._network_packet_row("net2", 100)],
+                [self._network_packet_row("net1", 100)],
+            ]
+        )
+        performance._fetch_device_packet_loss = AsyncMock(
+            side_effect=[
+                [self._device_packet_row("Q-A", 500), self._device_packet_row("Q-B", 700)],
+                [self._device_packet_row("Q-A", 500)],
+            ]
+        )
+
+        await mr_collector.collect_packet_loss("o", "Org", {})
+        assert any("serial=Q-B" in key for key in cache)
+        assert any("network_id=net2" in key for key in cache)
+
+        await mr_collector.collect_packet_loss("o", "Org", {})
+
+        assert not any("serial=Q-B" in key for key in cache)
+        assert not any("network_id=net2" in key for key in cache)
+        assert any("serial=Q-A" in key for key in cache)
+        assert any("network_id=net1" in key for key in cache)
+        # Pruned in place: MRCollector shares the same dict object.
+        assert mr_collector._packet_value_cache is performance._packet_value_cache
+
+    @pytest.mark.parametrize("failed", ["network", "device"])
+    async def test_packet_value_cache_kept_when_a_fetch_fails(
+        self, mr_collector: MRCollector, failed: str
+    ) -> None:
+        """A failed fetch touches none of its keys, so nothing is pruned (#979)."""
+        performance = mr_collector.performance
+        cache = mr_collector._packet_value_cache
+        ok_network = [self._network_packet_row("net1", 100), self._network_packet_row("net2", 100)]
+        ok_device = [self._device_packet_row("Q-A", 500), self._device_packet_row("Q-B", 700)]
+        second_network = None if failed == "network" else [self._network_packet_row("net1", 100)]
+        second_device = None if failed == "device" else [self._device_packet_row("Q-A", 500)]
+        performance._fetch_network_packet_loss = AsyncMock(side_effect=[ok_network, second_network])
+        performance._fetch_device_packet_loss = AsyncMock(side_effect=[ok_device, second_device])
+
+        await mr_collector.collect_packet_loss("o", "Org", {})
+        before = dict(cache)
+        assert before
+
+        await mr_collector.collect_packet_loss("o", "Org", {})
+
+        assert cache == before
 
     async def test_collect_connection_stats_network_level(
         self,
