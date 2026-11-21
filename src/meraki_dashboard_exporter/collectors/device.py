@@ -919,25 +919,26 @@ class DeviceCollector(MetricCollector):
                         org_name,
                         ms_devices,
                     )
-                    if not status_result:
+                    if status_result is False:
+                        # #997: False means the SDK lacks the org endpoint. A
+                        # transient failure returns None and is not answered
+                        # with a call per switch.
                         used_fallback = True
                         logger.warning(
-                            "Org-level switch port status collection failed; falling back to per-device status",
+                            "Org-level switch port status endpoint unavailable; falling back to per-device status",
                             org_id=org_id,
                         )
-                        await process_in_batches_with_errors(
-                            ms_devices,
-                            self._collect_ms_device_with_timeout,
-                            batch_size=self.settings.api.device_batch_size,
-                            delay_between_batches=self.settings.api.batch_delay,
-                            spread_over_seconds=spread_window,
-                            initial_delay=self._get_smoothing_offset(f"{org_id}:ms_devices"),
-                            min_batch_delay=min_delay,
-                            max_batch_delay=max_delay,
-                            max_concurrency=self.settings.api.concurrency_limit,
-                            item_description="MS device",
-                            error_context_func=lambda device: {"serial": device["serial"]},
-                            on_error=lambda error: self._track_error(categorize_error(error)),
+                        # Record an attempt for MS_PORT_USAGE so a failed pass is
+                        # finalised as failed; the result is not needed.
+                        self._should_run_group(EndpointGroupName.MS_PORT_USAGE)
+                        await self._collect_ms_per_switch_pass(
+                            org_id, ms_devices, spread_window, min_delay, max_delay
+                        )
+                    elif status_result is None:
+                        logger.warning(
+                            "Org-level switch port status collection failed; "
+                            "skipping the per-device fallback this cycle",
+                            org_id=org_id,
                         )
 
                     if not used_fallback:
@@ -959,7 +960,7 @@ class DeviceCollector(MetricCollector):
                                 org_name,
                                 usage_devices,
                             )
-                            if not usage_result:
+                            if usage_result is False:
                                 await process_in_batches_with_errors(
                                     usage_devices,
                                     self.ms_collector.collect_device_port_usage_metrics,
@@ -977,22 +978,17 @@ class DeviceCollector(MetricCollector):
                                     ),
                                 )
                 else:
-                    # Process devices in batches (configurable via device_batch_size)
+                    # Per-switch collection is the only path here. Gate it on both
+                    # port groups (no short-circuit: each needs its attempt
+                    # recorded) so it runs once per interval, not on every wake.
+                    # collect() owns packet statistics on this path.
                     used_fallback = True
-                    await process_in_batches_with_errors(
-                        ms_devices,
-                        self._collect_ms_device_with_timeout,
-                        batch_size=self.settings.api.device_batch_size,
-                        delay_between_batches=self.settings.api.batch_delay,
-                        spread_over_seconds=spread_window,
-                        initial_delay=self._get_smoothing_offset(f"{org_id}:ms_devices"),
-                        min_batch_delay=min_delay,
-                        max_batch_delay=max_delay,
-                        max_concurrency=self.settings.api.concurrency_limit,
-                        item_description="MS device",
-                        error_context_func=lambda device: {"serial": device["serial"]},
-                        on_error=lambda error: self._track_error(categorize_error(error)),
-                    )
+                    status_due = self._should_run_group(EndpointGroupName.MS_PORT_STATUS)
+                    usage_due = self._should_run_group(EndpointGroupName.MS_PORT_USAGE)
+                    if status_due or usage_due:
+                        await self._collect_ms_per_switch_pass(
+                            org_id, ms_devices, spread_window, min_delay, max_delay
+                        )
 
                 # Collect packet statistics with smoothing and interval gating
                 if not used_fallback:
@@ -1195,7 +1191,7 @@ class DeviceCollector(MetricCollector):
                 serial=device["serial"],
             )
 
-    async def _collect_ms_device_with_timeout(self, device: dict[str, Any]) -> None:
+    async def _collect_ms_device_with_timeout(self, device: dict[str, Any]) -> bool | None:
         """Collect MS device metrics with timeout.
 
         Parameters
@@ -1203,8 +1199,55 @@ class DeviceCollector(MetricCollector):
         device : dict[str, Any]
             Device data.
 
+        Returns
+        -------
+        bool | None
+            The result of ``MSCollector.collect``: ``True`` when the switch answered.
+
         """
-        await self.ms_collector.collect(device)
+        result: bool | None = await self.ms_collector.collect(device)
+        return result
+
+    async def _collect_ms_per_switch_pass(
+        self,
+        org_id: str,
+        ms_devices: list[dict[str, Any]],
+        spread_window: float | None,
+        min_delay: float | None,
+        max_delay: float | None,
+    ) -> bool:
+        """Collect port status switch by switch and close the port groups (#997).
+
+        One ``getDeviceSwitchPortsStatuses`` call per switch feeds both the
+        port-status and the port-usage families, so after a pass in which at least
+        one switch answered both groups are marked ran. When none answered nothing
+        is marked, and an admitted group is finalised as failed.
+
+        Returns
+        -------
+        bool
+            True when at least one switch answered.
+
+        """
+        results = await process_in_batches_with_errors(
+            ms_devices,
+            self._collect_ms_device_with_timeout,
+            batch_size=self.settings.api.device_batch_size,
+            delay_between_batches=self.settings.api.batch_delay,
+            spread_over_seconds=spread_window,
+            initial_delay=self._get_smoothing_offset(f"{org_id}:ms_devices"),
+            min_batch_delay=min_delay,
+            max_batch_delay=max_delay,
+            max_concurrency=self.settings.api.concurrency_limit,
+            item_description="MS device",
+            error_context_func=lambda device: {"serial": device["serial"]},
+            on_error=lambda error: self._track_error(categorize_error(error)),
+        )
+        answered = any(result is True for _, result in results)
+        if answered:
+            self._mark_group_ran(EndpointGroupName.MS_PORT_STATUS)
+            self._mark_group_ran(EndpointGroupName.MS_PORT_USAGE)
+        return answered
 
     @trace_method("collect.mr_metrics")
     async def _collect_mr_specific_metrics(
