@@ -72,6 +72,8 @@ class MRPerformanceCollector:
         self.settings = parent.settings
         # Cache for packet metric values (for retention logic)
         self._packet_value_cache: dict[str, float] = {}
+        # Keys written during the current packet-loss run; used to prune the cache
+        self._active_packet_keys: set[str] = set()
         self._initialize_metrics()
 
     def _initialize_metrics(self) -> None:
@@ -734,6 +736,8 @@ class MRPerformanceCollector:
         if not self.parent._should_run_group(EndpointGroupName.MR_PACKET_LOSS):
             return
 
+        self._active_packet_keys = set()
+
         try:
             # Fetch network-level packet loss data. ``None`` means the fetch
             # failed; a list (even empty) means it succeeded (#629).
@@ -858,6 +862,13 @@ class MRPerformanceCollector:
             # leaves the gate open so the next cycle retries.
             if network_ok or device_ok:
                 self.parent._mark_group_ran(EndpointGroupName.MR_PACKET_LOSS)
+
+            # Prune retained values for keys this run did not write (removed or
+            # re-homed devices and networks) (#979). Only when both fetches
+            # succeeded: a failed fetch writes none of its keys, so pruning
+            # then would drop the retained values of devices still present.
+            if network_ok and device_ok:
+                self._prune_packet_value_cache()
 
         except Exception:
             logger.exception(
@@ -1275,6 +1286,23 @@ class MRPerformanceCollector:
             ttl_seconds=self.parent._group_ttl_seconds(EndpointGroupName.MR_CPU_LOAD),
         )
 
+    def _prune_packet_value_cache(self) -> None:
+        """Drop retained packet values for keys not written in this run.
+
+        Removes in place: ``MRCollector`` holds a reference to the same dict.
+        """
+        stale_keys = [
+            key for key in self._packet_value_cache if key not in self._active_packet_keys
+        ]
+        for key in stale_keys:
+            del self._packet_value_cache[key]
+        if stale_keys:
+            logger.debug(
+                "Pruned stale MR packet value cache entries",
+                pruned_count=len(stale_keys),
+                remaining_count=len(self._packet_value_cache),
+            )
+
     def _set_packet_metric_value(
         self, metric_name: str, labels: dict[str, str], value: float | None
     ) -> None:
@@ -1295,6 +1323,7 @@ class MRPerformanceCollector:
         """
         # Create a cache key from metric name and sorted labels
         cache_key = f"{metric_name}:{':'.join(f'{k}={v}' for k, v in sorted(labels.items()))}"
+        self._active_packet_keys.add(cache_key)
 
         # Determine if this is a "total" metric that should retain values
         is_total_metric = "total" in metric_name and "percent" not in metric_name
