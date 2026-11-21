@@ -11,6 +11,7 @@ from meraki_dashboard_exporter.collectors.insight import (
     InsightCollector,
 )
 from meraki_dashboard_exporter.core.config import Settings
+from meraki_dashboard_exporter.core.constants import ProductType
 from meraki_dashboard_exporter.core.error_handling import (
     DataValidationError,
     validate_response_format,
@@ -153,7 +154,9 @@ class TestInsightCollectorBehaviour(BaseCollectorTest):
             return_value=[{"id": "O1", "name": "Org One"}]
         )
         collector.inventory.get_networks = AsyncMock(  # type: ignore[method-assign]
-            return_value=networks if networks is not None else [{"id": "N1", "name": "Net One"}]
+            return_value=networks
+            if networks is not None
+            else [{"id": "N1", "name": "Net One", "productTypes": ["appliance"]}]
         )
         apps_mock = (
             MagicMock(side_effect=apps)
@@ -331,6 +334,96 @@ class TestInsightCollectorBehaviour(BaseCollectorTest):
         await collector._collect_impl()
         assert collector.api.insight.getNetworkInsightApplicationHealthByTime.call_count == 0
         metrics.assert_gauge_value("meraki_insight_applications", 1, org_id="O1")
+
+    async def test_app_health_fans_out_over_appliance_networks_only(
+        self, mock_api, isolated_registry, inventory, monkeypatch, metrics
+    ) -> None:
+        """Insight data exists only for appliance networks, so only those are queried."""
+        settings = _settings(monkeypatch)
+        networks = [
+            {"id": "N1", "name": "Switch only", "productTypes": ["switch"]},
+            {"id": "N2", "name": "Appliance", "productTypes": [ProductType.APPLIANCE.value]},
+            {"id": "N3", "name": "No product types"},
+        ]
+        collector = self._build(
+            mock_api,
+            isolated_registry,
+            inventory,
+            settings,
+            apps=[_app("webex"), _app("zoom")],
+            health=[_FULL_BUCKET],
+            networks=networks,
+        )
+        await collector._collect_impl()
+
+        health = collector.api.insight.getNetworkInsightApplicationHealthByTime
+        assert health.call_count == 2
+        queried = {call.args[0] for call in health.call_args_list}
+        assert queried == {"N2"}
+
+    async def test_app_health_no_appliance_network_issues_no_calls_and_marks_ran(
+        self, mock_api, isolated_registry, inventory, monkeypatch, metrics
+    ) -> None:
+        """An org with no appliance network makes no health calls and still counts as run."""
+        settings = _settings(monkeypatch)
+        collector = self._build(
+            mock_api,
+            isolated_registry,
+            inventory,
+            settings,
+            apps=[_app("webex")],
+            health=[_FULL_BUCKET],
+            networks=[{"id": "N1", "name": "Switch only", "productTypes": ["switch"]}],
+        )
+        collector._mark_group_ran = MagicMock()  # type: ignore[method-assign]
+        await collector._collect_impl()
+
+        assert collector.api.insight.getNetworkInsightApplicationHealthByTime.call_count == 0
+        collector._mark_group_ran.assert_any_call(EndpointGroupName.INSIGHT_APP_HEALTH)
+
+    async def test_app_health_not_marked_ran_when_fan_out_fails(
+        self, mock_api, isolated_registry, inventory, monkeypatch, metrics
+    ) -> None:
+        """A swallowed error or deadline in the fan-out leaves the group unmarked."""
+        settings = _settings(monkeypatch)
+        collector = self._build(
+            mock_api,
+            isolated_registry,
+            inventory,
+            settings,
+            apps=[_app("webex")],
+            health=[_FULL_BUCKET],
+        )
+        collector._collect_application_health = AsyncMock(  # type: ignore[method-assign]
+            side_effect=RuntimeError("Connection error")
+        )
+        collector._mark_group_ran = MagicMock()  # type: ignore[method-assign]
+        await collector._collect_impl()
+
+        marked = [call.args[0] for call in collector._mark_group_ran.call_args_list]
+        assert EndpointGroupName.INSIGHT_APP_HEALTH not in marked
+        # The applications group is independent of the fan-out and is still marked.
+        assert EndpointGroupName.INSIGHT_APPLICATIONS in marked
+
+    async def test_app_health_marked_ran_when_fan_out_completes(
+        self, mock_api, isolated_registry, inventory, monkeypatch, metrics
+    ) -> None:
+        """A completed fan-out marks both groups as run."""
+        settings = _settings(monkeypatch)
+        collector = self._build(
+            mock_api,
+            isolated_registry,
+            inventory,
+            settings,
+            apps=[_app("webex")],
+            health=[_FULL_BUCKET],
+        )
+        collector._mark_group_ran = MagicMock()  # type: ignore[method-assign]
+        await collector._collect_impl()
+
+        marked = [call.args[0] for call in collector._mark_group_ran.call_args_list]
+        assert EndpointGroupName.INSIGHT_APP_HEALTH in marked
+        assert EndpointGroupName.INSIGHT_APPLICATIONS in marked
 
     async def test_license_absent_404_is_debug_skip(
         self, mock_api, isolated_registry, inventory, monkeypatch, metrics
