@@ -5,6 +5,24 @@ description: Review Meraki Dashboard Exporter releases, including new collectors
 
 # Changelog
 
+## [3.1.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v3.0.0...v3.1.0) (2026-11-21)
+
+
+### Features
+
+* add MT reading timestamps and fix seven collector, scheduler and API-facade bugs ([#1091](https://github.com/rknightion/meraki-dashboard-exporter/issues/1091)) ([edbd4c6](https://github.com/rknightion/meraki-dashboard-exporter/commit/edbd4c6cba8dedb961088ef4a1eb8446bfe9a8c5)), closes [#974](https://github.com/rknightion/meraki-dashboard-exporter/issues/974) [#970](https://github.com/rknightion/meraki-dashboard-exporter/issues/970) [#978](https://github.com/rknightion/meraki-dashboard-exporter/issues/978) [#990](https://github.com/rknightion/meraki-dashboard-exporter/issues/990) [#999](https://github.com/rknightion/meraki-dashboard-exporter/issues/999) [#993](https://github.com/rknightion/meraki-dashboard-exporter/issues/993) [#994](https://github.com/rknightion/meraki-dashboard-exporter/issues/994) [#1009](https://github.com/rknightion/meraki-dashboard-exporter/issues/1009)
+* **mr:** resume oversized signal-quality fan-outs where they stopped ([#1092](https://github.com/rknightion/meraki-dashboard-exporter/issues/1092)) ([c70c871](https://github.com/rknightion/meraki-dashboard-exporter/commit/c70c871a7abfbabe4c7da908900a9dddf175bf85)), closes [#996](https://github.com/rknightion/meraki-dashboard-exporter/issues/996)
+
+
+### Bug Fixes
+
+* **batch:** bound batch fan-outs by api.concurrency_limit ([#1090](https://github.com/rknightion/meraki-dashboard-exporter/issues/1090)) ([92b4a2f](https://github.com/rknightion/meraki-dashboard-exporter/commit/92b4a2f2286705e879c35f6d66aca17323044656)), closes [#1000](https://github.com/rknightion/meraki-dashboard-exporter/issues/1000)
+* correct eight collector, scheduler, inventory and webhook bugs ([#1085](https://github.com/rknightion/meraki-dashboard-exporter/issues/1085)) ([20536c8](https://github.com/rknightion/meraki-dashboard-exporter/commit/20536c804c2ffc33a251f59acdd0c94c122c3c78)), closes [#973](https://github.com/rknightion/meraki-dashboard-exporter/issues/973) [#971](https://github.com/rknightion/meraki-dashboard-exporter/issues/971) [#1005](https://github.com/rknightion/meraki-dashboard-exporter/issues/1005) [#976](https://github.com/rknightion/meraki-dashboard-exporter/issues/976) [#988](https://github.com/rknightion/meraki-dashboard-exporter/issues/988) [#1004](https://github.com/rknightion/meraki-dashboard-exporter/issues/1004) [#980](https://github.com/rknightion/meraki-dashboard-exporter/issues/980) [#992](https://github.com/rknightion/meraki-dashboard-exporter/issues/992)
+* correct four device, MR data-log and org count bugs ([#1093](https://github.com/rknightion/meraki-dashboard-exporter/issues/1093)) ([3579a96](https://github.com/rknightion/meraki-dashboard-exporter/commit/3579a96b5dcee3bc9bc884e66b505f58b3c57466)), closes [#975](https://github.com/rknightion/meraki-dashboard-exporter/issues/975) [#989](https://github.com/rknightion/meraki-dashboard-exporter/issues/989) [#981](https://github.com/rknightion/meraki-dashboard-exporter/issues/981) [#991](https://github.com/rknightion/meraki-dashboard-exporter/issues/991)
+* **device:** expire superseded device status info and MS port info series on rename ([#1097](https://github.com/rknightion/meraki-dashboard-exporter/issues/1097)) ([5b4f3da](https://github.com/rknightion/meraki-dashboard-exporter/commit/5b4f3da9e74388dccacd1fec64ca882fedd62b23)), closes [#998](https://github.com/rknightion/meraki-dashboard-exporter/issues/998)
+* keep the cached org name on a failed refresh and prune the MR packet cache ([#1095](https://github.com/rknightion/meraki-dashboard-exporter/issues/1095)) ([2c227c9](https://github.com/rknightion/meraki-dashboard-exporter/commit/2c227c9263edf12e000dbf7fd060ed962e3b4bda)), closes [#1006](https://github.com/rknightion/meraki-dashboard-exporter/issues/1006) [#979](https://github.com/rknightion/meraki-dashboard-exporter/issues/979)
+* **ms:** fall back to per-switch port collection only when the org endpoint is absent ([#1096](https://github.com/rknightion/meraki-dashboard-exporter/issues/1096)) ([4f6f363](https://github.com/rknightion/meraki-dashboard-exporter/commit/4f6f36364c707dbb824d24a8aa375ab5acfd1891)), closes [#997](https://github.com/rknightion/meraki-dashboard-exporter/issues/997)
+
 ## [3.0.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.3.1...v3.0.0) (2026-11-20)
 
 
