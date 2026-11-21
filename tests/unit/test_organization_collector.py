@@ -82,6 +82,100 @@ class TestOrganizationCollector(BaseCollectorTest):
         assert OrgMetricName.ORG_DEVICES_BY_MODEL.value in tracked_metric_names
         assert OrgMetricName.ORG_DEVICES_AVAILABILITY.value in tracked_metric_names
 
+    async def test_device_availability_count_zeroed_when_combination_disappears(
+        self, collector, metrics
+    ):
+        """A status/product-type combination that clears reads 0, not a stale count."""
+        org_id, org_name = "999", "Zero Org"
+        collector.inventory.get_device_availabilities = AsyncMock(  # type: ignore[method-assign]
+            side_effect=[
+                [
+                    {"status": "offline", "productType": "switch"},
+                    {"status": "online", "productType": "wireless"},
+                ],
+                [{"status": "online", "productType": "wireless"}],
+            ]
+        )
+
+        await collector._collect_device_availability_metrics(org_id, org_name)
+        metrics.assert_gauge_value(
+            OrgMetricName.ORG_DEVICES_AVAILABILITY,
+            1,
+            org_id=org_id,
+            status="offline",
+            product_type="switch",
+        )
+
+        await collector._collect_device_availability_metrics(org_id, org_name)
+        metrics.assert_gauge_value(
+            OrgMetricName.ORG_DEVICES_AVAILABILITY,
+            0,
+            org_id=org_id,
+            status="offline",
+            product_type="switch",
+        )
+        metrics.assert_gauge_value(
+            OrgMetricName.ORG_DEVICES_AVAILABILITY,
+            1,
+            org_id=org_id,
+            status="online",
+            product_type="wireless",
+        )
+
+    async def test_device_availability_failed_fetch_does_not_zero(self, collector, metrics):
+        """A failed availability fetch writes nothing and leaves earlier values alone."""
+        org_id, org_name = "999", "Zero Org"
+        collector.inventory.get_device_availabilities = AsyncMock(  # type: ignore[method-assign]
+            side_effect=[
+                [
+                    {"status": "offline", "productType": "switch"},
+                    {"status": "online", "productType": "wireless"},
+                ],
+                RuntimeError("availability fetch failed"),
+            ]
+        )
+
+        await collector._collect_device_availability_metrics(org_id, org_name)
+        with pytest.raises(CollectorError):
+            await collector._collect_device_availability_metrics(org_id, org_name)
+
+        metrics.assert_gauge_value(
+            OrgMetricName.ORG_DEVICES_AVAILABILITY,
+            1,
+            org_id=org_id,
+            status="offline",
+            product_type="switch",
+        )
+        metrics.assert_gauge_value(
+            OrgMetricName.ORG_DEVICES_AVAILABILITY,
+            1,
+            org_id=org_id,
+            status="online",
+            product_type="wireless",
+        )
+
+    async def test_device_type_count_zeroed_when_type_disappears(self, collector, metrics):
+        """A device type that clears reads 0, including when the list goes empty."""
+        org_id, org_name = "999", "Zero Org"
+        collector.api_helper.get_organization_devices = AsyncMock(  # type: ignore[method-assign]
+            side_effect=[
+                [{"model": "MS210-8"}, {"model": "MR36"}],
+                [{"model": "MR36"}],
+                [],
+            ]
+        )
+
+        await collector._collect_device_metrics(org_id, org_name)
+        metrics.assert_gauge_value(OrgMetricName.ORG_DEVICES, 1, org_id=org_id, device_type="MS")
+        metrics.assert_gauge_value(OrgMetricName.ORG_DEVICES, 1, org_id=org_id, device_type="MR")
+
+        await collector._collect_device_metrics(org_id, org_name)
+        metrics.assert_gauge_value(OrgMetricName.ORG_DEVICES, 0, org_id=org_id, device_type="MS")
+        metrics.assert_gauge_value(OrgMetricName.ORG_DEVICES, 1, org_id=org_id, device_type="MR")
+
+        await collector._collect_device_metrics(org_id, org_name)
+        metrics.assert_gauge_value(OrgMetricName.ORG_DEVICES, 0, org_id=org_id, device_type="MR")
+
     async def test_collect_packet_capture_metrics(self, collector, mock_api_builder, metrics):
         """Test collection of packet capture metrics."""
         # Set up test data

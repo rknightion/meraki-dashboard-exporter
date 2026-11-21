@@ -192,6 +192,10 @@ class OrganizationCollector(MetricCollector):
         # Create API helper
         self.api_helper = create_api_helper(self)
         self._last_network_tags: dict[str, set[tuple[str, str]]] = {}
+        # Keys emitted last pass, per org, so a (status, product_type) combination or a
+        # device type that clears is written as 0 instead of freezing and then vanishing.
+        self._seen_availability_keys: dict[str, set[tuple[str, str]]] = {}
+        self._seen_device_types: dict[str, set[str]] = {}
         # (network_id, network_name) pairs emitted last pass, per org, so a rename
         # or a removed network retires its meraki_network_info series in the same pass.
         self._last_network_info: dict[str, set[tuple[str, str]]] = {}
@@ -1025,7 +1029,9 @@ class OrganizationCollector(MetricCollector):
 
         """
         devices = await self.api_helper.get_organization_devices(org_id)
-        if not devices:
+        # With an inventory an empty list is a real answer. Without one, the direct
+        # fetch turns a failure into [], so skip rather than zero everything.
+        if not devices and self.inventory is None:
             return
 
         # Validate response format (handles API error responses like rate limits)
@@ -1046,6 +1052,17 @@ class OrganizationCollector(MetricCollector):
         org_data = {"id": org_id, "name": org_name}
 
         if self._devices_total:
+            # Zero the types emitted last pass that are absent now; the zero series
+            # then expires by TTL. A failed fetch raises above and never reaches here.
+            for stale_type in sorted(
+                self._seen_device_types.get(org_id, set()) - set(device_counts)
+            ):
+                self._set_metric(
+                    self._devices_total,
+                    create_org_labels(org_data, device_type=stale_type),
+                    0,
+                    OrgMetricName.ORG_DEVICES.value,
+                )
             for device_type, count in device_counts.items():
                 labels = create_org_labels(
                     org_data,
@@ -1059,6 +1076,7 @@ class OrganizationCollector(MetricCollector):
                     count,
                     OrgMetricName.ORG_DEVICES.value,
                 )
+            self._seen_device_types[org_id] = set(device_counts)
         else:
             logger.error("_devices_total metric not initialized")
 
@@ -1235,6 +1253,22 @@ class OrganizationCollector(MetricCollector):
         org_data = {"id": org_id, "name": org_name}
 
         if self._devices_availability_total:
+            # Zero combinations emitted last pass that are absent from this successful
+            # response. The fetch above raises on failure, so a failed fetch writes nothing.
+            for stale_status, stale_product_type in sorted(
+                self._seen_availability_keys.get(org_id, set()) - set(availability_counts)
+            ):
+                self._set_metric(
+                    self._devices_availability_total,
+                    create_org_labels(
+                        org_data,
+                        status=stale_status,
+                        product_type=stale_product_type,
+                    ),
+                    0,
+                    OrgMetricName.ORG_DEVICES_AVAILABILITY.value,
+                    ttl_seconds=ttl,
+                )
             for (status, product_type), count in availability_counts.items():
                 labels = create_org_labels(
                     org_data,
@@ -1250,6 +1284,7 @@ class OrganizationCollector(MetricCollector):
                     OrgMetricName.ORG_DEVICES_AVAILABILITY.value,
                     ttl_seconds=ttl,
                 )
+            self._seen_availability_keys[org_id] = set(availability_counts)
         else:
             logger.error("_devices_availability_total metric not initialized")
 
