@@ -134,6 +134,42 @@ class TestMSCollectorCacheEviction:
         assert len(ms_collector._last_port_usage) == 0
         assert len(ms_collector._last_packet_stats) == 0
 
+    async def test_org_endpoint_path_keeps_throttle_timestamps(
+        self, ms_collector: MSCollector, mock_parent: MagicMock
+    ) -> None:
+        """#971: a serial seen by the org-endpoint path survives end-of-cycle eviction.
+
+        ``collect()`` never runs on the org-endpoint path, so the only place the
+        serial is registered is ``collect_port_statuses_by_switch``, even when the
+        MS_PORT_STATUS gate is closed and nothing is fetched or written.
+        """
+        mock_parent._should_run_group.return_value = False
+        ms_collector._last_port_usage["S1"] = 100.0
+        ms_collector._last_packet_stats["S1"] = 100.0
+
+        await ms_collector.collect_port_statuses_by_switch("o", "O", [{"serial": "S1"}])
+        ms_collector._evict_stale_serials(ms_collector._active_serials)
+
+        assert "S1" in ms_collector._last_port_usage
+        assert "S1" in ms_collector._last_packet_stats
+
+    async def test_org_endpoint_path_still_evicts_absent_switch(
+        self, ms_collector: MSCollector, mock_parent: MagicMock
+    ) -> None:
+        """A switch missing from the next cycle's device list is evicted (#971)."""
+        mock_parent._should_run_group.return_value = False
+        for serial in ("S1", "S2"):
+            ms_collector._last_port_usage[serial] = 100.0
+            ms_collector._last_packet_stats[serial] = 100.0
+
+        await ms_collector.collect_port_statuses_by_switch(
+            "o", "O", [{"serial": "S1"}, {"name": "no-serial"}]
+        )
+        ms_collector._evict_stale_serials(ms_collector._active_serials)
+
+        assert set(ms_collector._last_port_usage) == {"S1"}
+        assert set(ms_collector._last_packet_stats) == {"S1"}
+
     def test_evict_stale_serials_empty_caches_is_noop(self, ms_collector: MSCollector) -> None:
         """Eviction on empty caches does not raise."""
         ms_collector._evict_stale_serials({"S1", "S2"})

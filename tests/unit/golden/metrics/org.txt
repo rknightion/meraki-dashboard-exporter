@@ -5,7 +5,7 @@ meraki_device_firmware_info gauge
   help: Device firmware join metric (value 1): maps serial -> running firmware. Numeric device series join firmware via on(serial) group_left(firmware)
   labels: device_type,firmware,model,network_id,org_id,serial
 meraki_network_firmware_up_to_date gauge
-  help: Whether every device in the network is on its latest firmware (1=all up to date / no pending upgrade, 0=at least one device has a pending or in-progress upgrade)
+  help: Whether the network's switches and access points have no firmware upgrade in flight (1=no upgrade scheduled or started, 0=at least one upgrade is scheduled or started). Not emitted for networks with no switch or access point
   labels: network_id,org_id
 meraki_network_info gauge
   help: Network information (join metric: network_id -> network_name)

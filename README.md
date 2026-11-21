@@ -171,7 +171,7 @@ See [docs/observability/otel.md](docs/observability/otel.md) for detailed OpenTe
 ## Webhook Support
 
 The exporter can receive webhook events from Meraki Dashboard. Webhooks accelerate **device-down**
-detection only: a `device_down`/`gateway_down` event fast-flips `meraki_device_up=0` ahead of the
+detection only: a `stopped_reporting` event fast-flips `meraki_device_up=0` ahead of the
 next poll. Device recovery/UP and every other metric remain polled at `DeviceCollector`'s own
 solved cadence (~120s by default); there is no whole-device "back online" webhook event to drive
 a fast recovery path. See [docs/data-freshness.md](docs/data-freshness.md) for the full staleness

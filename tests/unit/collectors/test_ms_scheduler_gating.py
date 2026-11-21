@@ -23,6 +23,7 @@ import pytest
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 from tests.helpers.base import BaseCollectorTest
+from tests.helpers.factories import DeviceFactory, OrganizationFactory
 
 
 class _FakeScheduler:
@@ -307,6 +308,38 @@ class TestMSPacketStatsGate(_MSGatingBase):
         await dc.ms_collector._collect_packet_statistics(device)
         mock_api.switch.getDeviceSwitchPortsStatusesPackets.assert_called_once()
         assert 777.0 in ttls
+
+    async def test_second_cycle_does_not_refetch_packet_stats(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ) -> None:
+        """Two full coordinator cycles fetch each switch once, not once per wake."""
+        org = OrganizationFactory.create(org_id="ORG")
+        devices = [
+            DeviceFactory.create(serial=f"Q2XX-{i}", model="MS120-8", productType="switch")
+            for i in (1, 2)
+        ]
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([], org_id="ORG")
+            .with_devices(devices, org_id="ORG")
+            .with_device_statuses([], org_id="ORG")
+            .build()
+        )
+        api.switch.getOrganizationSwitchPortsStatusesBySwitch.return_value = []
+        api.switch.getDeviceSwitchPortsStatusesPackets.return_value = []
+        inventory.api = api
+        sched = _FakeScheduler(interval_map={EndpointGroupName.MS_PACKET_STATS: 600.0})
+        dc = self._device_collector(api, settings, isolated_registry, inventory, sched)
+        assert settings.api.ms_port_status_use_org_endpoint is True
+        packets = api.switch.getDeviceSwitchPortsStatusesPackets
+
+        await dc._collect_impl()
+        assert packets.call_count == 2
+
+        packets.reset_mock()
+        await dc._collect_impl()
+        assert packets.call_count == 0
 
 
 class TestMSPortOverviewGate(_MSGatingBase):

@@ -38,7 +38,7 @@ from pydantic import BaseModel, ConfigDict
 from ..core.api_facade import facade_for
 from ..core.async_utils import ManagedTaskGroup
 from ..core.collector import MetricCollector
-from ..core.constants import InsightMetricName
+from ..core.constants import InsightMetricName, ProductType
 from ..core.error_handling import (
     ErrorCategory,
     validate_response_format,
@@ -302,16 +302,25 @@ class InsightCollector(MetricCollector):
             logger.debug("No organizations found for Insight collection")
             return
 
+        health_complete = True
         for org in organizations:
             org_id = org["id"]
             org_name = org.get("name", org_id)
             with LogContext(org_id=org_id, org_name=org_name):
-                await self._collect_org(org_id, org_name, apps_due=apps_due, health_due=health_due)
+                completed = await self._collect_org(
+                    org_id, org_name, apps_due=apps_due, health_due=health_due
+                )
+            # `with_error_handling` returns None when it swallowed an exception or
+            # the deadline; only an explicit True means the org finished.
+            if completed is not True:
+                health_complete = False
 
-        # Advance the scheduler's last-ran clock for each group that was due.
+        # Advance the scheduler's last-ran clock for each group that was due. The
+        # health group is marked only when every organization's fan-out finished,
+        # so a cut-short run is recorded as a failure and retried (#980).
         if apps_due:
             self._mark_group_ran(EndpointGroupName.INSIGHT_APPLICATIONS)
-        if health_due:
+        if health_due and health_complete:
             self._mark_group_ran(EndpointGroupName.INSIGHT_APP_HEALTH)
 
     @with_error_handling(
@@ -327,7 +336,7 @@ class InsightCollector(MetricCollector):
         *,
         apps_due: bool,
         health_due: bool,
-    ) -> None:
+    ) -> bool:
         """Collect Insight metrics for one organization.
 
         Parameters
@@ -342,6 +351,15 @@ class InsightCollector(MetricCollector):
             Whether the per-network application-health group is due (and
             enabled) this heartbeat.
 
+        Returns
+        -------
+        bool
+            ``True`` on every normal exit (applications unavailable for the
+            organization, health not due or no selected application, fan-out
+            finished). The error-handling decorator returns ``None`` instead when
+            it swallowed an exception or the deadline, which callers treat as
+            "did not complete".
+
         """
         # (Re)fetch the monitored-application inventory when the applications
         # group is due, or when the cache is cold (needed to fan out health).
@@ -352,7 +370,7 @@ class InsightCollector(MetricCollector):
                     "Insight applications unavailable for organization; skipping",
                     org_id=org_id,
                 )
-                return
+                return True
             applications = [InsightApplication.model_validate(a) for a in raw_apps]
             selected = self._select_applications(applications, org_id)
             self._app_cache[org_id] = selected
@@ -361,6 +379,7 @@ class InsightCollector(MetricCollector):
         selected = self._app_cache.get(org_id, [])
         if health_due and selected:
             await self._collect_application_health(org_id, org_name, selected)
+        return True
 
     def _select_applications(
         self, applications: list[InsightApplication], org_id: str
@@ -453,9 +472,17 @@ class InsightCollector(MetricCollector):
 
         """
         assert self.inventory is not None  # guaranteed by _collect_impl
-        networks = await self.inventory.get_networks(org_id)
+        # Insight data exists only for appliance networks; use the same selector as
+        # the inventory's appliance_network_count so the fan-out matches the cost.
+        networks = [
+            network
+            for network in await self.inventory.get_networks(org_id)
+            if ProductType.APPLIANCE in (network.get("productTypes") or [])
+        ]
         if not networks:
-            logger.debug("No networks for Insight application-health fan-out", org_id=org_id)
+            logger.debug(
+                "No appliance networks for Insight application-health fan-out", org_id=org_id
+            )
             return
 
         ttl = self._group_ttl_seconds(EndpointGroupName.INSIGHT_APP_HEALTH)

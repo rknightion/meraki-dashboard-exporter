@@ -240,7 +240,11 @@ def test_webhook_endpoint_processing_failure_is_retryable(
     applier = FailOnceApplier()
     exporter.webhook_handler._device_state_applier = applier
     client = TestClient(exporter.create_app())
-    payload = {**valid_webhook_payload, "alertType": "device_down"}
+    payload = {
+        **valid_webhook_payload,
+        "alertType": "APs went down",
+        "alertTypeId": "stopped_reporting",
+    }
 
     failed = client.post("/api/webhooks/meraki", json=payload)
     retried = client.post("/api/webhooks/meraki", json=payload)

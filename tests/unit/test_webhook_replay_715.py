@@ -53,7 +53,8 @@ def _device_down_payload() -> dict[str, object]:
         "organizationUrl": "https://dashboard.meraki.com/o/ABC123/manage/organization/overview",
         "deviceSerial": "Q2XX-XXXX-XXXX",
         "alertId": "alert-715",
-        "alertType": "device_down",
+        "alertType": "APs went down",
+        "alertTypeId": "stopped_reporting",
         "alertData": {},
     }
 
@@ -70,21 +71,21 @@ def test_replayed_alert_records_two_deliveries_but_applies_device_state_once() -
     assert (
         REGISTRY.get_sample_value(
             "meraki_webhook_delivery_attempts_total",
-            {"org_id": "123456", "alert_type": "device_down"},
+            {"org_id": "123456", "alert_type": "stopped_reporting"},
         )
         == 2
     )
     assert (
         REGISTRY.get_sample_value(
             "meraki_webhook_unique_alerts_total",
-            {"org_id": "123456", "alert_type": "device_down"},
+            {"org_id": "123456", "alert_type": "stopped_reporting"},
         )
         == 1
     )
     assert (
         REGISTRY.get_sample_value(
             "meraki_webhook_replays_rejected_total",
-            {"org_id": "123456", "alert_type": "device_down"},
+            {"org_id": "123456", "alert_type": "stopped_reporting"},
         )
         == 1
     )
@@ -107,14 +108,14 @@ def test_out_of_window_alert_is_rejected_before_applying_device_state(offset: in
     assert (
         REGISTRY.get_sample_value(
             "meraki_webhook_delivery_attempts_total",
-            {"org_id": "123456", "alert_type": "device_down"},
+            {"org_id": "123456", "alert_type": "stopped_reporting"},
         )
         == 1
     )
     assert (
         REGISTRY.get_sample_value(
             "meraki_webhook_stale_rejected_total",
-            {"org_id": "123456", "alert_type": "device_down"},
+            {"org_id": "123456", "alert_type": "stopped_reporting"},
         )
         == 1
     )

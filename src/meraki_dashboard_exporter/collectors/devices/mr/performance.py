@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ....core.api_facade import facade_for
 from ....core.constants import MRMetricName
+from ....core.domain_models import WirelessDeviceCpuLoadHistory
 from ....core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ....core.label_helpers import create_device_labels, create_network_labels
 from ....core.logging import get_logger
@@ -373,7 +374,7 @@ class MRPerformanceCollector:
         # MR CPU metrics
         self._mr_cpu_load_5min = self.parent._create_gauge(
             MRMetricName.MR_CPU_LOAD_5MIN,
-            "Access point CPU load percentage (5-minute average)",
+            "Access point 5-minute load average per core, percent (100 = one runnable task per core)",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.NETWORK_ID,
@@ -1081,8 +1082,13 @@ class MRPerformanceCollector:
             return
 
         try:
-            # Filter for MR devices
-            mr_devices = [d for d in devices if d.get("model", "").startswith("MR")]
+            # Filter for wireless devices: MR models plus Catalyst wireless access
+            # points, the same rule as DeviceCollector's wireless admission.
+            mr_devices = [
+                d
+                for d in devices
+                if (d.get("model") or "").startswith("MR") or d.get("productType") == "wireless"
+            ]
 
             if not mr_devices:
                 logger.debug("No MR devices found for CPU load collection", org_id=org_id)
@@ -1204,32 +1210,37 @@ class MRPerformanceCollector:
         self,
         item: dict[str, Any],
     ) -> float | None:
-        """Extract CPU load value from API response.
+        """Extract the 5-minute load average per core, as a percentage.
+
+        The API's ``cpuLoad5`` is the Linux ``sysinfo`` load average in fixed point
+        with 16 fractional bits, so the load is ``cpuLoad5 / 65536``. Dividing by the
+        core count keeps the gauge comparable across models (100 = one runnable task
+        per core).
 
         Parameters
         ----------
         item : dict[str, Any]
-            CPU data item from API.
+            CPU load history row from API.
 
         Returns
         -------
         float | None
-            CPU load percentage or None if unavailable.
+            Load percentage per core from the newest non-null sample, or None when
+            there is no such sample or the core count is missing or zero.
 
         """
-        # Get the most recent CPU reading
-        history = item.get("history", [])
-        if not history:
+        row = WirelessDeviceCpuLoadHistory.model_validate(item)
+        if not row.cpuCount:
             return None
 
-        # Use the last (most recent) reading
-        latest = history[-1]
-        cpu_load = latest.get("load")
+        samples = [s for s in row.series or [] if s.cpuLoad5 is not None]
+        if not samples:
+            return None
 
-        # Return as float or None
-        if cpu_load is not None:
-            return float(cpu_load)
-        return None
+        # ISO 8601 UTC timestamps sort lexically; a null ts sorts lowest.
+        newest = max(samples, key=lambda s: s.ts or "")
+        assert newest.cpuLoad5 is not None
+        return newest.cpuLoad5 / 65536 / row.cpuCount * 100
 
     def _process_device_cpu_data(
         self,

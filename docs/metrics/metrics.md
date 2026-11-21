@@ -164,7 +164,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 |--------|------|--------|-------------|-------|
 | `meraki_mr_aggregation_enabled` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | Access point port aggregation enabled status (1 = enabled, 0 = disabled) |  |
 | `meraki_mr_aggregation_speed_mbps` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | Access point total aggregated port speed in Mbps |  |
-| `meraki_mr_cpu_load_5min` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | Access point CPU load percentage (5-minute average) |  |
+| `meraki_mr_cpu_load_5min` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | Access point 5-minute load average per core, percent (100 = one runnable task per core) |  |
 | `meraki_mr_network_packet_loss_downstream_percent` | gauge | `org_id`, `network_id` | Downstream packet loss percentage for network (5-minute window) |  |
 | `meraki_mr_network_packet_loss_total_percent` | gauge | `org_id`, `network_id` | Total packet loss percentage for network (5-minute window) |  |
 | `meraki_mr_network_packet_loss_upstream_percent` | gauge | `org_id`, `network_id` | Upstream packet loss percentage for network (5-minute window) |  |
@@ -429,7 +429,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 |--------|------|--------|-------------|-------|
 | `meraki_device_firmware_info` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `firmware` | Device firmware join metric (value 1): maps serial -> running firmware. Numeric device series join firmware via on(serial) group_left(firmware) |  |
 | `meraki_exporter_org_collection_status` | gauge | `org_id` | Organization collection status (1=success, 0=failed or in backoff) |  |
-| `meraki_network_firmware_up_to_date` | gauge | `org_id`, `network_id` | Whether every device in the network is on its latest firmware (1=all up to date / no pending upgrade, 0=at least one device has a pending or in-progress upgrade) |  |
+| `meraki_network_firmware_up_to_date` | gauge | `org_id`, `network_id` | Whether the network's switches and access points have no firmware upgrade in flight (1=no upgrade scheduled or started, 0=at least one upgrade is scheduled or started). Not emitted for networks with no switch or access point |  |
 | `meraki_network_info` | gauge | `org_id`, `network_id`, `network_name` | Network information (join metric: network_id -> network_name) |  |
 | `meraki_network_tag_info` | gauge | `org_id`, `network_id`, `tag` | Network tag membership (one series per network and tag) |  |
 | `meraki_org` | info | `org_id`, `org_name` | Organization information |  |

@@ -195,6 +195,26 @@ class TestFailureRetrySpacing:
         # next_due is floored at last_attempt + failure_retry (300), not now.
         assert sched.next_due(g, now=1.0) == pytest.approx(300.0)
 
+    def test_fast_group_failure_retry_is_capped_at_its_interval(self) -> None:
+        """A failed fast group retries after its own interval, not failure_retry_seconds (#1005)."""
+        sched = self._sched()
+        g = EndpointGroupName.MT_SENSOR_READINGS  # interval 60, failure_retry 300
+        # Attempt at t=0 with no mark_ran ⇒ the fetch "failed".
+        assert sched.should_run(g, now=0.0) is True
+        # The retry spacing is capped at the group's own interval (60), not 300.
+        assert sched.next_due(g, now=1.0) == pytest.approx(60.0)
+        assert sched.should_run(g, now=59.0) is False
+        assert sched.should_run(g, now=60.0) is True
+
+    def test_two_minute_group_failure_retry_is_capped_at_its_interval(self) -> None:
+        """A failed 120 s group is due again 120 s after the attempt, not 300 s (#1005)."""
+        sched = self._sched()
+        g = EndpointGroupName.DEVICE_AVAILABILITY  # interval 120, failure_retry 300
+        assert sched.should_run(g, now=0.0) is True
+        assert sched.next_due(g, now=1.0) == pytest.approx(120.0)
+        assert sched.should_run(g, now=119.0) is False
+        assert sched.should_run(g, now=120.0) is True
+
 
 class TestForceRunGate:
     """A forced run opens every gate regardless of the schedule (#631)."""

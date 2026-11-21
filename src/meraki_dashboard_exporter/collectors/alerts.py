@@ -86,6 +86,13 @@ class AlertsCollector(MetricCollector):
         # tracker is owned/updated by OrganizationCollector.
         self.org_health_tracker = org_health_tracker
 
+        # Label keys emitted on the previous successful pass, per org (#992). A key
+        # that is absent from the next successful response is written once as 0 so
+        # a resolved alert reads 0 instead of freezing at its last count until TTL.
+        self._seen_alert_keys: dict[str, set[tuple[str, str, str, str, str]]] = {}
+        self._seen_alert_network_ids: dict[str, set[str]] = {}
+        self._seen_health_alert_keys: dict[str, set[tuple[str, str, str]]] = {}
+
     def _initialize_metrics(self) -> None:
         """Initialize alert metrics."""
         # Active alerts count by various dimensions
@@ -410,9 +417,10 @@ class AlertsCollector(MetricCollector):
             # NB: do NOT clear the gauges here. Organizations are processed
             # concurrently (process_in_batches_with_errors in _collect_impl), sharing
             # one gauge instance per metric, so a blanket clear would wipe every other
-            # org's series mid-cycle (same reasoning as mx_ha.py/mg.py). Resolved
-            # alerts' stale label combinations are instead reaped by the metric
-            # expiration manager via self._set_metric tracking below (F-059).
+            # org's series mid-cycle (same reasoning as mx_ha.py/mg.py). Label
+            # combinations that resolved since the last successful pass are instead
+            # written once as 0 in _process_alerts (#992); a failed fetch raised above
+            # and never reaches that step, so it writes nothing (F-015).
 
             allowed_network_ids = (
                 await self.inventory.get_allowed_network_ids(org_id)
@@ -421,8 +429,9 @@ class AlertsCollector(MetricCollector):
             )
 
             if not alerts:
+                # A successful empty response is a real zero: fall through so the
+                # by-severity buckets and every previously emitted key read 0 (#992).
                 logger.debug("No active alerts", org_id=org_id)
-                return
 
             # Process alerts and aggregate counts
             self._process_alerts(alerts, org_id, org_name, allowed_network_ids)
@@ -524,6 +533,24 @@ class AlertsCollector(MetricCollector):
         # Set metrics for active alerts. Routed through self._set_metric (rather than
         # raw .labels().set()) so the metric expiration manager tracks every label
         # combination and reaps series for alerts that have since resolved (F-059).
+        seen_alert_keys = self._seen_alert_keys.setdefault(org_id, set())
+        for stale_key in seen_alert_keys - alert_counts.keys():
+            if allowed_network_ids is not None and stale_key[0] not in allowed_network_ids:
+                continue  # F-173: no series for a network the filter now excludes
+            self._set_metric(
+                self._alerts_active,
+                {
+                    "org_id": org_id,
+                    "network_id": stale_key[0],
+                    "alert_type": stale_key[1],
+                    "category_type": stale_key[2],
+                    "severity": stale_key[3],
+                    "device_type": stale_key[4],
+                },
+                0,
+                AlertMetricName.ALERTS_ACTIVE.value,
+                ttl_seconds=ttl,
+            )
         for key, count in alert_counts.items():
             (
                 network_id,
@@ -561,7 +588,24 @@ class AlertsCollector(MetricCollector):
                 ttl_seconds=ttl,
             )
 
+        seen_alert_keys.clear()
+        seen_alert_keys.update(alert_counts.keys())
+
         # Set network summary metrics
+        seen_network_ids = self._seen_alert_network_ids.setdefault(org_id, set())
+        for stale_network_id in seen_network_ids - network_counts.keys():
+            if allowed_network_ids is not None and stale_network_id not in allowed_network_ids:
+                continue
+            self._set_metric(
+                self._alerts_by_network,
+                {
+                    "org_id": org_id,
+                    "network_id": stale_network_id,
+                },
+                0,
+                AlertMetricName.ALERTS_BY_NETWORK.value,
+                ttl_seconds=ttl,
+            )
         for network_id, count in network_counts.items():
             self._set_metric(
                 self._alerts_by_network,
@@ -574,8 +618,29 @@ class AlertsCollector(MetricCollector):
                 ttl_seconds=ttl,
             )
 
+        seen_network_ids.clear()
+        seen_network_ids.update(network_counts.keys())
+
         # Set derived network health alert metrics (replaces the deprecated
         # per-network getNetworkHealthAlerts loop, see F-064 / issue #273).
+        seen_health_keys = self._seen_health_alert_keys.setdefault(org_id, set())
+        for stale_network_id, stale_category, stale_severity in (
+            seen_health_keys - health_alert_counts.keys()
+        ):
+            if allowed_network_ids is not None and stale_network_id not in allowed_network_ids:
+                continue
+            self._set_metric(
+                self._network_health_alerts_total,
+                {
+                    "org_id": org_id,
+                    "network_id": stale_network_id,
+                    "category": stale_category,
+                    "severity": stale_severity,
+                },
+                0,
+                AlertMetricName.NETWORK_HEALTH_ALERTS.value,
+                ttl_seconds=ttl,
+            )
         for (network_id, category, severity), count in health_alert_counts.items():
             self._set_metric(
                 self._network_health_alerts_total,
@@ -589,6 +654,8 @@ class AlertsCollector(MetricCollector):
                 AlertMetricName.NETWORK_HEALTH_ALERTS.value,
                 ttl_seconds=ttl,
             )
+        seen_health_keys.clear()
+        seen_health_keys.update(health_alert_counts.keys())
 
         logger.debug(
             "Collected alert metrics",

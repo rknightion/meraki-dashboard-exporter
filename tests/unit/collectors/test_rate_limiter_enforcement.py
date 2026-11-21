@@ -88,7 +88,13 @@ async def test_mr_cpu_load_acquires_exactly_once_no_double() -> None:
     parent.settings.api.batch_size = 20
     parent.api = MagicMock()
     parent.api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory = MagicMock(
-        return_value=[{"serial": "Q123", "history": [{"load": 12.0}]}]
+        return_value=[
+            {
+                "serial": "Q123",
+                "cpuCount": 4,
+                "series": [{"ts": "2026-01-01T00:00:00Z", "cpuLoad5": 26112}],
+            }
+        ]
     )
     collector = MRPerformanceCollector(parent)
 

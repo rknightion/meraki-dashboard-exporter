@@ -218,7 +218,7 @@ Adaptive budget-aware endpoint scheduler (AIMD, stretch, resolve cadence)
 | `MERAKI_EXPORTER_SCHEDULER__MAX_STRETCH_FACTOR` | `float` | `4.0` | Per-group interval cap as a multiple of its volatility floor. (min: 1.0, max: 16.0) |
 | `MERAKI_EXPORTER_SCHEDULER__MAX_INTERVAL_SECONDS` | `int` | `3600` | Absolute per-group interval cap. (min: 300, max: 86400) |
 | `MERAKI_EXPORTER_SCHEDULER__RESOLVE_INTERVAL_SECONDS` | `int` | `900` | How often the solver recomputes from org shape (matches inventory TTL). (min: 60, max: 86400) |
-| `MERAKI_EXPORTER_SCHEDULER__FAILURE_RETRY_SECONDS` | `int` | `300` | After a group's fetch fails (its gate is left open), wait at least this long before re-attempting it, instead of hot-looping. Reproduces the old ~300s failed-fetch retry cadence for every group regardless of floor. (min: 30, max: 3600) |
+| `MERAKI_EXPORTER_SCHEDULER__FAILURE_RETRY_SECONDS` | `int` | `300` | After a group's fetch fails (its gate is left open), wait this long before re-attempting it, instead of hot-looping. The wait is capped at the group's own interval, so a group whose interval is shorter than this retries after its interval. (min: 30, max: 3600) |
 | `MERAKI_EXPORTER_SCHEDULER__AIMD_ENABLED` | `bool` | `True` | 429/Retry-After budget feedback (adaptive mode only). |
 | `MERAKI_EXPORTER_SCHEDULER__AIMD_BACKOFF_MULTIPLIER` | `float` | `0.5` |  (min: 0.1, max: 0.9) |
 | `MERAKI_EXPORTER_SCHEDULER__AIMD_RECOVERY_RPS_PER_MINUTE` | `float` | `0.1` |  (min: 0.01, max: 5.0) |

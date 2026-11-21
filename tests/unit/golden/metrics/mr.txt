@@ -14,7 +14,7 @@ meraki_mr_connection_stats_count gauge
   help: Wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success)
   labels: device_type,model,network_id,org_id,serial,stat_type
 meraki_mr_cpu_load_5min gauge
-  help: Access point CPU load percentage (5-minute average)
+  help: Access point 5-minute load average per core, percent (100 = one runnable task per core)
   labels: device_type,model,network_id,org_id,serial
 meraki_mr_network_packet_loss_downstream_percent gauge
   help: Downstream packet loss percentage for network (5-minute window)

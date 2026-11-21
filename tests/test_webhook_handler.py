@@ -343,7 +343,7 @@ class TestWebhookHandlerMetrics:
 
         # Second: a different known alert type.
         payload2 = valid_payload.copy()
-        payload2["alertType"] = "motion_detected"
+        payload2["alertType"] = "motion_alert"
         webhook_handler.process_webhook(payload2)
 
         # Both known alert types are tracked (org buckets to "other").
@@ -353,7 +353,7 @@ class TestWebhookHandlerMetrics:
         )
         motion_metric = REGISTRY.get_sample_value(
             "meraki_webhook_events_received_total",
-            {"org_id": "other", "alert_type": "motion_detected"},
+            {"org_id": "other", "alert_type": "motion_alert"},
         )
 
         assert settings_metric is not None
@@ -632,7 +632,7 @@ class _FailOnceApplier:
 
 
 def _device_down_payload() -> dict:
-    """A valid device_down webhook payload with a device serial."""
+    """A valid stopped_reporting webhook payload with a device serial."""
     return {
         "version": "1.0",
         "sharedSecret": "test_secret_123",
@@ -644,7 +644,8 @@ def _device_down_payload() -> dict:
         "networkName": "Test Network",
         "deviceSerial": "Q2XX-XXXX-XXXX",
         "deviceName": "Test Device",
-        "alertType": "device_down",
+        "alertType": "APs went down",
+        "alertTypeId": "stopped_reporting",
         "alertData": {},
     }
 
@@ -668,6 +669,94 @@ class TestWebhookDeviceStateFastPath:
             {"direction": "down", "result": "applied"},
         )
         assert counter == 1
+
+    def test_vendor_stopped_reporting_payload_flips_device_down(
+        self, settings_with_secret: Settings
+    ) -> None:
+        """The vendor sample pair (display text in alertType, id in alertTypeId) flips down."""
+        applier = _StubApplier(verdict=True)
+        handler = WebhookHandler(settings_with_secret, device_state_applier=applier)
+        payload = _device_down_payload()
+        assert payload["alertType"] == "APs went down"
+        assert payload["alertTypeId"] == "stopped_reporting"
+
+        handler.process_webhook(payload)
+
+        assert applier.calls == [("Q2XX-XXXX-XXXX", False)]
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_webhook_events_received_total",
+                {"org_id": "123456", "alert_type": "stopped_reporting"},
+            )
+            == 1
+        )
+
+    def test_started_reporting_is_counted_but_not_wired(
+        self, settings_with_secret: Settings
+    ) -> None:
+        """AC3: started_reporting keeps its own id and never calls the applier."""
+        applier = _StubApplier(verdict=True)
+        handler = WebhookHandler(settings_with_secret, device_state_applier=applier)
+        payload = _device_down_payload()
+        payload["alertType"] = "APs came up"
+        payload["alertTypeId"] = "started_reporting"
+
+        handler.process_webhook(payload)
+
+        assert applier.calls == []
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_webhook_events_received_total",
+                {"org_id": "123456", "alert_type": "started_reporting"},
+            )
+            == 1
+        )
+
+    def test_missing_alert_type_id_classifies_on_alert_type(
+        self, settings_with_secret: Settings
+    ) -> None:
+        """AC2: with no alertTypeId (or an empty one) the alertType value is the id."""
+        applier = _StubApplier(verdict=True)
+        handler = WebhookHandler(settings_with_secret, device_state_applier=applier)
+        payload = _device_down_payload()
+        del payload["alertTypeId"]
+        payload["alertType"] = "stopped_reporting"
+
+        handler.process_webhook(payload)
+
+        assert applier.calls == [("Q2XX-XXXX-XXXX", False)]
+
+    def test_empty_alert_type_id_falls_back_to_alert_type(
+        self, settings_with_secret: Settings
+    ) -> None:
+        """An empty alertTypeId does not hide a valid id carried in alertType."""
+        applier = _StubApplier(verdict=True)
+        handler = WebhookHandler(settings_with_secret, device_state_applier=applier)
+        payload = _device_down_payload()
+        payload["alertTypeId"] = ""
+        payload["alertType"] = "stopped_reporting"
+
+        handler.process_webhook(payload)
+
+        assert applier.calls == [("Q2XX-XXXX-XXXX", False)]
+
+    def test_unlisted_alert_type_id_buckets_to_other(self, settings_with_secret: Settings) -> None:
+        """AC2: an id outside the catalogue buckets to other and does not flip."""
+        applier = _StubApplier(verdict=True)
+        handler = WebhookHandler(settings_with_secret, device_state_applier=applier)
+        payload = _device_down_payload()
+        payload["alertTypeId"] = "device_down"
+
+        handler.process_webhook(payload)
+
+        assert applier.calls == []
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_webhook_events_received_total",
+                {"org_id": "123456", "alert_type": "other"},
+            )
+            == 1
+        )
 
     def test_processing_failure_does_not_poison_delivery_deduplication(
         self, settings_with_secret: Settings
@@ -718,19 +807,19 @@ class TestWebhookDeviceStateFastPath:
         assert (
             REGISTRY.get_sample_value(
                 "meraki_webhook_events_received_total",
-                {"org_id": "123456", "alert_type": "device_down"},
+                {"org_id": "123456", "alert_type": "stopped_reporting"},
             )
             == 1
         )
         assert (
             REGISTRY.get_sample_value(
                 "meraki_webhook_events_processed_total",
-                {"org_id": "123456", "alert_type": "device_down"},
+                {"org_id": "123456", "alert_type": "stopped_reporting"},
             )
             == 1
         )
 
-    @pytest.mark.parametrize("alert_type", ["port_down", "cellular_down", "uplink_status_change"])
+    @pytest.mark.parametrize("alert_type", ["port_disconnected", "cellular_down", "failover_event"])
     def test_non_device_alert_types_do_not_flip(
         self, settings_with_secret: Settings, alert_type: str
     ) -> None:
@@ -739,7 +828,7 @@ class TestWebhookDeviceStateFastPath:
         handler = WebhookHandler(settings_with_secret, device_state_applier=applier)
 
         payload = _device_down_payload()
-        payload["alertType"] = alert_type
+        payload["alertTypeId"] = alert_type
         handler.process_webhook(payload)
 
         assert applier.calls == []
@@ -765,7 +854,7 @@ class TestWebhookDeviceStateFastPath:
         assert (
             REGISTRY.get_sample_value(
                 "meraki_webhook_events_processed_total",
-                {"org_id": "123456", "alert_type": "device_down"},
+                {"org_id": "123456", "alert_type": "stopped_reporting"},
             )
             == 1
         )

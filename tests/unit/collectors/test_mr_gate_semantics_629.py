@@ -112,7 +112,13 @@ async def test_cpu_load_partial_success_marks_ran() -> None:
     parent = _make_parent()
     parent.settings.api.batch_size = 1  # two single-device batches
     parent.api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory.side_effect = [
-        [{"serial": "Q1", "history": [{"load": 10.0}]}],  # batch 1 ok
+        [
+            {
+                "serial": "Q1",
+                "cpuCount": 4,
+                "series": [{"ts": "2026-01-01T00:00:00Z", "cpuLoad5": 26112}],
+            }
+        ],  # batch 1 ok
         Exception("boom"),  # batch 2 fails
     ]
     collector = MRPerformanceCollector(parent)

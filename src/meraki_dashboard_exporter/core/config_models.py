@@ -493,9 +493,10 @@ class SchedulerSettings(BaseModel):
         ge=30,
         le=3600,
         description=(
-            "After a group's fetch fails (its gate is left open), wait at least this "
-            "long before re-attempting it, instead of hot-looping. Reproduces the old "
-            "~300s failed-fetch retry cadence for every group regardless of floor."
+            "After a group's fetch fails (its gate is left open), wait this long "
+            "before re-attempting it, instead of hot-looping. The wait is capped at "
+            "the group's own interval, so a group whose interval is shorter than this "
+            "retries after its interval."
         ),
     )
     aimd_enabled: bool = Field(

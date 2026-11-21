@@ -288,7 +288,7 @@ class ExporterApp:
         self.webhook_handler: WebhookHandler | None = None
         if self.settings.webhooks.enabled:
             # #614: wire the DeviceCollector as the fast-path device-state applier
-            # so a device_down webhook can flip meraki_device_up ahead of the poll.
+            # so a stopped_reporting webhook can flip meraki_device_up ahead of the poll.
             # Absent/disabled `device` collector => None => count-only degradation.
             device_collector = self.collector_manager.get_collector_by_class_name("DeviceCollector")
             self.webhook_handler = WebhookHandler(
