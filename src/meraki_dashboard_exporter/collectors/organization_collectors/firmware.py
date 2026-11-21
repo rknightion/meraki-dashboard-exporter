@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 
 from ...core.api_facade import facade_for
+from ...core.constants.device_constants import DeviceType
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_device_labels, create_org_labels
 from ...core.logging import get_logger
@@ -24,19 +25,11 @@ logger = get_logger(__name__)
 # status rather than the raw (label) value.
 _PENDING_STATUSES = frozenset({"scheduled", "pending", "started"})
 
-# By-device upgrade statuses that mean the device still has an outstanding
-# (pending / in-progress / staged) firmware upgrade — used to derive per-network
-# firmware compliance (#611). Compared case-insensitively.
-# ⚠ Phase-6 live verification: confirm the getOrganizationFirmwareUpgradesByDevice
-# upgrade-status field name and its exact value vocabulary.
-_BY_DEVICE_PENDING_STATUSES = frozenset({
-    "scheduled",
-    "pending",
-    "started",
-    "in_progress",
-    "in progress",
-    "staged",
-})
+# By-device upgrade statuses that mean a device has an upgrade in flight. The by-device
+# endpoint's `upgrade.status` vocabulary is scheduled, started, completed and canceled
+# (the capture carries `Completed`; the spec's filter enum is lower case), so the
+# comparison is case-insensitive. Finished states and any unlisted status never count.
+_IN_FLIGHT_UPGRADE_STATUSES = frozenset({"scheduled", "started"})
 
 
 class FirmwareCollector(BaseOrganizationCollector):
@@ -260,7 +253,7 @@ class FirmwareCollector(BaseOrganizationCollector):
 
     @log_api_call("getOrganizationFirmwareUpgradesByDevice")
     async def _fetch_firmware_upgrades_by_device(self, org_id: str) -> list[dict[str, Any]]:
-        """Fetch per-device firmware upgrade status.
+        """Fetch per-device firmware upgrade status for current upgrades only.
 
         Parameters
         ----------
@@ -279,6 +272,8 @@ class FirmwareCollector(BaseOrganizationCollector):
             self.api.organizations.getOrganizationFirmwareUpgradesByDevice,
             org_id,
             total_pages="all",
+            currentUpgradesOnly=True,
+            perPage=1000,
         )
         return cast(
             list[dict[str, Any]],
@@ -304,8 +299,10 @@ class FirmwareCollector(BaseOrganizationCollector):
           built entirely from the **cached inventory** (zero extra API calls),
           refreshed every cycle so serials join to their running firmware.
         * ``meraki_network_firmware_up_to_date`` — a per-network 1/0 gauge
-          derived from ``getOrganizationFirmwareUpgradesByDevice`` (gated by the
-          ORG_FIRMWARE_COMPLIANCE group).
+          derived from the current upgrades in
+          ``getOrganizationFirmwareUpgradesByDevice`` (gated by the
+          ORG_FIRMWARE_COMPLIANCE group). That endpoint returns no network, so each
+          row's serial is resolved to its network through the cached inventory.
 
         Parameters
         ----------
@@ -334,14 +331,19 @@ class FirmwareCollector(BaseOrganizationCollector):
 
             with LogContext(org_id=org_id, org_name=org_name):
                 by_device = await self._fetch_firmware_upgrades_by_device(org_id)
-                allowed_network_ids = (
-                    await self.inventory.get_allowed_network_ids(org_id)
-                    if self.inventory is not None
-                    else None
-                )
+                if self.inventory is not None:
+                    devices = await self.inventory.get_devices(org_id)
+                    allowed_network_ids = await self.inventory.get_allowed_network_ids(org_id)
+                else:
+                    devices = None
+                    allowed_network_ids = None
 
             self.parent._mark_group_ran(EndpointGroupName.ORG_FIRMWARE_COMPLIANCE)
-            self._process_firmware_compliance(org_id, org_name, by_device, allowed_network_ids)
+            # Without inventory there is no serial-to-network map, so no gauge is emitted.
+            if devices is not None:
+                self._process_firmware_compliance(
+                    org_id, org_name, by_device, devices, allowed_network_ids
+                )
             return True
 
         except Exception as e:
@@ -382,24 +384,31 @@ class FirmwareCollector(BaseOrganizationCollector):
             self._set_metric_value("_device_firmware_info", labels, 1)
 
     @staticmethod
-    def _is_device_pending(status: Any) -> bool:
-        """Whether a by-device upgrade status indicates an outstanding upgrade."""
-        if not isinstance(status, str):
-            return False
-        return status.lower() in _BY_DEVICE_PENDING_STATUSES
+    def _is_switch_or_ap(device: dict[str, Any]) -> bool:
+        """Whether a device is a switch or access point (the by-device endpoint's scope)."""
+        model = str(device.get("model") or "")
+        product_type = device.get("productType")
+        return model.startswith((DeviceType.MR, DeviceType.MS)) or product_type in {
+            "wireless",
+            "switch",
+        }
 
     def _process_firmware_compliance(
         self,
         org_id: str,
         org_name: str,
         by_device: list[dict[str, Any]],
+        devices: list[dict[str, Any]],
         allowed_network_ids: set[str] | None,
     ) -> None:
-        """Derive per-network firmware up-to-date state from by-device statuses.
+        """Derive per-network firmware up-to-date state from current by-device upgrades.
 
-        A network reports ``1`` when none of its devices have an outstanding
-        (pending/in-progress/staged) upgrade, ``0`` when at least one does.
-        Networks outside the configured NetworkFilter are skipped.
+        The by-device rows carry no network, so each serial is resolved to its
+        network from the cached inventory. Every allowed network that has a
+        switch or access point is emitted: ``0`` when any of its rows has a
+        ``scheduled`` or ``started`` upgrade, otherwise ``1`` (including when it has
+        no row at all). Networks outside the configured NetworkFilter, and
+        networks with no switch or access point, get no sample.
 
         Parameters
         ----------
@@ -408,31 +417,40 @@ class FirmwareCollector(BaseOrganizationCollector):
         org_name : str
             Organization name.
         by_device : list[dict[str, Any]]
-            Per-device firmware upgrade status entries.
+            Per-device firmware upgrade status entries (no network key).
+        devices : list[dict[str, Any]]
+            Cached inventory devices for the organization.
         allowed_network_ids : set[str] | None
             Network IDs permitted by the NetworkFilter, or None (accept all).
 
         """
         ttl = self.parent._group_ttl_seconds(EndpointGroupName.ORG_FIRMWARE_COMPLIANCE)
 
-        # network_id -> whether any device on it still has a pending upgrade.
-        net_pending: dict[str, bool] = {}
+        serial_to_network: dict[str, str] = {}
+        for device in devices:
+            serial = device.get("serial")
+            network_id = device.get("networkId")
+            if not serial or not network_id or not self._is_switch_or_ap(device):
+                continue
+            serial_to_network[serial] = network_id
+
+        # Every allowed network with a switch or AP is a candidate, pending until a row says so.
+        net_pending: dict[str, bool] = {
+            network_id: False
+            for network_id in set(serial_to_network.values())
+            if allowed_network_ids is None or network_id in allowed_network_ids
+        }
+
         skipped = 0
         for entry in by_device:
-            network_id = (entry.get("network") or {}).get("id")
-            if not network_id:
-                continue
-            if allowed_network_ids is not None and network_id not in allowed_network_ids:
+            network_id = serial_to_network.get(entry.get("serial") or "")
+            if network_id is None or network_id not in net_pending:
                 skipped += 1
                 continue
-            # ⚠ Phase-6: the upgrade status may live under `upgrade.status` or a
-            # top-level `status`; handle both leniently.
             upgrade = entry.get("upgrade")
             status = upgrade.get("status") if isinstance(upgrade, dict) else None
-            if status is None:
-                status = entry.get("status")
-            pending = self._is_device_pending(status)
-            net_pending[network_id] = net_pending.get(network_id, False) or pending
+            if isinstance(status, str) and status.lower() in _IN_FLIGHT_UPGRADE_STATUSES:
+                net_pending[network_id] = True
 
         org_data = {"id": org_id, "name": org_name}
         for network_id, pending in net_pending.items():
@@ -449,5 +467,5 @@ class FirmwareCollector(BaseOrganizationCollector):
             org_id=org_id,
             org_name=org_name,
             networks_evaluated=len(net_pending),
-            skipped_filtered_network=skipped,
+            skipped_unresolved_or_filtered_rows=skipped,
         )

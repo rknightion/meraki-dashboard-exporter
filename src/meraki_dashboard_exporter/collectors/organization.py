@@ -477,9 +477,9 @@ class OrganizationCollector(MetricCollector):
         )
         self._network_firmware_up_to_date = self._create_gauge(
             NetworkMetricName.NETWORK_FIRMWARE_UP_TO_DATE,
-            "Whether every device in the network is on its latest firmware "
-            "(1=all up to date / no pending upgrade, 0=at least one device has a "
-            "pending or in-progress upgrade)",
+            "Whether the network's switches and access points have no firmware upgrade in "
+            "flight (1=no upgrade scheduled or started, 0=at least one upgrade is "
+            "scheduled or started). Not emitted for networks with no switch or access point",
             labelnames=[LabelName.ORG_ID, LabelName.NETWORK_ID],
         )
 

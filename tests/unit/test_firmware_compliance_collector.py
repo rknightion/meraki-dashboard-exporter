@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -94,79 +96,161 @@ class TestFirmwareComplianceCollector:
         )
         assert collector.parent._metrics[key] == 1
 
+    @staticmethod
+    def _key(org_id: str, network_id: str):
+        return ("_network_firmware_up_to_date", (("network_id", network_id), ("org_id", org_id)))
+
     async def test_network_up_to_date_when_no_pending(self, mock_api_builder):
-        """A network with no pending device upgrade reports up_to_date=1."""
+        """A network whose rows are all finished reports up_to_date=1."""
         org_id = "org2"
+        devices = [
+            {"serial": "S1", "model": "MS120-8", "networkId": "N_A"},
+            {"serial": "S2", "model": "MR46", "networkId": "N_A"},
+        ]
         by_device = [
-            {"serial": "S1", "network": {"id": "N_A"}, "upgrade": {"status": "Completed"}},
-            {"serial": "S2", "network": {"id": "N_A"}, "upgrade": {"status": "Nothing to upgrade"}},
+            {"serial": "S1", "upgrade": {"status": "Completed"}},
+            {"serial": "S2", "upgrade": {"status": "Completed"}},
         ]
         api = mock_api_builder.with_custom_response(
             "getOrganizationFirmwareUpgradesByDevice", by_device
         ).build()
-        collector = self._collector(mock_api_builder)
+        collector = self._collector(mock_api_builder, devices=devices)
         collector.api = api
 
         await collector.collect_compliance(org_id, "Org Two")
 
-        key = ("_network_firmware_up_to_date", (("network_id", "N_A"), ("org_id", org_id)))
-        assert collector.parent._metrics[key] == 1
+        assert collector.parent._metrics[self._key(org_id, "N_A")] == 1
 
     async def test_network_not_up_to_date_when_pending(self, mock_api_builder):
-        """A network with any pending/scheduled device upgrade reports 0."""
+        """A network with a scheduled or started upgrade reports 0, case-insensitively."""
         org_id = "org3"
+        devices = [
+            {"serial": "S1", "model": "MS120-8", "networkId": "N_B"},
+            {"serial": "S2", "model": "MR46", "networkId": "N_B"},
+            {"serial": "S3", "model": "MS120-8", "networkId": "N_C"},
+            {"serial": "S4", "model": "MS120-8", "networkId": "N_D"},
+        ]
         by_device = [
-            {"serial": "S1", "network": {"id": "N_B"}, "upgrade": {"status": "Completed"}},
-            {"serial": "S2", "network": {"id": "N_B"}, "upgrade": {"status": "Scheduled"}},
+            {"serial": "S1", "upgrade": {"status": "Completed"}},
+            {"serial": "S2", "upgrade": {"status": "Scheduled"}},
+            {"serial": "S3", "upgrade": {"status": "started"}},
+            {"serial": "S4", "upgrade": {"status": "canceled"}},
         ]
         api = mock_api_builder.with_custom_response(
             "getOrganizationFirmwareUpgradesByDevice", by_device
         ).build()
-        collector = self._collector(mock_api_builder)
+        collector = self._collector(mock_api_builder, devices=devices)
         collector.api = api
 
         await collector.collect_compliance(org_id, "Org Three")
 
-        key = ("_network_firmware_up_to_date", (("network_id", "N_B"), ("org_id", org_id)))
-        assert collector.parent._metrics[key] == 0
+        m = collector.parent._metrics
+        assert m[self._key(org_id, "N_B")] == 0
+        assert m[self._key(org_id, "N_C")] == 0
+        assert m[self._key(org_id, "N_D")] == 1
 
-    async def test_network_filter_excludes_rows(self, mock_api_builder):
-        """By-device rows for networks outside the filter are skipped."""
-        org_id = "org4"
+    async def test_unknown_or_missing_status_does_not_mark_pending(self, mock_api_builder):
+        """A status the spec does not list, or no status at all, never turns a network to 0."""
+        org_id = "org3b"
+        devices = [
+            {"serial": "S1", "model": "MS120-8", "networkId": "N_E"},
+            {"serial": "S2", "model": "MS120-8", "networkId": "N_E"},
+            {"serial": "S3", "model": "MS120-8", "networkId": "N_E"},
+        ]
         by_device = [
-            {"serial": "S1", "network": {"id": "N_IN"}, "upgrade": {"status": "Scheduled"}},
-            {"serial": "S2", "network": {"id": "N_OUT"}, "upgrade": {"status": "Scheduled"}},
+            {"serial": "S1", "upgrade": {"status": "in_progress"}},
+            {"serial": "S2", "upgrade": {}},
+            {"serial": "S3"},
         ]
         api = mock_api_builder.with_custom_response(
             "getOrganizationFirmwareUpgradesByDevice", by_device
         ).build()
-        collector = self._collector(mock_api_builder, allowed={"N_IN"})
+        collector = self._collector(mock_api_builder, devices=devices)
+        collector.api = api
+
+        await collector.collect_compliance(org_id, "Org Three B")
+
+        assert collector.parent._metrics[self._key(org_id, "N_E")] == 1
+
+    async def test_network_filter_excludes_rows(self, mock_api_builder):
+        """Networks outside the allow-list get no sample, however their rows look."""
+        org_id = "org4"
+        devices = [
+            {"serial": "S1", "model": "MS120-8", "networkId": "N_IN"},
+            {"serial": "S2", "model": "MS120-8", "networkId": "N_OUT"},
+        ]
+        by_device = [
+            {"serial": "S1", "upgrade": {"status": "Scheduled"}},
+            {"serial": "S2", "upgrade": {"status": "Scheduled"}},
+        ]
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationFirmwareUpgradesByDevice", by_device
+        ).build()
+        collector = self._collector(mock_api_builder, devices=devices, allowed={"N_IN"})
         collector.api = api
 
         await collector.collect_compliance(org_id, "Org Four")
 
         m = collector.parent._metrics
-        assert ("_network_firmware_up_to_date", (("network_id", "N_IN"), ("org_id", org_id))) in m
-        assert (
-            "_network_firmware_up_to_date",
-            (("network_id", "N_OUT"), ("org_id", org_id)),
-        ) not in m
+        assert m[self._key(org_id, "N_IN")] == 0
+        assert self._key(org_id, "N_OUT") not in m
 
-    async def test_top_level_status_fallback(self, mock_api_builder):
-        """A top-level `status` (no nested upgrade) is still honoured."""
-        org_id = "org5"
-        by_device = [
-            {"serial": "S1", "network": {"id": "N_C"}, "status": "pending"},
+    async def test_network_without_rows_is_up_to_date(self, mock_api_builder):
+        """A switch or AP network with no current upgrade row reports 1, others no sample."""
+        org_id = "org7"
+        devices = [
+            {"serial": "S1", "model": "MS120-8", "networkId": "N_QUIET"},
+            {"serial": "S2", "model": "CW9162", "productType": "wireless", "networkId": "N_WIFI"},
+            {"serial": "S3", "model": "MX68", "networkId": "N_MX"},
+            {"serial": "S4", "model": "MS120-8"},
+            {"model": "MS120-8", "networkId": "N_NOSERIAL"},
         ]
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationFirmwareUpgradesByDevice", []
+        ).build()
+        collector = self._collector(mock_api_builder, devices=devices)
+        collector.api = api
+
+        await collector.collect_compliance(org_id, "Org Seven")
+
+        m = collector.parent._metrics
+        assert m[self._key(org_id, "N_QUIET")] == 1
+        assert m[self._key(org_id, "N_WIFI")] == 1
+        assert self._key(org_id, "N_MX") not in m
+        assert self._key(org_id, "N_NOSERIAL") not in m
+
+    async def test_corpus_fixture_resolves_network_from_inventory(self, mock_api_builder):
+        """The live-verified by-device capture has no network key; inventory supplies it."""
+        org_id = "org8"
+        corpus = (
+            Path(__file__).resolve().parents[1]
+            / "harness"
+            / "corpus"
+            / "get-organization-firmware-upgrades-by-device-01.json"
+        )
+        by_device = json.loads(corpus.read_text())
+        assert by_device
+        assert all("network" not in row for row in by_device)
+        serials = sorted({row["serial"] for row in by_device})
+        assert len(serials) == 10
+        devices = [
+            {"serial": serial, "model": "MS120-8", "networkId": "N_SW"} for serial in serials
+        ]
+        devices.append({"serial": "Q2MX-0000-0001", "model": "MX68", "networkId": "N_APPLIANCE"})
         api = mock_api_builder.with_custom_response(
             "getOrganizationFirmwareUpgradesByDevice", by_device
         ).build()
-        collector = self._collector(mock_api_builder)
+        collector = self._collector(mock_api_builder, devices=devices)
         collector.api = api
 
-        await collector.collect_compliance(org_id, "Org Five")
-        key = ("_network_firmware_up_to_date", (("network_id", "N_C"), ("org_id", org_id)))
-        assert collector.parent._metrics[key] == 0
+        await collector.collect_compliance(org_id, "Org Eight")
+
+        m = collector.parent._metrics
+        assert m[self._key(org_id, "N_SW")] == 1
+        assert self._key(org_id, "N_APPLIANCE") not in m
+        call = api.organizations.getOrganizationFirmwareUpgradesByDevice.call_args
+        assert call.kwargs["currentUpgradesOnly"] is True
+        assert call.kwargs["perPage"] == 1000
 
     async def test_by_device_404_still_emits_device_info(self, mock_api_builder):
         """A 404 on the by-device endpoint is benign; device info still emitted."""
