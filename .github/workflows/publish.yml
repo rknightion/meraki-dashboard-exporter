@@ -54,7 +54,7 @@ jobs:
       packages: read
       actions: read
       security-events: write
-    uses: rknightion/.github/.github/workflows/codeql.yml@77faed457d4f87675fec4024e2cd526fe964d7c9 # v1.30.36
+    uses: rknightion/.github/.github/workflows/codeql.yml@f460d96cfd777d8e01066df655f4c157d4cf9332 # v1.31.1
     with:
       languages: '[{"language":"python","build-mode":"none"},{"language":"actions","build-mode":"none"}]'
       ref: ${{ inputs.release_tag || github.sha }}
@@ -69,9 +69,12 @@ jobs:
       id-token: write
       attestations: write
       security-events: write
-    uses: rknightion/.github/.github/workflows/container-publish.yml@77faed457d4f87675fec4024e2cd526fe964d7c9 # v1.30.36
+    uses: rknightion/.github/.github/workflows/container-publish.yml@f460d96cfd777d8e01066df655f4c157d4cf9332 # v1.31.1
     with:
       release-tag: ${{ inputs.release_tag }}
+      # A release candidate (vX.Y.Z-rc.N) pushes only its own tag; :main and
+      # :main-<sha> come from the edge build alone (#967).
+      publish-branch-tags-on-prerelease: false
       helm-chart-path: charts/meraki-dashboard-exporter
       build-args: |
         PY_VERSION=3.14
