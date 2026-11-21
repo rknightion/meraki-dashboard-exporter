@@ -152,6 +152,33 @@ class TestMSPortStatusGate(_MSGatingBase):
         if first == second:
             expire.assert_not_called()
 
+    async def test_port_rename_leaves_one_port_info_series(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """A renamed port must not leave a second meraki_ms_port_info series (#998)."""
+        dc = self._device_collector(
+            mock_api, settings, isolated_registry, inventory, _FakeScheduler()
+        )
+        inventory.get_allowed_network_ids = AsyncMock(return_value=None)
+        device = {"serial": "Q2XX-1", "networkId": "net1", "orgId": "org1", "orgName": "Org"}
+        mock_api.switch.getDeviceSwitchPortsStatusesPackets.return_value = []
+        for port_name in ("Uplink A", "Uplink B"):
+            port = {"portId": "1", "name": port_name, "status": "Connected"}
+            mock_api.switch.getOrganizationSwitchPortsStatusesBySwitch.return_value = [
+                {"serial": "Q2XX-1", "network": {"id": "net1"}, "ports": [port]}
+            ]
+            await dc.ms_collector.collect_port_statuses_by_switch("org1", "Org", [device])
+        samples = [
+            sample
+            for metric in isolated_registry.collect()
+            for sample in metric.samples
+            if sample.name == "meraki_ms_port_info"
+            and sample.labels["serial"] == "Q2XX-1"
+            and sample.labels["port_id"] == "1"
+        ]
+        assert len(samples) == 1
+        assert samples[0].labels["port_name"] == "Uplink B"
+
     async def test_org_port_status_gate_skips_fetch(
         self, mock_api, settings, isolated_registry, inventory
     ) -> None:

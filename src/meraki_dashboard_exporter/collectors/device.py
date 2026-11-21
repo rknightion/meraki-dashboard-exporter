@@ -507,6 +507,12 @@ class DeviceCollector(MetricCollector):
         # already owns (byte-identical label tuple, same collector identity/TTL).
         self._webhook_device_labels: dict[str, dict[str, str]] = {}
 
+        # serial -> last meraki_device_status_info label dict, so a rename, move,
+        # model change or status change expires the superseded series in the same
+        # pass that emits its replacement (#998). Pruned per org in
+        # _collect_org_devices.
+        self._last_status_info_labels: dict[str, dict[str, str]] = {}
+
         # Ensure all subcollectors share the current API instance
         self._subcollectors_ready = True
         self._sync_subcollector_api()
@@ -902,6 +908,14 @@ class DeviceCollector(MetricCollector):
                 for s, lbl in self._webhook_device_labels.items()
                 if lbl[LabelName.ORG_ID.value] != org_id
             } | org_serial_labels
+
+            # #998: bound the status info memo. Only the memo entry goes; a device
+            # that left the inventory still expires by TTL.
+            self._last_status_info_labels = {
+                s: lbl
+                for s, lbl in self._last_status_info_labels.items()
+                if lbl[LabelName.ORG_ID.value] != org_id or s in device_lookup
+            }
 
             # Store references for device processing
             ms_devices = devices_by_type.get(DeviceType.MS, [])
@@ -1637,33 +1651,6 @@ class DeviceCollector(MetricCollector):
                 ttl_seconds=availability_ttl,
             )
 
-            # Remove stale status label series for this device
-            # (status is a label, so transitions leave old series at 1)
-            for stale_status in DeviceStatus:
-                if stale_status.value != availability_status:
-                    stale_labels = create_device_labels(
-                        device,
-                        org_id=org_id,
-                        org_name=org_name,
-                        name=device_name,
-                        status=stale_status.value,
-                    )
-                    try:
-                        self._device_status_info.remove(*[
-                            stale_labels[ln.value]
-                            for ln in [
-                                LabelName.ORG_ID,
-                                LabelName.NETWORK_ID,
-                                LabelName.SERIAL,
-                                LabelName.NAME,
-                                LabelName.MODEL,
-                                LabelName.DEVICE_TYPE,
-                                LabelName.STATUS,
-                            ]
-                        ])
-                    except KeyError:
-                        pass  # Label combination doesn't exist
-
             # Device status info metric
             status_labels = create_device_labels(
                 device,
@@ -1672,12 +1659,24 @@ class DeviceCollector(MetricCollector):
                 name=device_name,
                 status=availability_status,
             )
+            # #998: status, name, model and network are all labels, so any change
+            # leaves the previous series behind. Expire it in this pass (through
+            # the helper, so its tracking entry goes with it).
+            serial = device.get("serial", "")
+            previous_status_labels = self._last_status_info_labels.get(serial)
+            if previous_status_labels is not None and previous_status_labels != status_labels:
+                self._expire_metric_series(
+                    self._device_status_info,
+                    previous_status_labels,
+                    DeviceMetricName.DEVICE_STATUS_INFO.value,
+                )
             self._set_metric_value(
                 "_device_status_info",
                 status_labels,
                 1,
                 ttl_seconds=availability_ttl,
             )
+            self._last_status_info_labels[serial] = dict(status_labels)
 
         # Uptime
         if "uptimeInSeconds" in device:
