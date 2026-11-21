@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
+from meraki_dashboard_exporter.collectors.devices import mt as mt_module
 from meraki_dashboard_exporter.collectors.devices.mt import MTCollector
 from meraki_dashboard_exporter.collectors.mt_sensor import MTSensorCollector
 from meraki_dashboard_exporter.core.domain_models import SensorMeasurement
@@ -909,6 +910,66 @@ class TestMTReadingTimestamp(BaseCollectorTest):
         # The gauge is registered, but neither reading produced a sample for it.
         metrics.assert_metric_exists("meraki_mt_reading_timestamp_seconds")
         metrics.assert_metric_not_set("meraki_mt_reading_timestamp_seconds", **common)
+
+    async def test_reading_timestamp_set_on_fallback_path(self, collector, metrics) -> None:
+        """When domain validation raises, the fallback still sets a timestamp per emitted value."""
+        device = self._device()
+        sensor_readings = [
+            {
+                "serial": device["serial"],
+                "network": {"id": "N_123", "name": "Test Network"},
+                "readings": [
+                    {
+                        "ts": "2024-01-01T00:00:00Z",
+                        "metric": "temperature",
+                        "temperature": {"celsius": 4.5},
+                    },
+                    {
+                        "ts": "2024-01-02T12:00:00Z",
+                        "metric": "humidity",
+                        "humidity": {"relativePercentage": 55},
+                    },
+                    # Emitted by the fallback but carries no ts: no timestamp sample.
+                    {"metric": "battery", "battery": {"percentage": 77}},
+                    # No value to emit: no timestamp sample even though ts parses.
+                    {"ts": "2024-01-03T00:00:00Z", "metric": "noise", "noise": {}},
+                ],
+            }
+        ]
+        real_measurement = mt_module.SensorMeasurement
+
+        def failing_measurement(*, metric: str, value: float) -> object:
+            if metric == "humidity":
+                raise ValueError("forced domain-model failure")
+            return real_measurement(metric=metric, value=value)
+
+        with patch.object(mt_module, "SensorMeasurement", side_effect=failing_measurement):
+            collector.mt_collector.collect_batch(sensor_readings, {device["serial"]: device})
+
+        common = {
+            "org_id": "123456",
+            "network_id": "N_123",
+            "serial": device["serial"],
+            "model": "MT10",
+            "device_type": "MT",
+        }
+        # The fallback emitted every value...
+        metrics.assert_gauge_value("meraki_mt_temperature_celsius", 4.5, **common)
+        metrics.assert_gauge_value("meraki_mt_humidity_percent", 55, **common)
+        metrics.assert_gauge_value("meraki_mt_battery_percent", 77, **common)
+        # ...and a timestamp for exactly the readings that had a value and a ts.
+        metrics.assert_gauge_value(
+            "meraki_mt_reading_timestamp_seconds", 1704067200.0, metric="temperature", **common
+        )
+        metrics.assert_gauge_value(
+            "meraki_mt_reading_timestamp_seconds", 1704196800.0, metric="humidity", **common
+        )
+        metrics.assert_metric_not_set(
+            "meraki_mt_reading_timestamp_seconds", metric="battery", **common
+        )
+        metrics.assert_metric_not_set(
+            "meraki_mt_reading_timestamp_seconds", metric="noise", **common
+        )
 
 
 class TestMTButtonPresses(BaseCollectorTest):
