@@ -347,7 +347,26 @@ class TestDeviceAvailabilityGate(BaseCollectorTest):
         assert calls == ["org1"]  # fetch happened once
         marked = [c.args[0] for c in sched.mark_ran.call_args_list]
         assert EndpointGroupName.DEVICE_AVAILABILITY in marked
-        # Positive control: a successful fetch does write the status series.
+        # #989: an empty successful response has no row for any device, so none is
+        # reported offline; the series are left to expire at their TTL.
+        assert self._device_status_samples(isolated_registry) == []
+
+    async def test_writes_status_when_fetch_returns_rows(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ) -> None:
+        """Positive control for #989: a device with an explicit row is still reported."""
+        sched = MagicMock()
+        sched.should_run.return_value = True
+        sched.ttl_seconds_for.return_value = 600.0
+        sched.interval_for.return_value = 300.0
+
+        collector = self._build(mock_api_builder, settings, isolated_registry, inventory, sched)
+        devices = await collector._fetch_devices("org1")
+        rows = [{"serial": d["serial"], "status": "online"} for d in devices]
+        self._stub_availabilities(collector, rows)
+
+        await collector.collect()
+
         assert "meraki_device_up" in self._device_status_samples(isolated_registry)
 
 

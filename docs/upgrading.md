@@ -94,6 +94,18 @@ The following previously accepted configurations now prevent startup:
 expression. If a static scrape configuration uses another job name and relied on the old default
 `meraki-dashboard-exporter`, set `prometheusRule.job` to match that job.
 
+### A device with no availability row is no longer reported offline
+
+When the organisation availability response has no row for a device in the inventory, or its row
+has no status, the exporter used to write `meraki_device_up` 0 and
+`meraki_device_status_info{status="offline"}` for it. It now skips that device for the cycle: the
+two series keep their last value and expire at their TTL. An empty or partial response therefore no
+longer reads as every missing device going down at once. A device with an explicit `online`,
+`alerting`, `offline` or `dormant` row is reported exactly as before. A device the API stops
+listing now goes absent instead of reading 0, so an alert written only as `meraki_device_up == 0`
+does not fire for it. If that case matters, alert on absence as well, for example with `absent()`
+or a staleness rule.
+
 ### Helm chart Ingress routes only the webhook receiver
 
 The chart's default `ingress.hosts` rule now routes `/api/webhooks/meraki` (`Prefix`) instead of

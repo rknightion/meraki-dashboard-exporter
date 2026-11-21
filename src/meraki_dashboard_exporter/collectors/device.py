@@ -10,7 +10,6 @@ from ..core.async_utils import ManagedTaskGroup
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
 from ..core.constants import (
-    DEFAULT_DEVICE_STATUS,
     DeviceMetricName,
     DeviceStatus,
     DeviceType,
@@ -889,9 +888,15 @@ class DeviceCollector(MetricCollector):
             # status_info); None when no scheduler ⇒ tier-derived TTL applies.
             availability_ttl = self._group_ttl_seconds(EndpointGroupName.DEVICE_AVAILABILITY)
 
-            # Create availability lookup by serial
+            # Create availability lookup by serial. #989: only rows that carry both a
+            # serial and a status count. A device with no usable row has an unknown
+            # status, which is not the same as offline: it is skipped below and its
+            # device_up / status_info series expire at their TTL instead of being
+            # rewritten to 0 (the F-015 rule, never emit a value from missing data).
             availability_map = {
-                a["serial"]: a.get("status", DEFAULT_DEVICE_STATUS) for a in availabilities
+                a["serial"]: a["status"]
+                for a in availabilities
+                if a.get("serial") and a.get("status")
             }
 
             # Fetch network information for adding network names to devices
@@ -942,10 +947,9 @@ class DeviceCollector(MetricCollector):
                 # Convert to enum
                 device_type = DeviceType(device_type_str)
 
-                # Add availability status to device
-                device["availability_status"] = availability_map.get(
-                    device["serial"], DEFAULT_DEVICE_STATUS
-                )
+                # Add availability status to device (#989: None when the response has
+                # no usable row for it; _collect_common_metrics then skips it)
+                device["availability_status"] = availability_map.get(device["serial"])
 
                 # Add network name to device data
                 network_id = device.get("networkId", "")
@@ -1634,14 +1638,16 @@ class DeviceCollector(MetricCollector):
             When False the device_availability endpoint group was gated out this
             cycle (#617); the availability-derived series (``meraki_device_up``,
             ``meraki_device_status_info``) are left to ride on their TTL rather
-            than being re-emitted with stale/default statuses.
+            than being re-emitted with stale/default statuses. A device whose
+            ``availability_status`` is None (no row in the response, #989) is
+            skipped the same way.
         availability_ttl : float | None
             Resolved per-series TTL for the device_availability group, forwarded
             to the availability-derived ``_set_metric`` calls (#617 §1f). ``None``
             ⇒ the tier-derived TTL applies.
 
         """
-        availability_status = device.get("availability_status", DEFAULT_DEVICE_STATUS)
+        availability_status = device.get("availability_status")
 
         # Create standard device labels (ID-only; see label_helpers.py, #534)
         labels = create_device_labels(device, org_id=org_id, org_name=org_name)
@@ -1652,8 +1658,10 @@ class DeviceCollector(MetricCollector):
         device_name = device.get("name", device.get("serial", ""))
 
         # Availability-derived series are emitted only when the device_availability
-        # group ran this cycle; otherwise they survive on their TTL (#617).
-        if availability_due:
+        # group ran this cycle; otherwise they survive on their TTL (#617). #989: a
+        # device with no availability row (status None) is skipped the same way, so
+        # an empty or partial response never reads as a fleet-wide outage.
+        if availability_due and availability_status is not None:
             # Device up/down status
             is_online = 1 if availability_status == DeviceStatus.ONLINE else 0
             self._set_metric_value(
