@@ -984,6 +984,15 @@ class DeviceCollector(MetricCollector):
                     # collect() owns packet statistics only when the pass runs; on
                     # a wake where neither group is due the independent packet-stats
                     # pass below must still run, so the flag is set with the pass.
+                    #
+                    # Register every switch whether or not the pass runs (same as
+                    # collect_port_statuses_by_switch on the org path): the
+                    # end-of-cycle eviction drops the packet-stats and port-usage
+                    # throttle timestamps of any serial not registered, which would
+                    # make every switch due again on the next wake.
+                    self.ms_collector._active_serials.update(
+                        serial for device in ms_devices if (serial := device.get("serial"))
+                    )
                     status_due = self._should_run_group(EndpointGroupName.MS_PORT_STATUS)
                     usage_due = self._should_run_group(EndpointGroupName.MS_PORT_USAGE)
                     if status_due or usage_due:

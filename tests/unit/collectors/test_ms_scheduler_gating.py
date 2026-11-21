@@ -856,6 +856,7 @@ class TestMSPortFallback(_MSGatingBase):
         assert mock_api.switch.getDeviceSwitchPortsStatuses.call_count == len(self._SWITCHES)
         assert EndpointGroupName.MS_PORT_STATUS in sched.marked
         assert EndpointGroupName.MS_PORT_USAGE in sched.marked
+        assert dc.ms_collector._active_serials == set(self._SWITCHES)
 
     async def test_flag_off_pass_is_gated_and_marked(
         self, mock_api, settings, isolated_registry, inventory
@@ -903,6 +904,29 @@ class TestMSPortFallback(_MSGatingBase):
         assert sorted(call.args[0]["serial"] for call in packet_stats.await_args_list) == sorted(
             self._SWITCHES
         )
+
+    async def test_flag_off_packet_stats_throttle_survives_end_of_cycle_eviction(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """Serials stay registered on a wake with no per-switch pass, so throttles persist."""
+        settings.api.ms_port_status_use_org_endpoint = False
+        sched = _FakeScheduler({
+            EndpointGroupName.MS_PORT_STATUS: False,
+            EndpointGroupName.MS_PORT_USAGE: False,
+        })
+        dc = self._build(mock_api, settings, isolated_registry, inventory, sched)
+        packets = mock_api.switch.getDeviceSwitchPortsStatusesPackets
+
+        await dc._collect_org_devices("org1", "Org")
+        assert packets.call_count == len(self._SWITCHES)
+
+        # The end-of-cycle step of DeviceCollector._collect_impl.
+        dc.ms_collector._evict_stale_serials(dc.ms_collector._active_serials)
+        dc.ms_collector._active_serials = set()
+
+        packets.reset_mock()
+        await dc._collect_org_devices("org1", "Org")
+        packets.assert_not_called()
 
     async def test_per_switch_pass_total_failure_marks_nothing(
         self, mock_api, settings, isolated_registry, inventory
