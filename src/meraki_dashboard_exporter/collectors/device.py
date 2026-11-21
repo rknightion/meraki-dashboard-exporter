@@ -981,11 +981,13 @@ class DeviceCollector(MetricCollector):
                     # Per-switch collection is the only path here. Gate it on both
                     # port groups (no short-circuit: each needs its attempt
                     # recorded) so it runs once per interval, not on every wake.
-                    # collect() owns packet statistics on this path.
-                    used_fallback = True
+                    # collect() owns packet statistics only when the pass runs; on
+                    # a wake where neither group is due the independent packet-stats
+                    # pass below must still run, so the flag is set with the pass.
                     status_due = self._should_run_group(EndpointGroupName.MS_PORT_STATUS)
                     usage_due = self._should_run_group(EndpointGroupName.MS_PORT_USAGE)
                     if status_due or usage_due:
+                        used_fallback = True
                         await self._collect_ms_per_switch_pass(
                             org_id, ms_devices, spread_window, min_delay, max_delay
                         )

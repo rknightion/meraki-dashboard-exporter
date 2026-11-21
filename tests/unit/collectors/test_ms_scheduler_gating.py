@@ -884,6 +884,26 @@ class TestMSPortFallback(_MSGatingBase):
         assert EndpointGroupName.MS_PORT_STATUS not in sched.marked
         assert EndpointGroupName.MS_PORT_USAGE not in sched.marked
 
+    async def test_flag_off_packet_stats_run_when_port_groups_not_due(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """No per-switch pass this wake: due packet statistics are still collected."""
+        settings.api.ms_port_status_use_org_endpoint = False
+        sched = _FakeScheduler({
+            EndpointGroupName.MS_PORT_STATUS: False,
+            EndpointGroupName.MS_PORT_USAGE: False,
+        })
+        dc = self._build(mock_api, settings, isolated_registry, inventory, sched)
+        packet_stats = AsyncMock()
+        dc.ms_collector._collect_packet_statistics = packet_stats  # type: ignore[method-assign]
+
+        await dc._collect_org_devices("org1", "Org")
+
+        mock_api.switch.getDeviceSwitchPortsStatuses.assert_not_called()
+        assert sorted(call.args[0]["serial"] for call in packet_stats.await_args_list) == sorted(
+            self._SWITCHES
+        )
+
     async def test_per_switch_pass_total_failure_marks_nothing(
         self, mock_api, settings, isolated_registry, inventory
     ) -> None:
