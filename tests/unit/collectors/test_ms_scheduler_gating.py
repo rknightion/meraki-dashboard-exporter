@@ -796,6 +796,154 @@ class TestMSPowerSummaryGate(_MSGatingBase):
         assert 777.0 in ttls
 
 
+class TestMSPortFallback(_MSGatingBase):
+    """#997: the per-switch port pass runs only when the org endpoint is absent or opted out."""
+
+    _SWITCHES = ("Q2XX-1", "Q2XX-2")
+
+    def _build(
+        self,
+        mock_api: Any,
+        settings: Any,
+        isolated_registry: Any,
+        inventory: Any,
+        sched: _FakeScheduler,
+    ) -> DeviceCollector:
+        """Build a collector over two switches with inventory fetches stubbed."""
+        settings.api.smoothing_enabled = False
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        switches = [
+            {
+                "serial": serial,
+                "name": serial,
+                "model": "MS250-48",
+                "productType": "switch",
+                "networkId": "net1",
+            }
+            for serial in self._SWITCHES
+        ]
+        inventory.get_devices = AsyncMock(return_value=switches)
+        inventory.get_device_availabilities = AsyncMock(return_value=[])
+        inventory.get_networks = AsyncMock(return_value=[{"id": "net1", "name": "Net 1"}])
+        inventory.get_allowed_network_ids = AsyncMock(return_value=None)
+        mock_api.switch.getDeviceSwitchPortsStatuses.return_value = []
+        mock_api.switch.getDeviceSwitchPortsStatusesPackets.return_value = []
+        return dc
+
+    async def test_transient_org_failure_does_not_fan_out(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """A failed org-wide call is not answered with one call per switch."""
+        sched = _FakeScheduler()
+        dc = self._build(mock_api, settings, isolated_registry, inventory, sched)
+        mock_api.switch.getOrganizationSwitchPortsStatusesBySwitch.side_effect = Exception("boom")
+
+        await dc._collect_org_devices("org1", "Org")
+
+        mock_api.switch.getDeviceSwitchPortsStatuses.assert_not_called()
+        assert EndpointGroupName.MS_PORT_STATUS not in sched.marked
+
+    async def test_unsupported_endpoint_falls_back_and_marks(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """An SDK without the org endpoint takes the per-switch pass and closes both groups."""
+        sched = _FakeScheduler()
+        dc = self._build(mock_api, settings, isolated_registry, inventory, sched)
+        dc.ms_collector._org_port_status_supported = False
+
+        await dc._collect_org_devices("org1", "Org")
+
+        assert mock_api.switch.getDeviceSwitchPortsStatuses.call_count == len(self._SWITCHES)
+        assert EndpointGroupName.MS_PORT_STATUS in sched.marked
+        assert EndpointGroupName.MS_PORT_USAGE in sched.marked
+        assert dc.ms_collector._active_serials == set(self._SWITCHES)
+
+    async def test_flag_off_pass_is_gated_and_marked(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """With the org endpoint opted out, the pass follows the gates and closes both groups."""
+        settings.api.ms_port_status_use_org_endpoint = False
+        sched = _FakeScheduler()
+        dc = self._build(mock_api, settings, isolated_registry, inventory, sched)
+
+        await dc._collect_org_devices("org1", "Org")
+
+        assert mock_api.switch.getDeviceSwitchPortsStatuses.call_count == len(self._SWITCHES)
+        assert EndpointGroupName.MS_PORT_STATUS in sched.marked
+        assert EndpointGroupName.MS_PORT_USAGE in sched.marked
+
+        mock_api.switch.getDeviceSwitchPortsStatuses.reset_mock()
+        sched.marked.clear()
+        sched.run_map = {
+            EndpointGroupName.MS_PORT_STATUS: False,
+            EndpointGroupName.MS_PORT_USAGE: False,
+        }
+
+        await dc._collect_org_devices("org1", "Org")
+
+        mock_api.switch.getDeviceSwitchPortsStatuses.assert_not_called()
+        assert EndpointGroupName.MS_PORT_STATUS not in sched.marked
+        assert EndpointGroupName.MS_PORT_USAGE not in sched.marked
+
+    async def test_flag_off_packet_stats_run_when_port_groups_not_due(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """No per-switch pass this wake: due packet statistics are still collected."""
+        settings.api.ms_port_status_use_org_endpoint = False
+        sched = _FakeScheduler({
+            EndpointGroupName.MS_PORT_STATUS: False,
+            EndpointGroupName.MS_PORT_USAGE: False,
+        })
+        dc = self._build(mock_api, settings, isolated_registry, inventory, sched)
+        packet_stats = AsyncMock()
+        dc.ms_collector._collect_packet_statistics = packet_stats  # type: ignore[method-assign]
+
+        await dc._collect_org_devices("org1", "Org")
+
+        mock_api.switch.getDeviceSwitchPortsStatuses.assert_not_called()
+        assert sorted(call.args[0]["serial"] for call in packet_stats.await_args_list) == sorted(
+            self._SWITCHES
+        )
+
+    async def test_flag_off_packet_stats_throttle_survives_end_of_cycle_eviction(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """Serials stay registered on a wake with no per-switch pass, so throttles persist."""
+        settings.api.ms_port_status_use_org_endpoint = False
+        sched = _FakeScheduler({
+            EndpointGroupName.MS_PORT_STATUS: False,
+            EndpointGroupName.MS_PORT_USAGE: False,
+        })
+        dc = self._build(mock_api, settings, isolated_registry, inventory, sched)
+        packets = mock_api.switch.getDeviceSwitchPortsStatusesPackets
+
+        await dc._collect_org_devices("org1", "Org")
+        assert packets.call_count == len(self._SWITCHES)
+
+        # The end-of-cycle step of DeviceCollector._collect_impl.
+        dc.ms_collector._evict_stale_serials(dc.ms_collector._active_serials)
+        dc.ms_collector._active_serials = set()
+
+        packets.reset_mock()
+        await dc._collect_org_devices("org1", "Org")
+        packets.assert_not_called()
+
+    async def test_per_switch_pass_total_failure_marks_nothing(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """A pass in which every switch fails closes neither group."""
+        settings.api.ms_port_status_use_org_endpoint = False
+        sched = _FakeScheduler()
+        dc = self._build(mock_api, settings, isolated_registry, inventory, sched)
+        mock_api.switch.getDeviceSwitchPortsStatuses.side_effect = Exception("boom")
+
+        await dc._collect_org_devices("org1", "Org")
+
+        assert mock_api.switch.getDeviceSwitchPortsStatuses.call_count == len(self._SWITCHES)
+        assert EndpointGroupName.MS_PORT_STATUS not in sched.marked
+        assert EndpointGroupName.MS_PORT_USAGE not in sched.marked
+
+
 @pytest.mark.parametrize(
     "group",
     [

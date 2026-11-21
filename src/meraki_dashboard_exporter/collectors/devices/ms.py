@@ -1046,13 +1046,21 @@ class MSCollector(BaseDeviceCollector):
         operation="Collect MS device metrics",
         continue_on_error=True,
     )
-    async def collect(self, device: dict[str, Any]) -> None:
+    async def collect(self, device: dict[str, Any]) -> bool | None:
         """Collect switch-specific metrics.
 
         Parameters
         ----------
         device : dict[str, Any]
             Switch device data.
+
+        Returns
+        -------
+        bool | None
+            ``True`` when the port-status fetch and its processing completed (or
+            dense port metrics are disabled), ``False`` when it raised, ``None``
+            when the error decorator swallowed the failure. The coordinator closes
+            the port groups only after at least one switch returns ``True`` (#997).
 
         """
         if not self.settings.api.ms_port_metrics_enabled:
@@ -1065,7 +1073,7 @@ class MSCollector(BaseDeviceCollector):
                 EndpointGroupName.MS_PACKET_STATS,
             ):
                 self.parent._mark_group_ran(group_name)
-            return
+            return True
 
         # Extract org info from device data
         org_id = device.get("orgId", "")
@@ -1078,12 +1086,14 @@ class MSCollector(BaseDeviceCollector):
         serial_key = device_labels["serial"]
         self._active_serials.add(serial_key)
 
-        # #617: this is the per-device fallback path (org endpoint unavailable /
-        # failed), invoked once per device inside a batch fan-out, so it is NOT
-        # group-gated here (a group mark_ran mid-batch would skip the remaining
-        # devices). It emits both the port-status family and the port-usage/PoE
-        # family from a single getDeviceSwitchPortsStatuses call, so thread each
-        # family's solved TTL onto its own emissions.
+        # #617 / #997: this is the per-device path (org endpoint absent from the
+        # SDK, or ms_port_status_use_org_endpoint off), invoked once per device
+        # inside a batch fan-out, so it is NOT group-gated or marked here (a mark
+        # mid-batch would skip the remaining devices). The coordinator gates the
+        # pass and marks MS_PORT_STATUS and MS_PORT_USAGE after a batch in which at
+        # least one switch returned True. It emits both the port-status family and
+        # the port-usage/PoE family from a single getDeviceSwitchPortsStatuses
+        # call, so thread each family's solved TTL onto its own emissions.
         status_ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_PORT_STATUS)
         usage_ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_PORT_USAGE)
 
@@ -1263,12 +1273,14 @@ class MSCollector(BaseDeviceCollector):
             # Collect packet statistics
             await self._collect_packet_statistics(device)
             self._mark_port_usage_collected(device_labels["serial"])
+            return True
 
         except Exception:
             logger.exception(
                 "Failed to collect switch metrics",
                 serial=device_labels["serial"],
             )
+            return False
 
     @log_api_call("getDeviceSwitchPortsStatuses")
     @with_error_handling(
