@@ -1385,3 +1385,87 @@ class TestWebhookDeviceStateApplier(BaseCollectorTest):
         assert len(serial_series) == 1
         # Final value is a valid 0/1 written by the last writer (poll or flip).
         assert serial_series[0] in {0.0, 1.0}
+
+
+class TestDeviceAvailabilityMissingRows(BaseCollectorTest):
+    """#989: a device with no availability row is unknown, not offline."""
+
+    collector_class = DeviceCollector
+
+    SERIALS = ("Q2XX-0001", "Q2XX-0002", "Q2XX-0003")
+
+    def _wire(self, collector, availabilities):
+        """Point the collector at three MR devices and a stubbed availability fetch."""
+        collector.inventory = None
+        collector._fetch_networks_for_poe = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        collector._fetch_devices = AsyncMock(  # type: ignore[method-assign]
+            return_value=[
+                DeviceFactory.create(serial=s, model="MR36", network_id="N_1") for s in self.SERIALS
+            ]
+        )
+        collector._fetch_device_availabilities = AsyncMock(return_value=availabilities)  # type: ignore[method-assign]
+        collector._collect_mr_specific_metrics = AsyncMock()  # type: ignore[method-assign]
+        collector._mark_group_ran = MagicMock()  # type: ignore[method-assign]
+
+    async def test_device_missing_from_availability_response_is_skipped(self, collector, metrics):
+        """A serial absent from a successful response gets no device_up or status_info."""
+        present = self.SERIALS[:2]
+        omitted = self.SERIALS[2]
+        self._wire(collector, [{"serial": s, "status": "online"} for s in present])
+
+        await collector._collect_org_devices("654321", "Test Org")
+
+        for serial in present:
+            metrics.assert_gauge_value("meraki_device_up", 1, serial=serial)
+            metrics.assert_gauge_value(
+                "meraki_device_status_info", 1, serial=serial, status="online"
+            )
+        metrics.assert_metric_not_set("meraki_device_up", serial=omitted)
+        metrics.assert_metric_not_set("meraki_device_status_info", serial=omitted)
+
+    async def test_row_without_status_is_skipped(self, collector, metrics):
+        """A row that carries a serial but no status is unknown too."""
+        self._wire(
+            collector,
+            [
+                {"serial": self.SERIALS[0], "status": "online"},
+                {"serial": self.SERIALS[1]},
+                {"serial": self.SERIALS[2], "status": None},
+            ],
+        )
+
+        await collector._collect_org_devices("654321", "Test Org")
+
+        metrics.assert_gauge_value("meraki_device_up", 1, serial=self.SERIALS[0])
+        metrics.assert_metric_not_set("meraki_device_up", serial=self.SERIALS[1])
+        metrics.assert_metric_not_set("meraki_device_up", serial=self.SERIALS[2])
+
+    async def test_explicit_offline_row_still_reads_zero(self, collector, metrics):
+        """An explicit offline row is reported exactly as before."""
+        self._wire(
+            collector,
+            [
+                {"serial": self.SERIALS[0], "status": "offline"},
+                {"serial": self.SERIALS[1], "status": "alerting"},
+                {"serial": self.SERIALS[2], "status": "dormant"},
+            ],
+        )
+
+        await collector._collect_org_devices("654321", "Test Org")
+
+        for serial in self.SERIALS:
+            metrics.assert_gauge_value("meraki_device_up", 0, serial=serial)
+        metrics.assert_gauge_value(
+            "meraki_device_status_info", 1, serial=self.SERIALS[0], status="offline"
+        )
+
+    async def test_empty_availability_response_writes_no_device_up(self, collector, metrics):
+        """A successful empty response writes no device_up but still marks the group ran."""
+        self._wire(collector, [])
+
+        await collector._collect_org_devices("654321", "Test Org")
+
+        for serial in self.SERIALS:
+            metrics.assert_metric_not_set("meraki_device_up", serial=serial)
+            metrics.assert_metric_not_set("meraki_device_status_info", serial=serial)
+        collector._mark_group_ran.assert_any_call(EndpointGroupName.DEVICE_AVAILABILITY)

@@ -16,7 +16,7 @@ from __future__ import annotations
 import time
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -340,6 +340,114 @@ class TestMSPacketStatsGate(_MSGatingBase):
         packets.reset_mock()
         await dc._collect_impl()
         assert packets.call_count == 0
+
+    @staticmethod
+    def _packet_batch_calls(batch: AsyncMock) -> list[Any]:
+        """Return the recorded batch-helper calls made for packet statistics."""
+        return [
+            call
+            for call in batch.call_args_list
+            if call.kwargs.get("item_description") == "MS packet stats"
+        ]
+
+    def _org_with_switches(
+        self, mock_api_builder, settings, isolated_registry, inventory, serials: list[str]
+    ) -> DeviceCollector:
+        """Build a DeviceCollector over one org holding the given MS switches."""
+        org = OrganizationFactory.create(org_id="ORG")
+        devices = [
+            DeviceFactory.create(serial=serial, model="MS120-8", productType="switch")
+            for serial in serials
+        ]
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([], org_id="ORG")
+            .with_devices(devices, org_id="ORG")
+            .with_device_statuses([], org_id="ORG")
+            .build()
+        )
+        api.switch.getOrganizationSwitchPortsStatusesBySwitch.return_value = []
+        api.switch.getDeviceSwitchPortsStatusesPackets.return_value = []
+        inventory.api = api
+        sched = _FakeScheduler(interval_map={EndpointGroupName.MS_PACKET_STATS: 600.0})
+        return self._device_collector(api, settings, isolated_registry, inventory, sched)
+
+    async def test_packet_stats_batch_skipped_when_no_switch_is_due(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ) -> None:
+        """A wake with every switch inside its interval never reaches the batch helper."""
+        dc = self._org_with_switches(
+            mock_api_builder, settings, isolated_registry, inventory, ["Q2XX-1", "Q2XX-2"]
+        )
+        for serial in ("Q2XX-1", "Q2XX-2"):
+            dc.ms_collector._last_packet_stats[serial] = time.time()
+
+        batch = AsyncMock(return_value=[])
+        with patch(
+            "meraki_dashboard_exporter.collectors.device.process_in_batches_with_errors", batch
+        ):
+            await dc._collect_org_devices("ORG", "Org")
+
+        assert self._packet_batch_calls(batch) == []
+
+    async def test_packet_stats_batch_receives_only_due_switches(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ) -> None:
+        """Only the switch outside its interval is passed to the batch helper."""
+        dc = self._org_with_switches(
+            mock_api_builder, settings, isolated_registry, inventory, ["Q2XX-1", "Q2XX-2"]
+        )
+        dc.ms_collector._last_packet_stats["Q2XX-1"] = time.time()
+
+        batch = AsyncMock(return_value=[])
+        with patch(
+            "meraki_dashboard_exporter.collectors.device.process_in_batches_with_errors", batch
+        ):
+            await dc._collect_org_devices("ORG", "Org")
+
+        calls = self._packet_batch_calls(batch)
+        assert len(calls) == 1
+        assert [device["serial"] for device in calls[0].args[0]] == ["Q2XX-2"]
+
+    async def test_packet_stats_batch_skips_initial_delay_on_forced_run(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ) -> None:
+        """A forced run (including startup) does not wait for the smoothing offset."""
+        dc = self._org_with_switches(
+            mock_api_builder, settings, isolated_registry, inventory, ["Q2XX-1"]
+        )
+        dc._force_run = True
+        dc._get_smoothing_offset = MagicMock(return_value=42.0)  # type: ignore[method-assign]
+
+        batch = AsyncMock(return_value=[])
+        with patch(
+            "meraki_dashboard_exporter.collectors.device.process_in_batches_with_errors", batch
+        ):
+            await dc._collect_org_devices("ORG", "Org")
+
+        calls = self._packet_batch_calls(batch)
+        assert len(calls) == 1
+        assert calls[0].kwargs["initial_delay"] == 0.0
+
+    async def test_packet_stats_batch_keeps_initial_delay_on_unforced_run(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ) -> None:
+        """An unforced run still passes the per-org smoothing offset."""
+        dc = self._org_with_switches(
+            mock_api_builder, settings, isolated_registry, inventory, ["Q2XX-1"]
+        )
+        dc._get_smoothing_offset = MagicMock(return_value=42.0)  # type: ignore[method-assign]
+
+        batch = AsyncMock(return_value=[])
+        with patch(
+            "meraki_dashboard_exporter.collectors.device.process_in_batches_with_errors", batch
+        ):
+            await dc._collect_org_devices("ORG", "Org")
+
+        calls = self._packet_batch_calls(batch)
+        assert len(calls) == 1
+        assert calls[0].kwargs["initial_delay"] == 42.0
 
 
 class TestMSPortOverviewGate(_MSGatingBase):

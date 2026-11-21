@@ -6,7 +6,7 @@ series**. Per-client wireless detail (packet loss, signal quality) is an unbound
 churny population and must never become a labelled metric (see the project cardinality
 rules in ``CLAUDE.md`` and the boundary rule in ``otel_data_logs.py``). Operators with
 an OTLP log backend (Loki, Elastic, ...) get per-client visibility at zero metric cost;
-everyone else pays nothing because the emitter is off by default.
+everyone else pays nothing because the emitter is off by default (``otel.logs.enabled``).
 
 Two events are produced, both gated on the emitter's per-event allowlist so a
 disabled event costs **no API calls** at all:
@@ -14,11 +14,14 @@ disabled event costs **no API calls** at all:
 - ``WIRELESS_CLIENT_PACKET_LOSS`` (#323, PRIMARY): one org-wide bulk call
   (``getOrganizationWirelessDevicesPacketLossByClient``) → one record per client row.
   Clean, cheap, always the primary producer.
-- ``WIRELESS_CLIENT_SIGNAL_QUALITY`` (#622, EXPERIMENTAL / off by default): there is
+- ``WIRELESS_CLIENT_SIGNAL_QUALITY`` (#622, experimental; enabled whenever data logs
+  are on unless ``otel.logs.events`` excludes it): there is
   **no bulk per-client signal source** in the SDK, only the per-client
   ``getNetworkWirelessSignalQualityHistory(clientId=...)`` fan-out — i.e. **one API
-  call per active client per cycle**. This is potentially very expensive on large
-  orgs, so it is off by default and ``ManagedTaskGroup``-bounded. Its client universe
+  call per active client**. This is potentially very expensive on large
+  orgs, so it is ``ManagedTaskGroup``-bounded, paced per network by
+  ``api.client_signal_quality_interval`` and capped per network by
+  ``api.client_signal_quality_max_clients`` (#981). Its client universe
   is enumerated INDEPENDENTLY of packet loss (#637) — the active wireless clients of
   each allowed network via ``getNetworkClients`` — so a healthy, zero-loss client
   (which never appears in the packet-loss response) still gets a signal-quality
@@ -31,6 +34,7 @@ new top-level ``DeviceCollector`` call site / no ``device.py`` edit is needed.
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, ConfigDict
@@ -146,6 +150,9 @@ class MRClientLogsCollector:
         self.api = parent.api
         self.settings = parent.settings
         self.api_facade: MerakiApiFacade = facade_for(self)
+        # Per-network time of the last signal-quality enumeration (#981). Settings are
+        # read at use, not here: the parent may be a bare mock in tests.
+        self._last_signal_quality_by_network: dict[str, float] = {}
 
     @with_error_handling(
         operation="Collect MR per-client data logs",
@@ -339,8 +346,11 @@ class MRClientLogsCollector:
     ) -> None:
         """Fan out per-client signal-quality fetches and emit one record per client.
 
-        EXPERIMENTAL / off by default: one ``getNetworkWirelessSignalQualityHistory``
-        call **per client**. The client universe is enumerated INDEPENDENTLY of
+        Experimental; enabled whenever data logs are on unless ``otel.logs.events``
+        excludes it. One ``getNetworkWirelessSignalQualityHistory`` call **per
+        client**, paced per network by ``api.client_signal_quality_interval`` and
+        capped per network by ``api.client_signal_quality_max_clients``
+        (#981). The client universe is enumerated INDEPENDENTLY of
         packet loss (#637): the active wireless clients of every allowed wireless
         network (``getNetworkClients`` filtered to wireless), deduplicated on
         network.id + client.id and bounded by ``settings.api.concurrency_limit``.
@@ -405,6 +415,8 @@ class MRClientLogsCollector:
             return []
 
         networks = await self.parent.inventory.get_networks(org_id)
+        interval = self.settings.api.client_signal_quality_interval
+        max_clients = self.settings.api.client_signal_quality_max_clients
         seen: set[tuple[str, str]] = set()
         targets: list[tuple[str, str, str | None]] = []
         for network in networks:
@@ -413,7 +425,25 @@ class MRClientLogsCollector:
             network_id = network.get("id")
             if not network_id:
                 continue
-            for client in await self._fetch_network_wireless_clients(network_id):
+
+            # Pace per network; an interval of 0 disables the gate (#981).
+            last_run = self._last_signal_quality_by_network.get(network_id, 0.0)
+            if interval > 0 and (time.time() - last_run) < interval:
+                logger.debug(
+                    "Skipping client signal-quality fan-out",
+                    network_id=network_id,
+                    interval_seconds=interval,
+                )
+                continue
+
+            network_clients = await self._fetch_network_wireless_clients(network_id)
+            # Record right after the enumeration call: a network with no wireless
+            # clients, or a run cut short by the collector timeout, must not be
+            # enumerated again on the next cycle.
+            self._last_signal_quality_by_network[network_id] = time.time()
+
+            network_targets: list[tuple[str, str, str | None]] = []
+            for client in network_clients:
                 client_id = client.get("id")
                 if not client_id:
                     continue
@@ -424,7 +454,18 @@ class MRClientLogsCollector:
                 if key in seen:
                     continue
                 seen.add(key)
-                targets.append((network_id, client_id, client.get("mac")))
+                network_targets.append((network_id, client_id, client.get("mac")))
+
+            # Cap the per-client fan-out per network (0 disables the cap).
+            if max_clients > 0 and len(network_targets) > max_clients:
+                logger.warning(
+                    "Truncating wireless clients for signal quality data logs",
+                    network_id=network_id,
+                    total_wireless_clients=len(network_targets),
+                    limit=max_clients,
+                )
+                network_targets = network_targets[:max_clients]
+            targets.extend(network_targets)
         return targets
 
     @log_api_call("getNetworkClients")

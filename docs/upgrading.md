@@ -82,6 +82,18 @@ longer expire for that reason. `meraki_exporter_scheduler_over_budget` still rep
 A fixed-mode deployment that is over budget now sends more requests and relies on the rate limiter
 to pace them. Adaptive mode is unchanged.
 
+### A device with no availability row is no longer reported offline
+
+When the organisation availability response has no row for a device in the inventory, or its row
+has no status, the exporter used to write `meraki_device_up` 0 and
+`meraki_device_status_info{status="offline"}` for it. It now skips that device for the cycle: the
+two series keep their last value and expire at their TTL. An empty or partial response therefore no
+longer reads as every missing device going down at once. A device with an explicit `online`,
+`alerting`, `offline` or `dormant` row is reported exactly as before. A device the API stops
+listing now goes absent instead of reading 0, so an alert written only as `meraki_device_up == 0`
+does not fire for it. If that case matters, alert on absence as well, for example with `absent()`
+or a staleness rule.
+
 ## Changes after 2.3.0
 
 The following previously accepted configurations now prevent startup:

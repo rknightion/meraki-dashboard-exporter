@@ -12,6 +12,7 @@ Prometheus series. The tests assert:
 
 from __future__ import annotations
 
+import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -19,6 +20,7 @@ import pytest
 from opentelemetry.sdk._logs.export import InMemoryLogRecordExporter  # noqa: PLC2701
 from prometheus_client import CollectorRegistry
 from prometheus_client.core import REGISTRY
+from structlog.testing import capture_logs
 
 from meraki_dashboard_exporter.collectors.devices.mr.client_logs import (
     MRClientLogsCollector,
@@ -93,6 +95,9 @@ class _FakeParent:
         self.api.networks = MagicMock()
         self.settings = MagicMock()
         self.settings.api.concurrency_limit = 5
+        # Real numbers: a MagicMock attribute cannot be compared with `>`.
+        self.settings.api.client_signal_quality_interval = 600
+        self.settings.api.client_signal_quality_max_clients = 200
         self.data_log_emitter = emitter
         # _create_gauge must NEVER be called by a log producer.
         self._create_gauge = MagicMock()
@@ -381,6 +386,157 @@ class TestSignalQualityProducer:
         await collector.collect_client_logs("org1", "Org One")
 
         assert len(exp.get_finished_logs()) == 0
+
+
+class TestSignalQualityPacing:
+    """The signal-quality fan-out is paced and capped per network (#981)."""
+
+    @staticmethod
+    def _build(
+        wireless_clients: dict[str, list[dict[str, Any]]],
+        *,
+        interval: int = 600,
+        max_clients: int = 200,
+    ) -> tuple[MRClientLogsCollector, _FakeParent, InMemoryLogRecordExporter]:
+        exp = InMemoryLogRecordExporter()
+        emitter = _make_emitter(
+            exp, enabled=True, endpoint="http://otel:4317", events=[SIGNAL_QUALITY]
+        )
+        parent = _FakeParent(emitter, wireless_clients=wireless_clients)
+        parent.settings.api.client_signal_quality_interval = interval
+        parent.settings.api.client_signal_quality_max_clients = max_clients
+        parent.api.wireless.getNetworkWirelessSignalQualityHistory = MagicMock(
+            return_value=_sq_history()
+        )
+        return MRClientLogsCollector(parent), parent, exp  # type: ignore[arg-type]
+
+    async def test_second_run_inside_interval_makes_no_calls(self) -> None:
+        """Two consecutive runs inside the interval enumerate and fan out once in total."""
+        collector, parent, exp = self._build({"N_1": [_wl_client("c1")]})
+
+        await collector.collect_client_logs("org1", "Org One")
+        await collector.collect_client_logs("org1", "Org One")
+
+        assert parent.api.networks.getNetworkClients.call_count == 1
+        assert parent.api.wireless.getNetworkWirelessSignalQualityHistory.call_count == 1
+        assert len(exp.get_finished_logs()) == 1
+
+    async def test_run_after_interval_elapsed_fans_out_again(self) -> None:
+        """A network whose last run is older than the interval runs again."""
+        collector, parent, _ = self._build({"N_1": [_wl_client("c1")]})
+
+        await collector.collect_client_logs("org1", "Org One")
+        collector._last_signal_quality_by_network["N_1"] -= 601
+        await collector.collect_client_logs("org1", "Org One")
+
+        assert parent.api.networks.getNetworkClients.call_count == 2
+        assert parent.api.wireless.getNetworkWirelessSignalQualityHistory.call_count == 2
+
+    async def test_pacing_is_per_network(self) -> None:
+        """A recent run on one network does not hold back another network."""
+        collector, parent, _ = self._build({"N_1": [_wl_client("c1")], "N_2": [_wl_client("c2")]})
+        collector._last_signal_quality_by_network["N_1"] = time.time()
+
+        await collector.collect_client_logs("org1", "Org One")
+
+        enumerated = [c.args[0] for c in parent.api.networks.getNetworkClients.call_args_list]
+        assert enumerated == ["N_2"]
+        history = parent.api.wireless.getNetworkWirelessSignalQualityHistory
+        assert history.call_count == 1
+        assert history.call_args.args[0] == "N_2"
+
+    async def test_cap_limits_history_calls_per_network(self) -> None:
+        """A network over the cap gets exactly that many history calls and a warning."""
+        clients = [_wl_client(f"c{i}", mac=f"aa:bb:cc:dd:ee:0{i}") for i in range(5)]
+        collector, parent, exp = self._build({"N_1": clients}, max_clients=2)
+
+        with capture_logs() as logs:
+            await collector.collect_client_logs("org1", "Org One")
+
+        history = parent.api.wireless.getNetworkWirelessSignalQualityHistory
+        assert history.call_count == 2
+        assert sorted(c.kwargs["clientId"] for c in history.call_args_list) == ["c0", "c1"]
+        assert len(exp.get_finished_logs()) == 2
+        warnings = [e for e in logs if e["log_level"] == "warning" and e.get("limit") == 2]
+        assert len(warnings) == 1
+        assert warnings[0]["network_id"] == "N_1"
+        assert warnings[0]["total_wireless_clients"] == 5
+
+    async def test_cap_applies_to_each_network_separately(self) -> None:
+        """The cap is per network, not per organisation."""
+        collector, parent, _ = self._build(
+            {
+                "N_1": [_wl_client(f"a{i}") for i in range(3)],
+                "N_2": [_wl_client(f"b{i}") for i in range(3)],
+            },
+            max_clients=2,
+        )
+
+        await collector.collect_client_logs("org1", "Org One")
+
+        assert parent.api.wireless.getNetworkWirelessSignalQualityHistory.call_count == 4
+
+    async def test_cap_counts_wireless_clients_only(self) -> None:
+        """Wired rows do not use up the cap."""
+        wired = {"id": "w1", "mac": "11:22:33:44:55:66", "recentDeviceConnection": "Wired"}
+        collector, parent, _ = self._build(
+            {"N_1": [wired, wired | {"id": "w2"}, _wl_client("c1"), _wl_client("c2")]},
+            max_clients=2,
+        )
+
+        await collector.collect_client_logs("org1", "Org One")
+
+        history = parent.api.wireless.getNetworkWirelessSignalQualityHistory
+        assert sorted(c.kwargs["clientId"] for c in history.call_args_list) == ["c1", "c2"]
+
+    async def test_cap_of_zero_removes_the_limit(self) -> None:
+        """A cap of 0 fans out to every client."""
+        clients = [_wl_client(f"c{i}") for i in range(5)]
+        collector, parent, _ = self._build({"N_1": clients}, max_clients=0)
+
+        await collector.collect_client_logs("org1", "Org One")
+
+        assert parent.api.wireless.getNetworkWirelessSignalQualityHistory.call_count == 5
+
+    async def test_interval_of_zero_runs_every_call(self) -> None:
+        """An interval of 0 disables the gate."""
+        collector, parent, _ = self._build({"N_1": [_wl_client("c1")]}, interval=0)
+
+        await collector.collect_client_logs("org1", "Org One")
+        await collector.collect_client_logs("org1", "Org One")
+
+        assert parent.api.networks.getNetworkClients.call_count == 2
+        assert parent.api.wireless.getNetworkWirelessSignalQualityHistory.call_count == 2
+
+    async def test_empty_network_is_enumerated_once_per_interval(self) -> None:
+        """A network with no wireless clients is not enumerated again inside the interval."""
+        collector, parent, _ = self._build({"N_1": []})
+
+        await collector.collect_client_logs("org1", "Org One")
+        await collector.collect_client_logs("org1", "Org One")
+        assert parent.api.networks.getNetworkClients.call_count == 1
+
+        collector._last_signal_quality_by_network["N_1"] -= 601
+        await collector.collect_client_logs("org1", "Org One")
+        assert parent.api.networks.getNetworkClients.call_count == 2
+        parent.api.wireless.getNetworkWirelessSignalQualityHistory.assert_not_called()
+
+    async def test_disabled_event_makes_no_calls_and_records_nothing(self) -> None:
+        """With the event excluded there is no enumeration and no pacing state."""
+        exp = InMemoryLogRecordExporter()
+        emitter = _make_emitter(
+            exp, enabled=True, endpoint="http://otel:4317", events=[PACKET_LOSS]
+        )
+        parent = _FakeParent(emitter, wireless_clients={"N_1": [_wl_client("c1")]})
+        parent.api.wireless.getOrganizationWirelessDevicesPacketLossByClient = MagicMock(
+            return_value=[]
+        )
+        collector = MRClientLogsCollector(parent)  # type: ignore[arg-type]
+
+        await collector.collect_client_logs("org1", "Org One")
+
+        parent.api.networks.getNetworkClients.assert_not_called()
+        assert collector._last_signal_quality_by_network == {}
 
 
 class TestNoPrometheusSeries:
