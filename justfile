@@ -198,7 +198,7 @@ image-structure tag="meraki-dashboard-exporter:latest":
 [script('bash')]
 smoke tag="meraki-dashboard-exporter:latest":
     set -euo pipefail
-    container_id="$(docker run -d --rm -p 9099:9099 -e MERAKI_EXPORTER_MERAKI__API_KEY=00000000000000000000000000000000deadbeef -e MERAKI_EXPORTER_MERAKI__ORG_ID=123456 '{{ tag }}')"
+    container_id="$(docker run -d --rm -p 9099:9099 -e MERAKI_EXPORTER_MERAKI__API_KEY=00000000000000000000000000000000deadbeef -e MERAKI_EXPORTER_MERAKI__ORG_ID=123456 -e MERAKI_EXPORTER_MERAKI__API_BASE_URL=https://127.0.0.1:1 -e MERAKI_EXPORTER_MERAKI__ALLOW_CUSTOM_API_BASE_URL=true -e HTTP_PROXY= -e HTTPS_PROXY= -e ALL_PROXY= -e http_proxy= -e https_proxy= -e all_proxy= -e NO_PROXY=127.0.0.1 -e no_proxy=127.0.0.1 '{{ tag }}')"
     echo "Started container ${container_id}"
     cleanup() {
       echo "::group::container logs"
