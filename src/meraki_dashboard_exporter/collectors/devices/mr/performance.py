@@ -645,6 +645,8 @@ class MRPerformanceCollector:
                 self.api.wireless.getOrganizationWirelessDevicesPowerModeHistory,
                 org_id,
                 total_pages="all",
+                # Endpoint max is 20 (default 10); matches the group cost_fn (#978).
+                perPage=20,
                 timespan=86400,
             )
         history = validate_response_format(

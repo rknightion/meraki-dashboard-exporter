@@ -102,6 +102,8 @@ class TestWebhookLogsCollector:
         call = api.organizations.getOrganizationWebhooksLogs.call_args
         assert call[1]["timespan"] == 3600
         assert call[1]["total_pages"] == "all"
+        # Endpoint maximum page size (acceptable range 3 - 1000).
+        assert call[1]["perPage"] == 1000
 
     async def test_missing_response_code_maps_to_zero(self, mock_api_builder):
         """An attempt with no response (connection failure) counts under '0'."""

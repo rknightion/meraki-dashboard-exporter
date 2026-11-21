@@ -107,6 +107,21 @@ class TestMeshCollector:
             assert labels["org_id"] == "org_1"
             assert labels["serial"] == "Q234-ABCD-5678"
 
+    async def test_requests_maximum_page_size(
+        self,
+        collector: MeshCollector,
+        mock_api: MagicMock,
+        network: dict,
+    ) -> None:
+        """The mesh statuses fetch pages at the endpoint maximum (3 - 500)."""
+        mock_api.wireless.getNetworkWirelessMeshStatuses = MagicMock(return_value=[])
+
+        await collector.collect(network)
+
+        _, kwargs = mock_api.wireless.getNetworkWirelessMeshStatuses.call_args
+        assert kwargs["perPage"] == 500
+        assert kwargs["total_pages"] == "all"
+
     async def test_metric_names(
         self,
         collector: MeshCollector,

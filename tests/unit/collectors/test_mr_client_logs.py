@@ -279,6 +279,24 @@ class TestSignalQualityProducer:
         _, kwargs = parent.api.wireless.getNetworkWirelessSignalQualityHistory.call_args
         assert kwargs["clientId"] == "c1"
 
+    async def test_client_enumeration_requests_maximum_page_size(self) -> None:
+        """getNetworkClients pages at the endpoint maximum (3 - 5000)."""
+        exp = InMemoryLogRecordExporter()
+        emitter = _make_emitter(
+            exp, enabled=True, endpoint="http://otel:4317", events=[SIGNAL_QUALITY]
+        )
+        parent = _FakeParent(emitter, wireless_clients={"N_1": [_wl_client("c1")]})
+        parent.api.wireless.getNetworkWirelessSignalQualityHistory = MagicMock(
+            return_value=_sq_history()
+        )
+        collector = MRClientLogsCollector(parent)  # type: ignore[arg-type]
+
+        await collector.collect_client_logs("org1", "Org One")
+
+        _, kwargs = parent.api.networks.getNetworkClients.call_args
+        assert kwargs["perPage"] == 5000
+        assert kwargs["total_pages"] == "all"
+
     async def test_signal_quality_emits_when_packet_loss_empty(self) -> None:
         """#637 regression: a healthy client with EMPTY packet loss still emits signal quality.
 
