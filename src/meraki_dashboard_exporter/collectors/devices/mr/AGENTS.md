@@ -84,7 +84,7 @@ SSID-to-network mapping and no per-network fan-out.
 per-client detail is unbounded, and emits OTLP log records through `self.parent.data_log_emitter`
 (`core/otel_data_logs.py`), which may be `None`. The two events are `WIRELESS_CLIENT_PACKET_LOSS`
 (one org-wide bulk `getOrganizationWirelessDevicesPacketLossByClient` call, one record per client
-row) and `WIRELESS_CLIENT_SIGNAL_QUALITY` (experimental and off by default: one
+row) and `WIRELESS_CLIENT_SIGNAL_QUALITY` (experimental; enabled whenever data logs are on unless `otel.logs.events` excludes it: one
 `getNetworkWirelessSignalQualityHistory` call per active client, with the client universe
 enumerated from `getNetworkClients` independently of packet loss, so a healthy zero-loss client
 still emits a record). Both are gated on `emitter.is_event_enabled(...)` so a disabled event makes
@@ -92,5 +92,8 @@ no API call at all. Client MAC is emitted
 only when `emitter.include_identifiers`. The packet-loss-by-client response carries no AP serial, so
 `device.serial` is deliberately not emitted.
 
-It declares no `EndpointGroup` and has no `_should_run_group` check, so when enabled it runs on every
-`DeviceCollector` cycle rather than at the cadence of the group whose method it is folded into.
+It declares no `EndpointGroup`. The packet-loss producer runs on every `DeviceCollector` cycle. The
+signal-quality producer paces itself per network with `api.client_signal_quality_interval` and caps
+each network at `api.client_signal_quality_max_clients`; it reads the settings directly because the
+`CLIENTS_SIGNAL_QUALITY` group exists only when the clients collector's own signal-quality path is
+enabled.

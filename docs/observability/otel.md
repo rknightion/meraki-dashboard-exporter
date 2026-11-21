@@ -153,7 +153,7 @@ want that.
 |---|---|---|
 | `meraki.wireless.client.packet_loss` | one record per wireless client per cycle (up/down/total loss %) | **Low** — a single org-wide bulk call (`getOrganizationWirelessDevicesPacketLossByClient`). |
 | `meraki.org.webhook.delivery` | one record per outbound webhook delivery attempt | **Low** — reuses the webhook-logs fetch the aggregate metric already makes (no extra call). |
-| `meraki.wireless.client.signal_quality` | one record per wireless client per cycle (RSSI/SNR) | **High — experimental.** One `getNetworkWirelessSignalQualityHistory` call **per client**, not a bulk endpoint. Interval-gated and bounded by `MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_MAX_CLIENTS` (default 200) / `MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_INTERVAL`, but still linear in client count. |
+| `meraki.wireless.client.signal_quality` | one record per wireless client per cycle (RSSI/SNR) | **High — experimental.** One `getNetworkWirelessSignalQualityHistory` call **per client**, not a bulk endpoint. Paced per network by `MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_INTERVAL` (default 600 s) and capped per network by `MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_MAX_CLIENTS` (default 200), but still linear in client count. |
 
 To ship the cheap events without the per-client fan-out:
 
@@ -163,7 +163,7 @@ export MERAKI_EXPORTER_OTEL__LOGS__EVENTS='["meraki.wireless.client.packet_loss"
 
 Note this data-log event is independent of the `MERAKI_EXPORTER_CLIENTS__SIGNAL_QUALITY_ENABLED`
 metric path — that flag drives the ID-only `wireless_client_rssi`/`snr` **Prometheus** series;
-the `signal_quality` data-log event above is its own per-client fan-out and fires whenever the
+the `signal_quality` data-log event above is its own per-client fan-out and runs on its own interval whenever the
 event is enabled. Enabling both runs the fan-out twice.
 
 ### Record shape
@@ -183,9 +183,10 @@ Data logs are **per-entity, not per-metric-series** — a network with 10,000 ac
 appropriate for a log/trace backend with volume-based retention (Loki, Elastic, any OTLP log
 sink) but is a materially different cost profile from Prometheus scraping. Built-in producers run
 on their host collector's own endpoint-group cadence (see [Scheduler
-Architecture](scheduler.md)) — e.g. the MR per-client packet-loss/signal-quality producers ride
-the `mr_ssid_usage` group (900s floor) and the webhook-delivery producer rides `org_webhook_logs`
-(300s floor) — specifically to bound this; enabling more events or a shorter effective cadence
+Architecture](scheduler.md)) — e.g. the MR packet-loss producer runs on every `DeviceCollector` cycle (about every 120 s by
+default), the signal-quality producer runs per network at most once per
+`MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_INTERVAL`, and the webhook-delivery producer rides
+`org_webhook_logs` (300s floor) — specifically to bound this; enabling more events or a shorter effective cadence
 multiplies volume linearly. Size your backend's ingest/retention accordingly before enabling this
 in a large environment.
 
