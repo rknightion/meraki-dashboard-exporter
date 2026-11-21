@@ -1080,20 +1080,34 @@ class DeviceCollector(MetricCollector):
 
                 # Collect packet statistics with smoothing and interval gating
                 if not used_fallback:
-                    await process_in_batches_with_errors(
-                        ms_devices,
-                        self.ms_collector._collect_packet_statistics,
-                        batch_size=self.settings.api.device_batch_size,
-                        delay_between_batches=self.settings.api.batch_delay,
-                        spread_over_seconds=spread_window,
-                        initial_delay=self._get_smoothing_offset(f"{org_id}:ms_packets"),
-                        min_batch_delay=min_delay,
-                        max_batch_delay=max_delay,
-                        max_concurrency=self.settings.api.concurrency_limit,
-                        item_description="MS packet stats",
-                        error_context_func=lambda device: {"serial": device["serial"]},
-                        on_error=lambda error: self._track_error(categorize_error(error)),
-                    )
+                    # Filter before batching: the batch helper sleeps its smoothing
+                    # delays for every item it is given, due or not (#975).
+                    packet_devices = [
+                        device
+                        for device in ms_devices
+                        if self.ms_collector._should_collect_packet_stats(device.get("serial", ""))
+                    ]
+
+                    if packet_devices:
+                        await process_in_batches_with_errors(
+                            packet_devices,
+                            self.ms_collector._collect_packet_statistics,
+                            batch_size=self.settings.api.device_batch_size,
+                            delay_between_batches=self.settings.api.batch_delay,
+                            spread_over_seconds=spread_window,
+                            # A forced run (including startup) does not wait for the offset.
+                            initial_delay=(
+                                0.0
+                                if self._force_run
+                                else self._get_smoothing_offset(f"{org_id}:ms_packets")
+                            ),
+                            min_batch_delay=min_delay,
+                            max_batch_delay=max_delay,
+                            max_concurrency=self.settings.api.concurrency_limit,
+                            item_description="MS packet stats",
+                            error_context_func=lambda device: {"serial": device["serial"]},
+                            on_error=lambda error: self._track_error(categorize_error(error)),
+                        )
 
             # Note: MR per-device collection has been replaced with org/network-level
             # collection for efficiency. Client counts use org-wide endpoint and
