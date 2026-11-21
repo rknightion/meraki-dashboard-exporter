@@ -61,7 +61,7 @@ def test_rate_functions_only_apply_to_counter_series(queries: dict[tuple[str, st
 
 def test_packet_panels_use_windowed_gauges(queries: dict[tuple[str, str], str]) -> None:
     """Packet loss divides the window counts; error panels read packet rates."""
-    selector = 'job="meraki_dashboard", org_id=~"$organization", network_id=~"$network"'
+    selector = 'job=~"$job", org_id=~"$organization", network_id=~"$network"'
     assert queries[("panel-15", "A")] == (
         f"sum(meraki_mr_packets_lost_count{{{selector}}}) / "
         f"(sum(meraki_mr_packets_count{{{selector}}}) > 0)"
