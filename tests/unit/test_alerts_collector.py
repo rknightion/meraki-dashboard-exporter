@@ -1006,11 +1006,16 @@ class TestAlertsCollector(BaseCollectorTest):
         # (and with what batch size / delay) for each fan-out site.
         collector.settings.api.network_batch_size = 2
         collector.settings.api.batch_delay = 0.0
+        collector.settings.api.concurrency_limit = 3
 
         calls: list[dict[str, Any]] = []
 
         async def spying_batches(items, process_func, **kwargs):
-            calls.append({"items": list(items), "batch_size": kwargs.get("batch_size")})
+            calls.append({
+                "items": list(items),
+                "batch_size": kwargs.get("batch_size"),
+                "max_concurrency": kwargs.get("max_concurrency"),
+            })
             return await process_in_batches_with_errors(items, process_func, **kwargs)
 
         original = alerts_module.process_in_batches_with_errors
@@ -1032,6 +1037,8 @@ class TestAlertsCollector(BaseCollectorTest):
         assert len(calls) == 2, f"expected 2 batched fan-outs, got {len(calls)}: {calls}"
         for call in calls:
             assert call["batch_size"] == 2
+            # #1000: each fan-out is bounded by api.concurrency_limit.
+            assert call["max_concurrency"] == 3
 
         # Calls are awaited strictly sequentially in _collect_impl, in this order:
         # org alerts, then sensor-alert networks.

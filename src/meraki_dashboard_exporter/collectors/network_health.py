@@ -514,6 +514,7 @@ class NetworkHealthCollector(MetricCollector):
                     initial_delay=self._get_smoothing_offset(f"{org_id}:network_health"),
                     min_batch_delay=self.settings.api.smoothing_min_batch_delay,
                     max_batch_delay=self.settings.api.smoothing_max_batch_delay,
+                    max_concurrency=self.settings.api.concurrency_limit,
                     item_description="network health",
                     error_context_func=lambda network: {
                         "org_id": org_id,

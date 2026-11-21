@@ -47,6 +47,18 @@ honoured. Earlier releases ignored both and used 5 and 30. The default of
 `max_consecutive_failures` is now 5, matching that behaviour, where the reference used to say 10.
 If you set either value, it now takes effect.
 
+## Batch fan-outs are capped at `api.concurrency_limit`
+
+The batch fan-outs in the device, network health, alerts, clients and config collectors now honour
+`api.concurrency_limit`. Earlier releases started a whole batch (`api.device_batch_size`, 20 by
+default, or `api.network_batch_size`, 30 by default) at once and ignored the setting there, so
+lowering it only reduced how many collectors were admitted. At the shipped default of 5, up to 5
+items of a batch are now in flight instead of up to 20 or 30. The client-side rate limiter still
+paces request starts, so at normal latency throughput is about the same, but a large fan-out takes
+longer when calls are slow. A deployment that relied on 20 or 30 items in flight should raise
+`api.concurrency_limit` together with `api.executor_workers`, because collector admission is
+`api.executor_workers // api.concurrency_limit`.
+
 ## Changes after 2.3.0
 
 The following previously accepted configurations now prevent startup:

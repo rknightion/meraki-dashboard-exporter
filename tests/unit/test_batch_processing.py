@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+import pytest
+
 from meraki_dashboard_exporter.core.batch_processing import (
     extract_successful_results,
     process_grouped_items,
@@ -262,9 +264,106 @@ class TestProcessInBatchesWithErrors:
         assert isinstance(results[1][1], ValueError)
         assert results[2] == (3, "processed_3")
 
+    async def test_max_concurrency_bounds_in_flight_items(self):
+        """A batch of 30 with max_concurrency=5 never has more than 5 items in flight."""
+        process_item, state = _in_flight_probe()
+
+        items = list(range(30))
+        results = await process_in_batches_with_errors(
+            items,
+            process_item,
+            batch_size=30,
+            delay_between_batches=0.0,
+            max_concurrency=5,
+        )
+
+        assert state["peak"] == 5
+        assert [item for item, _ in results] == items
+        assert [result for _, result in results] == [f"processed_{i}" for i in items]
+
+    async def test_max_concurrency_two_over_ten_items(self):
+        """max_concurrency=2 over 10 items observes at most 2 in flight."""
+        process_item, state = _in_flight_probe()
+
+        results = await process_in_batches_with_errors(
+            list(range(10)), process_item, batch_size=10, max_concurrency=2
+        )
+
+        assert state["peak"] == 2
+        assert len(results) == 10
+
+    async def test_max_concurrency_none_keeps_whole_batch_in_flight(self):
+        """Without max_concurrency the whole batch still starts at once."""
+        process_item, state = _in_flight_probe()
+
+        await process_in_batches_with_errors(list(range(12)), process_item, batch_size=12)
+
+        assert state["peak"] == 12
+
+    async def test_max_concurrency_still_reports_item_errors(self):
+        """A failing item still lands in the results and reaches on_error."""
+        seen: list[Exception] = []
+
+        async def process_item(item: int) -> str:
+            await asyncio.sleep(0)
+            if item == 3:
+                raise ValueError("boom")
+            return f"processed_{item}"
+
+        results = await process_in_batches_with_errors(
+            list(range(6)),
+            process_item,
+            batch_size=6,
+            max_concurrency=2,
+            on_error=seen.append,
+        )
+
+        assert [item for item, _ in results] == list(range(6))
+        assert isinstance(results[3][1], ValueError)
+        assert results[4] == (4, "processed_4")
+        assert len(seen) == 1
+
+    async def test_max_concurrency_must_be_positive(self):
+        """A non-positive bound is a programming error, not a deadlock."""
+        process_item, _ = _in_flight_probe()
+
+        with pytest.raises(ValueError, match="max_concurrency"):
+            await process_in_batches_with_errors([1], process_item, max_concurrency=0)
+
+
+def _in_flight_probe() -> tuple[Any, dict[str, int]]:
+    """Return an async item function and the counters it updates."""
+    state = {"running": 0, "peak": 0}
+
+    async def process_item(item: int) -> str:
+        state["running"] += 1
+        state["peak"] = max(state["peak"], state["running"])
+        try:
+            await asyncio.sleep(0.01)
+        finally:
+            state["running"] -= 1
+        return f"processed_{item}"
+
+    return process_item, state
+
 
 class TestProcessGroupedItems:
     """Test process_grouped_items functionality."""
+
+    async def test_max_concurrency_is_forwarded(self):
+        """process_grouped_items forwards max_concurrency to every group."""
+        process_item, state = _in_flight_probe()
+
+        results = await process_grouped_items(
+            {"a": list(range(8)), "b": list(range(8))},
+            process_item,
+            batch_size=8,
+            max_concurrency=3,
+        )
+
+        assert state["peak"] == 3
+        assert len(results["a"]) == 8
+        assert len(results["b"]) == 8
 
     async def test_grouped_processing(self):
         """Test processing items grouped by key."""

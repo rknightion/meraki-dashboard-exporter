@@ -112,8 +112,11 @@ class APISettings(BaseModel):
         ge=1,
         le=20,
         description=(
-            "Max in-flight sub-requests within a SINGLE collector's fan-out (the "
-            "ManagedTaskGroup bound in device/network_health/organization collectors). "
+            "Max in-flight sub-requests within a SINGLE collector's fan-out: both the "
+            "ManagedTaskGroup fan-outs and the batch fan-outs (process_in_batches_with_errors "
+            "in the device, network_health, alerts, clients and config collectors), so a batch "
+            "of api.device_batch_size or api.network_batch_size items starts at most this many "
+            "at a time. "
             "This caps concurrency BREADTH (in-flight memory + SDK executor-thread "
             "pressure), which is distinct from the client-side AIMD rate limiter that "
             "caps request RATE: the limiter paces how fast requests leave, this caps how "

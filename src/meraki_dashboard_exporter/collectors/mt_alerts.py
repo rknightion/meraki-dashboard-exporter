@@ -358,6 +358,7 @@ class MTSensorAlertsCollector(MetricCollector):
             _process_network,
             batch_size=self.settings.api.network_batch_size,
             delay_between_batches=self.settings.api.batch_delay,
+            max_concurrency=self.settings.api.concurrency_limit,
             item_description="MT sensor alerts",
             error_context_func=lambda network: {
                 "org_id": org_id,
