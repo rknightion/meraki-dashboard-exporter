@@ -41,14 +41,14 @@ unattended on the release PR.
 - `publish.yml` validates the expiring Trivy exception policy
   (`scripts/validate_trivy_exceptions.py`, `.trivyignore.yaml`) and runs publication-scoped
   HIGH-severity CodeQL before wrapping the shared `container-publish.yml`, passing
-  `helm-chart-path: charts/meraki-dashboard-exporter` and `build-args: PY_VERSION=3.14`. Its
-  `merge_group` trigger is a build-only arch-validation gate, no push.
+  `helm-chart-path: charts/meraki-dashboard-exporter` and `build-args: PY_VERSION=3.14`.
 - `api-drift.yml` fetches the live Meraki spec, runs `apidrift`, then `tufin/oasdiff breaking` over
   the reduced specs. `actions/report-drift` upserts a labelled tracking issue when the report
   fingerprint changes and then **always fails the job** - drift is a hard-fail signal once reported.
   `actions/resolve-drift` closes the issue when a lane comes back clean.
-- `ci.yml`'s `docker-build-test` asserts the image runs as the non-root `exporter` user, so keep it
-  aligned with the chart's security context.
+- `ci.yml`'s `docker-build-test` builds and smoke-tests both architectures on every pull request.
+  It asserts the image runs as the non-root `exporter` user, so keep it aligned with the chart's
+  security context.
 
 **`issue-triage.yml` and `notify-new-issue.yml` were removed deliberately and are not part of this
 repo.** Do not recreate them.
