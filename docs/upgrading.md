@@ -82,6 +82,17 @@ match the Meraki dashboard:
 
 Rescale any dashboard, alert threshold or recorded history that used the old values.
 
+### Webhook `alert_type` label values are now vendor alert type ids
+
+The webhook receiver now classifies each delivery on `alertTypeId`, the vendor's stable id, and
+falls back to `alertType` only when the id is absent or empty. The `alert_type` label on the six
+`meraki_webhook_*` counters and the duration histogram, and `events_by_type` on `/status`, now
+carry vendor ids such as `stopped_reporting`, `motion_alert` and `port_disconnected`. Earlier
+releases mostly recorded `other`, because real deliveries put display text in `alertType`. Values
+such as `device_down`, `motion_detected` and `port_down` no longer occur, and an id outside the
+vendor catalogue buckets to `other`. No metric or label name changes. If you query these series
+by `alert_type`, update the matcher. No bundled dashboard selects a `meraki_webhook_*` series.
+
 ### Usage gauges use Meraki's binary kilobyte and megabyte
 
 Meraki reports usage in binary units: its kilobyte is 1024 bytes and its megabyte is 1024 kilobytes.

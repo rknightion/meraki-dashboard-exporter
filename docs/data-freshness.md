@@ -135,18 +135,26 @@ Combine the two lags to get the worst case a Prometheus alert should tolerate be
 ## Webhook-driven fast path (device-down only)
 
 As of the webhook device-state fast path (`core/webhook_handler.py`), an inbound webhook whose
-`alertType` is `device_down` or `gateway_down` (`DEVICE_DOWN_ALERT_TYPES`) flips
+`alertTypeId` is `stopped_reporting` (`DEVICE_DOWN_ALERT_TYPES`) flips
 `meraki_device_up=0` for that device's serial immediately, ahead of the next poll — but
 **only** for devices the exporter already knows about from a prior poll (unknown serials are a
-no-op) and **only** for those two alert types (per-port/uplink/cellular/PSU/tunnel/role-change
+no-op) and **only** for that alert type (per-port/uplink/cellular/PSU/tunnel/role-change
 alert types are deliberately excluded — they aren't whole-device availability signals).
 
-There is currently **no** whole-device "back online" webhook alert type
-(`DEVICE_UP_ALERT_TYPES` is intentionally empty) — Meraki's webhook alert catalog has no verified
-whole-device-recovery type. Recovery is therefore reconciliation-only: the next poll restores
+The receiver classifies on `alertTypeId`, the stable machine id in a real delivery, not on
+`alertType`, which carries display text such as "APs went down". A payload with no `alertTypeId`
+(or an empty one) is classified on `alertType` instead.
+
+The vendor sample page shows `stopped_reporting` only with access-point wording, so the fast
+path is unverified for switches, appliances, cameras and sensors. Until a real delivery for
+those families is captured, assume it is only confirmed for access points.
+
+The vendor catalogue does have a recovery id, `started_reporting`, but it is deliberately **not**
+wired (`DEVICE_UP_ALERT_TYPES` is intentionally empty). Such a delivery is counted under its own
+id and changes nothing else. Recovery is therefore reconciliation-only: the next poll restores
 `meraki_device_up=1` once the device is actually reachable again, bounded by the same
-`DeviceCollector` cadence staleness as everything else. If Meraki later documents a verified
-recovery alert type, wiring it up is a one-line addition to `DEVICE_UP_ALERT_TYPES`.
+`DeviceCollector` cadence staleness as everything else. Wiring `started_reporting` up would be a
+one-line addition to `DEVICE_UP_ALERT_TYPES`.
 
 Webhooks are opt-in and off by default (`MERAKI_EXPORTER_WEBHOOKS__ENABLED=false`) — see
 [Deployment & Operations](deployment-operations.md#webhook-receiver-https-tls-termination) for setup. Without them enabled, device-down detection is

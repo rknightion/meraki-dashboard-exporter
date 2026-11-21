@@ -70,11 +70,12 @@ class DeviceStateApplier(Protocol):
 # whole-device availability transitions belong here — per-port / uplink /
 # cellular-uplink / PSU / tunnel / role-change types are deliberately excluded
 # (they are not whole-device availability).
-DEVICE_DOWN_ALERT_TYPES: frozenset[str] = frozenset({"device_down", "gateway_down"})
-# Empty in v1: KNOWN_ALERT_TYPES contains no *verified* whole-device recovery
-# type, so UP recovery is reconciliation-only (the next MEDIUM poll restores it,
-# bounded staleness ≤ one poll cycle + Meraki lag — never worse than today).
-# The up=True path is fully wired so a verified recovery type is a one-line add.
+DEVICE_DOWN_ALERT_TYPES: frozenset[str] = frozenset({"stopped_reporting"})
+# Empty by decision: the catalogue has ``started_reporting``, but it is
+# deliberately not wired, so UP recovery is reconciliation-only (the next MEDIUM
+# poll restores it, bounded staleness ≤ one poll cycle + Meraki lag — never
+# worse than today). The up=True path is fully wired, so adding
+# ``started_reporting`` here is a one-line change once a maintainer wants it.
 DEVICE_UP_ALERT_TYPES: frozenset[str] = frozenset()
 
 
@@ -96,46 +97,86 @@ class WebhookSecurityError(RuntimeError):
 ALERT_TYPE_OTHER = "other"
 ALERT_TYPE_UNKNOWN = "unknown"
 
-# Curated set of common Meraki webhook alert types (bounded allowlist). This is
-# deliberately conservative: unknown values bucket to ``other`` rather than the
-# allowlist growing without bound. Add well-known types here as needed.
+# The vendor catalogue of alert type ids (bounded allowlist). A real delivery
+# carries the stable machine id in ``alertTypeId`` and display text in
+# ``alertType`` ("APs went down"), so classification keys on the id. These are
+# the 72 ids on the vendor sample page
+# (https://developer.cisco.com/meraki/webhooks/webhook-sample-alerts/). Unknown
+# values bucket to ``other`` rather than the allowlist growing without bound,
+# which keeps the label at 74 values with ``other`` and ``unknown``.
 KNOWN_ALERT_TYPES: frozenset[str] = frozenset({
-    "settings_changed",
-    "settings changed",
-    "client_connectivity",
-    "connectivity",
-    "device_down",
-    "gateway_down",
-    "gateway_to_repeater",
-    "repeater_to_gateway",
-    "dhcp_no_leases",
-    "dhcp_lease",
-    "rogue_ap",
-    "rogue_dhcp",
-    "port_error",
-    "port_down",
-    "port_link_change",
-    "power_supply",
-    "vpn_connectivity_change",
-    "cellular_up",
+    "amp_malware_blocked",
+    "amp_malware_detected",
+    "analyzed_app_network_insight_performance_alert",
+    "bluetooth_in",
+    "bluetooth_out",
     "cellular_down",
-    "motion_detected",
-    "motion_alert",
-    "sensor_alert",
-    "water_detected",
-    "door_opened",
-    "temperature",
-    "humidity",
-    "high_wireless_usage",
-    "high_wired_usage",
-    "network_usage",
-    "onboarding",
-    "config_changed",
-    "failed_8021x_auth",
-    "splash_auth",
-    "air_marshal",
+    "cellular_up",
+    "client_connectivity",
+    "cloud_archive_alert",
+    "critical_temperature",
+    "dhcp6na_renumber",
+    "dhcp6pd_renumber",
+    "dhcp_alerts",
+    "dhcp_no_leases",
+    "failover_event",
+    "firewall_test_failed",
+    "foreign_ap",
+    "gateway_to_repeater",
+    "geofencing_in",
+    "geofencing_out",
+    "ip6_conflict",
     "ip_conflict",
-    "uplink_status_change",
+    "mi_alert",
+    "motion_alert",
+    "new_splash_signup",
+    "node_hardware_failure",
+    "pcc_enrollment",
+    "pcc_expired_apns_cert",
+    "pcc_outage_begin",
+    "pcc_outage_end",
+    "pcc_security_compliance",
+    "pcc_security_violation",
+    "pcc_sw_found",
+    "pcc_unmanaged",
+    "port_cable_error",
+    "port_connected",
+    "port_disconnected",
+    "port_speed_change",
+    "power_supply_down",
+    "power_supply_up",
+    "prefix_starvation",
+    "rogue_ap",
+    "rogue_ap_association",
+    "rogue_dhcp",
+    "rps_backup",
+    "rps_base_supply_up",
+    "sensor_alert",
+    "sensor_alert_test",
+    "sensor_automation",
+    "sensor_automation_test",
+    "sensor_battery_cover_removed",
+    "sensor_battery_cover_replaced",
+    "sensor_battery_improved",
+    "sensor_battery_low",
+    "sensor_magnetic_tampering_detected",
+    "sensor_magnetic_tampering_reset",
+    "sensor_probe_cable_disconnected",
+    "sensor_probe_cable_reconnected",
+    "sensor_usb_power_cable_disconnected",
+    "sensor_usb_power_cable_reconnected",
+    "sensor_water_cable_disconnected",
+    "sensor_water_cable_reconnected",
+    "settings_changed",
+    "started_reporting",
+    "stopped_reporting",
+    "udld_error",
+    "umbrella_expiring",
+    "unreachable_radius_server",
+    "uplink_ip6_conflict",
+    "usage_alert",
+    "vpn_connectivity_change",
+    "vrrp",
 })
 
 
@@ -145,7 +186,8 @@ def bound_alert_type(alert_type: str | None) -> str:
     Parameters
     ----------
     alert_type : str | None
-        Raw ``alertType`` from the webhook payload (attacker-controlled when
+        The ``alertTypeId`` from the webhook payload, or its ``alertType`` when
+        the id is absent or empty (attacker-controlled when
         ``require_secret=false``).
 
     Returns
@@ -264,10 +306,12 @@ class WebhookHandler:
             Application settings including webhook configuration.
         device_state_applier : DeviceStateApplier | None
             Optional fast-path applier (#614). When wired (the ``device``
-            collector is enabled) a ``device_down``/``gateway_down`` webhook for
-            a poll-known serial flips ``meraki_device_up`` ahead of the next
-            poll. ``None`` (default) = feature off; webhooks degrade to today's
-            count-only behaviour.
+            collector is enabled) a webhook whose ``alertTypeId`` is
+            ``stopped_reporting`` for a poll-known serial flips
+            ``meraki_device_up`` ahead of the next poll. ``started_reporting``
+            is in the catalogue but deliberately not wired: recovery stays
+            reconciliation-only. ``None`` (default) = feature off; webhooks
+            degrade to today's count-only behaviour.
 
         """
         if settings.webhooks.require_secret and not settings.webhooks.shared_secret:
@@ -532,7 +576,9 @@ class WebhookHandler:
             # validate org_id against the known org set and bucket unknown
             # alert types to prevent an unbounded-cardinality label injection.
             org_id = bound_org_id(payload.organization_id, self._known_org_ids)
-            alert_type = bound_alert_type(payload.alert_type)
+            # Prefer the stable id (alertTypeId); fall back to alertType only when
+            # the id is absent or empty (custom payload templates).
+            alert_type = bound_alert_type(payload.alert_type_id or payload.alert_type)
 
             self.events_received.labels(
                 org_id=org_id,

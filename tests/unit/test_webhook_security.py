@@ -29,7 +29,7 @@ class TestBoundAlertType:
 
     def test_known_alert_type_passes_through(self) -> None:
         """Known alert type passes through."""
-        assert bound_alert_type("motion_detected") == "motion_detected"
+        assert bound_alert_type("motion_alert") == "motion_alert"
 
     def test_unknown_alert_type_buckets_to_other(self) -> None:
         """Unknown alert type buckets to other."""
@@ -165,14 +165,14 @@ class TestSuccessPathLabelBounding:
         """Known org and alert type preserved."""
         handler = WebhookHandler(_insecure_settings())
 
-        result = handler.process_webhook(_payload(org_id="123456", alert_type="motion_detected"))
+        result = handler.process_webhook(_payload(org_id="123456", alert_type="motion_alert"))
         assert result is not None
 
         status = handler.get_status()
-        assert status["last_alert_type"] == "motion_detected"
+        assert status["last_alert_type"] == "motion_alert"
         samples = list(handler.events_received.collect())[0].samples
         assert {s.labels["org_id"] for s in samples} == {"123456"}
-        assert {s.labels["alert_type"] for s in samples} == {"motion_detected"}
+        assert {s.labels["alert_type"] for s in samples} == {"motion_alert"}
 
 
 class TestReceiverHealthTracking:
