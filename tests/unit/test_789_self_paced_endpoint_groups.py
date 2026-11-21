@@ -39,6 +39,7 @@ _DEVICE_SELF_PACED = {
     EndpointGroupName.MS_STP,
     EndpointGroupName.MV_ANALYTICS,
     EndpointGroupName.MV_SENSE_CONFIG,
+    EndpointGroupName.MR_SIGNAL_QUALITY,
 }
 _CLIENTS_SELF_PACED = {
     EndpointGroupName.CLIENTS_APP_USAGE,

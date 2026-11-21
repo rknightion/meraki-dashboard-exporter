@@ -390,6 +390,7 @@ class DeviceCollector(MetricCollector):
             floor_seconds=3600,
             cost_fn=lambda s: float(s.signal_quality_ap_count),
             enabled_fn=lambda s: s.signal_quality_ap_count > 0,
+            self_paced=True,  # resumable per-AP cursor (#996)
         ),
         # Phase 4B (#325): current power mode; org-wide paginated (perPage max 20).
         EndpointGroup(
