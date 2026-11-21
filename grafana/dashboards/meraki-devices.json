@@ -32,7 +32,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_device_up{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_device_up{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "online",
                         "range": true
@@ -106,7 +106,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mr_clients_connected{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mr_clients_connected{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "clients",
                         "range": true
@@ -178,7 +178,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mr_clients_connected{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_mr_clients_connected{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{model}} ({{network_id}})",
                         "range": true
@@ -239,7 +239,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_ap_channel_utilization_2_4ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}",
+                        "expr": "meraki_ap_channel_utilization_2_4ghz_percent{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}",
                         "instant": false,
                         "legendFormat": "2.4GHz {{serial}}",
                         "range": true
@@ -260,7 +260,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_ap_channel_utilization_5ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}",
+                        "expr": "meraki_ap_channel_utilization_5ghz_percent{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}",
                         "instant": false,
                         "legendFormat": "5GHz {{serial}}",
                         "range": true
@@ -281,7 +281,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_ap_channel_utilization_6ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}",
+                        "expr": "meraki_ap_channel_utilization_6ghz_percent{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}",
                         "instant": false,
                         "legendFormat": "6GHz {{serial}}",
                         "range": true
@@ -342,7 +342,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mr_radio_channel{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", band=~\"2.4|5|6\"}",
+                        "expr": "meraki_mr_radio_channel{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\", band=~\"2.4|5|6\"}",
                         "instant": false,
                         "legendFormat": "{{serial}} {{band}}GHz",
                         "range": true
@@ -403,7 +403,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mr_radio_power_dbm{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", band=~\"2.4|5|6\"}",
+                        "expr": "meraki_mr_radio_power_dbm{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\", band=~\"2.4|5|6\"}",
                         "instant": false,
                         "legendFormat": "{{serial}} {{band}}GHz",
                         "range": true
@@ -464,7 +464,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mr_packets_lost_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) / (sum(meraki_mr_packets_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) > 0)",
+                        "expr": "sum(meraki_mr_packets_lost_count{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}) / (sum(meraki_mr_packets_count{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}) > 0)",
                         "instant": false,
                         "legendFormat": "loss ratio",
                         "range": true
@@ -525,7 +525,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mr_air_marshal_bssids_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mr_air_marshal_bssids_count{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "rogue BSSIDs",
                         "range": true
@@ -546,7 +546,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mr_air_marshal_ssids_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mr_air_marshal_ssids_count{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "rogue SSIDs",
                         "range": true
@@ -567,7 +567,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mr_air_marshal_contained_bssids_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mr_air_marshal_contained_bssids_count{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "contained BSSIDs",
                         "range": true
@@ -628,7 +628,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mr_port_link_negotiation_speed_mbps{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_mr_port_link_negotiation_speed_mbps{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{model}} {{port_name}}",
                         "range": true
@@ -689,7 +689,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_ms_ports_active{job=\"meraki_dashboard\", org_id=~\"$organization\"})",
+                        "expr": "sum(meraki_ms_ports_active{job=~\"$job\", org_id=~\"$organization\"})",
                         "instant": false,
                         "legendFormat": "active",
                         "range": true
@@ -710,7 +710,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_ms_ports_inactive{job=\"meraki_dashboard\", org_id=~\"$organization\"})",
+                        "expr": "sum(meraki_ms_ports_inactive{job=~\"$job\", org_id=~\"$organization\"})",
                         "instant": false,
                         "legendFormat": "inactive",
                         "range": true
@@ -771,7 +771,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_ms_power_usage_watts{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_ms_power_usage_watts{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{serial}} ({{model}})",
                         "range": true
@@ -832,7 +832,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "count(meraki_device_up{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) - sum(meraki_device_up{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "count(meraki_device_up{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}) - sum(meraki_device_up{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "offline",
                         "range": true
@@ -909,7 +909,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (serial) (meraki_ms_port_client_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum by (serial) (meraki_ms_port_client_count{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "{{serial}}",
                         "range": true
@@ -970,7 +970,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (serial, direction) (meraki_ms_port_traffic_bytes_per_second{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum by (serial, direction) (meraki_ms_port_traffic_bytes_per_second{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "{{serial}} {{direction}}",
                         "range": true
@@ -1031,7 +1031,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (serial) (meraki_ms_port_error_active{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum by (serial) (meraki_ms_port_error_active{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "{{serial}}",
                         "range": true
@@ -1092,7 +1092,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (serial) (meraki_ms_port_packets_rate_crcerrors{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum by (serial) (meraki_ms_port_packets_rate_crcerrors{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "{{serial}} crc",
                         "range": true
@@ -1113,7 +1113,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (serial) (meraki_ms_port_packets_rate_collisions{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum by (serial) (meraki_ms_port_packets_rate_collisions{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "{{serial}} coll",
                         "range": true
@@ -1174,7 +1174,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_ms_stp_priority{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_ms_stp_priority{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{serial}}",
                         "range": true
@@ -1235,7 +1235,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_ms_port_status{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_ms_port_status{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": true,
                         "legendFormat": "",
                         "range": false
@@ -1349,7 +1349,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (status) (meraki_mx_uplinks_by_status{job=\"meraki_dashboard\", org_id=~\"$organization\"})",
+                        "expr": "sum by (status) (meraki_mx_uplinks_by_status{job=~\"$job\", org_id=~\"$organization\"})",
                         "instant": false,
                         "legendFormat": "{{status}}",
                         "range": true
@@ -1410,7 +1410,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mx_ha_role{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_mx_ha_role{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{serial}} role",
                         "range": true
@@ -1431,7 +1431,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mx_ha_enabled{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_mx_ha_enabled{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "HA enabled",
                         "range": true
@@ -1492,7 +1492,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mx_dhcp_subnet_used_ips{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mx_dhcp_subnet_used_ips{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "used",
                         "range": true
@@ -1513,7 +1513,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mx_dhcp_subnet_free_ips{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mx_dhcp_subnet_free_ips{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "free",
                         "range": true
@@ -1574,7 +1574,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mx_firewall_rules{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mx_firewall_rules{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "L3 firewall",
                         "range": true
@@ -1595,7 +1595,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mx_nat_rules{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mx_nat_rules{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "NAT",
                         "range": true
@@ -1616,7 +1616,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mx_port_forwarding_rules{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mx_port_forwarding_rules{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "port-forward",
                         "range": true
@@ -1637,7 +1637,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mx_static_routes{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mx_static_routes{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "static routes",
                         "range": true
@@ -1700,7 +1700,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "count by (device_type) (meraki_device_up{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "count by (device_type) (meraki_device_up{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": true,
                         "legendFormat": "{{device_type}}",
                         "range": false
@@ -1769,7 +1769,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mx_vpn_hubs{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mx_vpn_hubs{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "VPN hubs",
                         "range": true
@@ -1790,7 +1790,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mx_vpn_subnets_advertised{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mx_vpn_subnets_advertised{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "subnets advertised",
                         "range": true
@@ -1851,7 +1851,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mx_content_filtering_blocked_categories{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mx_content_filtering_blocked_categories{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "blocked categories",
                         "range": true
@@ -1872,7 +1872,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mx_content_filtering_blocked_url_patterns{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mx_content_filtering_blocked_url_patterns{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "blocked URLs",
                         "range": true
@@ -1893,7 +1893,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mx_content_filtering_allowed_url_patterns{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mx_content_filtering_allowed_url_patterns{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "allowed URLs",
                         "range": true
@@ -1954,7 +1954,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mt_alerting_sensors_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mt_alerting_sensors_count{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "alerting",
                         "range": true
@@ -2029,7 +2029,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mt_temperature_celsius{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_mt_temperature_celsius{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{serial}} ({{model}})",
                         "range": true
@@ -2090,7 +2090,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mt_humidity_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_mt_humidity_percent{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{serial}}",
                         "range": true
@@ -2151,7 +2151,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mt_battery_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_mt_battery_percent{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{serial}}",
                         "range": true
@@ -2212,7 +2212,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mt_door_status{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_mt_door_status{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{serial}}",
                         "range": true
@@ -2287,7 +2287,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mt_real_power_watts{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_mt_real_power_watts{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{serial}}",
                         "range": true
@@ -2348,7 +2348,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mt_current_amps{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_mt_current_amps{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{serial}} A",
                         "range": true
@@ -2369,7 +2369,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mt_voltage_volts{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_mt_voltage_volts{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{serial}} V",
                         "range": true
@@ -2430,7 +2430,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mt_indoor_air_quality_score{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_mt_indoor_air_quality_score{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{serial}}",
                         "range": true
@@ -2491,7 +2491,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "count by (status) (meraki_device_status_info{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "count by (status) (meraki_device_status_info{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": true,
                         "legendFormat": "{{status}}",
                         "range": false
@@ -2560,7 +2560,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mt_co2_ppm{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_mt_co2_ppm{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{serial}} CO2",
                         "range": true
@@ -2581,7 +2581,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mt_pm25_ug_m3{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_mt_pm25_ug_m3{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{serial}} PM2.5",
                         "range": true
@@ -2602,7 +2602,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mt_tvoc_ppb{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_mt_tvoc_ppb{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{serial}} TVOC",
                         "range": true
@@ -2663,7 +2663,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mt_gateway_rssi{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_mt_gateway_rssi{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{serial}}",
                         "range": true
@@ -2724,7 +2724,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mv_people_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mv_people_count{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "people",
                         "range": true
@@ -2796,7 +2796,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mv_people_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_mv_people_count{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{serial}} zone {{zone_id}}",
                         "range": true
@@ -2857,7 +2857,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (status) (meraki_mv_onboarding_status{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum by (status) (meraki_mv_onboarding_status{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "{{status}}",
                         "range": true
@@ -2918,7 +2918,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_mv_audio_recording_enabled{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_mv_audio_recording_enabled{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "instant": false,
                         "legendFormat": "{{serial}}",
                         "range": true
@@ -2980,7 +2980,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mv_sense_enabled{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mv_sense_enabled{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "sense enabled",
                         "range": true
@@ -3001,7 +3001,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mv_motion_based_retention_enabled{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mv_motion_based_retention_enabled{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "motion retention",
                         "range": true
@@ -3022,7 +3022,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_mv_restricted_bandwidth_mode_enabled{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_mv_restricted_bandwidth_mode_enabled{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "restricted bw",
                         "range": true
@@ -3083,7 +3083,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (serial) (meraki_mv_analytics_zones{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum by (serial) (meraki_mv_analytics_zones{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "{{serial}}",
                         "range": true
@@ -3144,7 +3144,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (device_type) (meraki_device_up{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum by (device_type) (meraki_device_up{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "{{device_type}}",
                         "range": true
@@ -3205,7 +3205,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "count by (model) (meraki_device_up{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "count by (model) (meraki_device_up{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "{{model}}",
                         "range": true
@@ -3269,7 +3269,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "topk(15, meraki_device_memory_usage_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "topk(15, meraki_device_memory_usage_percent{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "instant": false,
                         "legendFormat": "{{serial}} ({{device_type}})",
                         "range": true
@@ -3330,7 +3330,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_device_status_info{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"} == 1",
+                        "expr": "meraki_device_status_info{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"} == 1",
                         "instant": true,
                         "legendFormat": "",
                         "range": false
@@ -3444,7 +3444,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_device_firmware_info{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"} == 1",
+                        "expr": "meraki_device_firmware_info{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"} == 1",
                         "instant": true,
                         "legendFormat": "",
                         "range": false
@@ -4335,6 +4335,39 @@
         "spec": {
           "allowCustomValue": true,
           "current": {
+            "text": "meraki_dashboard",
+            "value": "meraki_dashboard"
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "definition": "label_values(meraki_exporter_build_info, job)",
+          "hide": "dontHide",
+          "includeAll": false,
+          "label": "Job",
+          "multi": true,
+          "name": "job",
+          "options": [],
+          "query": {
+            "kind": "prometheus",
+            "spec": {
+              "qryType": 1,
+              "query": "label_values(meraki_exporter_build_info, job)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            }
+          },
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": "alphabeticalAsc"
+        }
+      },
+      {
+        "kind": "QueryVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
             "text": [
               "All"
             ],
@@ -4346,7 +4379,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "definition": "label_values(meraki_device_up{job=\"meraki_dashboard\"}, org_id)",
+          "definition": "label_values(meraki_device_up{job=~\"$job\"}, org_id)",
           "hide": "dontHide",
           "includeAll": true,
           "label": "Organization",
@@ -4357,7 +4390,7 @@
             "kind": "prometheus",
             "spec": {
               "qryType": 1,
-              "query": "label_values(meraki_device_up{job=\"meraki_dashboard\"}, org_id)",
+              "query": "label_values(meraki_device_up{job=~\"$job\"}, org_id)",
               "refId": "PrometheusVariableQueryEditor-VariableQuery"
             }
           },
@@ -4383,7 +4416,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "definition": "label_values(meraki_device_up{job=\"meraki_dashboard\", org_id=~\"$organization\"}, network_id)",
+          "definition": "label_values(meraki_device_up{job=~\"$job\", org_id=~\"$organization\"}, network_id)",
           "hide": "dontHide",
           "includeAll": true,
           "label": "Network",
@@ -4394,7 +4427,7 @@
             "kind": "prometheus",
             "spec": {
               "qryType": 1,
-              "query": "label_values(meraki_device_up{job=\"meraki_dashboard\", org_id=~\"$organization\"}, network_id)",
+              "query": "label_values(meraki_device_up{job=~\"$job\", org_id=~\"$organization\"}, network_id)",
               "refId": "PrometheusVariableQueryEditor-VariableQuery"
             }
           },
@@ -4416,7 +4449,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "definition": "label_values(meraki_device_up{device_type=\"MX\", org_id=~\"$organization\", job=\"meraki_dashboard\"}, device_type)",
+          "definition": "label_values(meraki_device_up{device_type=\"MX\", org_id=~\"$organization\", job=~\"$job\"}, device_type)",
           "hide": "hideVariable",
           "includeAll": false,
           "label": "has_mx",
@@ -4427,7 +4460,7 @@
             "kind": "prometheus",
             "spec": {
               "qryType": 1,
-              "query": "label_values(meraki_device_up{device_type=\"MX\", org_id=~\"$organization\", job=\"meraki_dashboard\"}, device_type)",
+              "query": "label_values(meraki_device_up{device_type=\"MX\", org_id=~\"$organization\", job=~\"$job\"}, device_type)",
               "refId": "PrometheusVariableQueryEditor-VariableQuery"
             }
           },
@@ -4449,7 +4482,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "definition": "label_values(meraki_device_up{device_type=\"MT\", org_id=~\"$organization\", job=\"meraki_dashboard\"}, device_type)",
+          "definition": "label_values(meraki_device_up{device_type=\"MT\", org_id=~\"$organization\", job=~\"$job\"}, device_type)",
           "hide": "hideVariable",
           "includeAll": false,
           "label": "has_mt",
@@ -4460,7 +4493,7 @@
             "kind": "prometheus",
             "spec": {
               "qryType": 1,
-              "query": "label_values(meraki_device_up{device_type=\"MT\", org_id=~\"$organization\", job=\"meraki_dashboard\"}, device_type)",
+              "query": "label_values(meraki_device_up{device_type=\"MT\", org_id=~\"$organization\", job=~\"$job\"}, device_type)",
               "refId": "PrometheusVariableQueryEditor-VariableQuery"
             }
           },
@@ -4482,7 +4515,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "definition": "label_values(meraki_device_up{device_type=\"MV\", org_id=~\"$organization\", job=\"meraki_dashboard\"}, device_type)",
+          "definition": "label_values(meraki_device_up{device_type=\"MV\", org_id=~\"$organization\", job=~\"$job\"}, device_type)",
           "hide": "hideVariable",
           "includeAll": false,
           "label": "has_mv",
@@ -4493,7 +4526,7 @@
             "kind": "prometheus",
             "spec": {
               "qryType": 1,
-              "query": "label_values(meraki_device_up{device_type=\"MV\", org_id=~\"$organization\", job=\"meraki_dashboard\"}, device_type)",
+              "query": "label_values(meraki_device_up{device_type=\"MV\", org_id=~\"$organization\", job=~\"$job\"}, device_type)",
               "refId": "PrometheusVariableQueryEditor-VariableQuery"
             }
           },

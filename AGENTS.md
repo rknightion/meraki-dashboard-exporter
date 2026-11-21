@@ -77,9 +77,11 @@ which overrides this block for loop work; nothing here depends on it.
 
 ## Surfaces and the boundary between them
 
-- Prometheus `/metrics` is the **sole metrics surface**. OpenTelemetry carries traces for
-  self-observability (`core/otel_tracing.py`) and an optional structured data-log channel for
-  per-entity product data (`core/otel_data_logs.py`). Neither is a metrics mirror.
+- Prometheus `/metrics` is the **canonical, default metrics surface**. The sanctioned exception is
+  the opt-in OTLP metrics bridge (`core/otel_metrics.py`), off by default: when enabled with a
+  resolved OTLP endpoint, it periodically translates and pushes snapshots of the Prometheus registry.
+  The registry remains the source of truth. OpenTelemetry tracing (`core/otel_tracing.py`) and the
+  optional structured per-entity data-log channel (`core/otel_data_logs.py`) are not metrics mirrors.
 - Never add a new client-keyed, or otherwise unbounded per-entity, labelled Prometheus metric.
   Metrics carry bounded fleet-shaped aggregates (org, network, device serial, SSID number, port,
   band, or a top-N bounded by construction). A per-client, per-request or per-delivery signal goes

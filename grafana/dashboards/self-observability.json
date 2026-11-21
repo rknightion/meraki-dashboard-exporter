@@ -32,7 +32,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "histogram_quantile(0.95, sum by (le, collector) (rate(meraki_exporter_collector_duration_seconds_bucket{job=\"meraki_dashboard\", instance=~\"$instance\"}[$__rate_interval])))",
+                        "expr": "histogram_quantile(0.95, sum by (le, collector) (rate(meraki_exporter_collector_duration_seconds_bucket{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval])))",
                         "legendFormat": "{{collector}}",
                         "range": true
                       }
@@ -92,7 +92,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_exporter_api_rate_limiter_tokens{job=\"meraki_dashboard\", instance=~\"$instance\"}",
+                        "expr": "meraki_exporter_api_rate_limiter_tokens{job=~\"$job\", instance=~\"$instance\"}",
                         "legendFormat": "{{org_id}}",
                         "range": true
                       }
@@ -151,7 +151,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum (rate(meraki_exporter_api_rate_limiter_throttled_total{job=\"meraki_dashboard\", instance=~\"$instance\"}[$__rate_interval]))",
+                        "expr": "sum (rate(meraki_exporter_api_rate_limiter_throttled_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
                         "legendFormat": "throttles",
                         "range": true
                       }
@@ -210,7 +210,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "histogram_quantile(0.95, sum by (le) (rate(meraki_exporter_api_rate_limiter_wait_seconds_bucket{job=\"meraki_dashboard\", instance=~\"$instance\"}[$__rate_interval])))",
+                        "expr": "histogram_quantile(0.95, sum by (le) (rate(meraki_exporter_api_rate_limiter_wait_seconds_bucket{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval])))",
                         "legendFormat": "wait p95",
                         "range": true
                       }
@@ -270,7 +270,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (collector) (rate(meraki_exporter_collector_errors_total{job=\"meraki_dashboard\", instance=~\"$instance\"}[$__rate_interval]))",
+                        "expr": "sum by (collector) (rate(meraki_exporter_collector_errors_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
                         "legendFormat": "{{collector}}",
                         "range": true
                       }
@@ -322,7 +322,7 @@
                   "spec": {
                     "datasource": {
                       "type": "tempo",
-                      "uid": "grafanacloud-traces"
+                      "uid": "${tempo_datasource}"
                     },
                     "hidden": false,
                     "query": {
@@ -381,7 +381,7 @@
                   "spec": {
                     "datasource": {
                       "type": "tempo",
-                      "uid": "grafanacloud-traces"
+                      "uid": "${tempo_datasource}"
                     },
                     "hidden": false,
                     "query": {
@@ -440,7 +440,7 @@
                   "spec": {
                     "datasource": {
                       "type": "loki",
-                      "uid": "grafanacloud-logs"
+                      "uid": "${loki_datasource}"
                     },
                     "hidden": false,
                     "query": {
@@ -500,7 +500,7 @@
                   "spec": {
                     "datasource": {
                       "type": "loki",
-                      "uid": "grafanacloud-logs"
+                      "uid": "${loki_datasource}"
                     },
                     "hidden": false,
                     "query": {
@@ -560,7 +560,7 @@
                   "spec": {
                     "datasource": {
                       "type": "loki",
-                      "uid": "grafanacloud-logs"
+                      "uid": "${loki_datasource}"
                     },
                     "hidden": false,
                     "query": {
@@ -627,7 +627,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_exporter_collector_cadence_seconds{job=\"meraki_dashboard\", instance=~\"$instance\"}",
+                        "expr": "meraki_exporter_collector_cadence_seconds{job=~\"$job\", instance=~\"$instance\"}",
                         "legendFormat": "{{collector}} · {{instance}}",
                         "range": true
                       }
@@ -687,7 +687,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_exporter_collector_failure_streak{job=\"meraki_dashboard\", instance=~\"$instance\"}",
+                        "expr": "meraki_exporter_collector_failure_streak{job=~\"$job\", instance=~\"$instance\"}",
                         "legendFormat": "{{collector}} · {{instance}}",
                         "range": true
                       }
@@ -746,7 +746,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_exporter_scheduler_budget_rps{job=\"meraki_dashboard\", instance=~\"$instance\"}",
+                        "expr": "meraki_exporter_scheduler_budget_rps{job=~\"$job\", instance=~\"$instance\"}",
                         "legendFormat": "{{instance}}",
                         "range": true
                       }
@@ -806,7 +806,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_exporter_scheduler_budget_utilization_ratio{job=\"meraki_dashboard\", instance=~\"$instance\"}",
+                        "expr": "meraki_exporter_scheduler_budget_utilization_ratio{job=~\"$job\", instance=~\"$instance\"}",
                         "legendFormat": "{{instance}}",
                         "range": true
                       }
@@ -866,7 +866,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_exporter_collection_utilization_ratio{job=\"meraki_dashboard\", instance=~\"$instance\"}",
+                        "expr": "meraki_exporter_collection_utilization_ratio{job=~\"$job\", instance=~\"$instance\"}",
                         "legendFormat": "{{instance}}",
                         "range": true
                       }
@@ -926,7 +926,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_exporter_collector_start_offset_seconds{job=\"meraki_dashboard\", instance=~\"$instance\"}",
+                        "expr": "meraki_exporter_collector_start_offset_seconds{job=~\"$job\", instance=~\"$instance\"}",
                         "legendFormat": "{{collector}} · {{instance}}",
                         "range": true
                       }
@@ -986,7 +986,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (status_code) (rate(meraki_exporter_api_requests_total{job=\"meraki_dashboard\", instance=~\"$instance\"}[$__rate_interval]))",
+                        "expr": "sum by (status_code) (rate(meraki_exporter_api_requests_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
                         "legendFormat": "{{status_code}}",
                         "range": true
                       }
@@ -1371,6 +1371,79 @@
         "spec": {
           "allowCustomValue": true,
           "current": {
+            "text": "meraki_dashboard",
+            "value": "meraki_dashboard"
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "definition": "label_values(meraki_exporter_build_info, job)",
+          "hide": "dontHide",
+          "includeAll": false,
+          "label": "Job",
+          "multi": true,
+          "name": "job",
+          "options": [],
+          "query": {
+            "kind": "prometheus",
+            "spec": {
+              "qryType": 1,
+              "query": "label_values(meraki_exporter_build_info, job)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            }
+          },
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": "alphabeticalAsc"
+        }
+      },
+      {
+        "kind": "DatasourceVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": "grafanacloud-traces",
+            "value": "grafanacloud-traces"
+          },
+          "hide": "dontHide",
+          "includeAll": false,
+          "label": "Tempo Data Source",
+          "multi": false,
+          "name": "tempo_datasource",
+          "options": [],
+          "pluginId": "tempo",
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "skipUrlSync": false
+        }
+      },
+      {
+        "kind": "DatasourceVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": "grafanacloud-logs",
+            "value": "grafanacloud-logs"
+          },
+          "hide": "dontHide",
+          "includeAll": false,
+          "label": "Loki Data Source",
+          "multi": false,
+          "name": "loki_datasource",
+          "options": [],
+          "pluginId": "loki",
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "skipUrlSync": false
+        }
+      },
+      {
+        "kind": "QueryVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
             "text": [
               "All"
             ],
@@ -1382,7 +1455,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "definition": "label_values(meraki_exporter_collections_active{job=\"meraki_dashboard\"}, instance)",
+          "definition": "label_values(meraki_exporter_collections_active{job=~\"$job\"}, instance)",
           "hide": "dontHide",
           "includeAll": true,
           "label": "Instance",
@@ -1393,7 +1466,7 @@
             "kind": "prometheus",
             "spec": {
               "qryType": 1,
-              "query": "label_values(meraki_exporter_collections_active{job=\"meraki_dashboard\"}, instance)",
+              "query": "label_values(meraki_exporter_collections_active{job=~\"$job\"}, instance)",
               "refId": "PrometheusVariableQueryEditor-VariableQuery"
             }
           },

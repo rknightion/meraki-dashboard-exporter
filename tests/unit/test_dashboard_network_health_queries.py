@@ -22,7 +22,7 @@ def test_success_rate_counts_all_outcomes() -> None:
     assert " / (sum(meraki_network_wireless_connection_stats_count{" in expr
     assert ") > 0)) * 100" in expr
     for labels in selectors:
-        assert 'job="meraki_dashboard"' in labels
+        assert 'job=~"$job"' in labels
         assert 'org_id=~"$organization"' in labels
         assert 'network_id=~"$network"' in labels
     assert "success + assoc + auth + dhcp + dns" in panel["description"]

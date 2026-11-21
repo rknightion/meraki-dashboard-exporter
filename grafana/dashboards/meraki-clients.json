@@ -32,7 +32,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_client_status{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"} == 1)",
+                        "expr": "sum(meraki_client_status{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"} == 1)",
                         "legendFormat": "Online",
                         "range": true
                       }
@@ -93,7 +93,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "topk(10, meraki_client_usage_total_bytes{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "topk(10, meraki_client_usage_total_bytes{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "legendFormat": "{{client_id}}",
                         "range": true
                       }
@@ -154,7 +154,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "topk(10, sum by (type) (meraki_client_application_usage_total_bytes{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}))",
+                        "expr": "topk(10, sum by (type) (meraki_client_application_usage_total_bytes{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}))",
                         "legendFormat": "{{type}}",
                         "range": true
                       }
@@ -222,7 +222,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_exporter_client_dns_cache_hit_ratio{job=\"meraki_dashboard\"}",
+                        "expr": "meraki_exporter_client_dns_cache_hit_ratio{job=~\"$job\"}",
                         "legendFormat": "{{instance}}",
                         "range": true
                       }
@@ -285,7 +285,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (instance) (rate(meraki_exporter_client_dns_lookups_successful_total{job=\"meraki_dashboard\"}[$__rate_interval]))",
+                        "expr": "sum by (instance) (rate(meraki_exporter_client_dns_lookups_successful_total{job=~\"$job\"}[$__rate_interval]))",
                         "legendFormat": "successful {{instance}}",
                         "range": true
                       }
@@ -305,7 +305,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (instance) (rate(meraki_exporter_client_dns_lookups_failed_total{job=\"meraki_dashboard\"}[$__rate_interval]))",
+                        "expr": "sum by (instance) (rate(meraki_exporter_client_dns_lookups_failed_total{job=~\"$job\"}[$__rate_interval]))",
                         "legendFormat": "failed {{instance}}",
                         "range": true
                       }
@@ -325,7 +325,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (instance) (rate(meraki_exporter_client_dns_lookups_cached_total{job=\"meraki_dashboard\"}[$__rate_interval]))",
+                        "expr": "sum by (instance) (rate(meraki_exporter_client_dns_lookups_cached_total{job=~\"$job\"}[$__rate_interval]))",
                         "legendFormat": "cached {{instance}}",
                         "range": true
                       }
@@ -384,7 +384,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "rate(meraki_exporter_client_dns_resolution_seconds_total{job=\"meraki_dashboard\"}[$__rate_interval]) / ((rate(meraki_exporter_client_dns_lookups_total{job=\"meraki_dashboard\"}[$__rate_interval]) - rate(meraki_exporter_client_dns_lookups_cached_total{job=\"meraki_dashboard\"}[$__rate_interval])) > 0)",
+                        "expr": "rate(meraki_exporter_client_dns_resolution_seconds_total{job=~\"$job\"}[$__rate_interval]) / ((rate(meraki_exporter_client_dns_lookups_total{job=~\"$job\"}[$__rate_interval]) - rate(meraki_exporter_client_dns_lookups_cached_total{job=~\"$job\"}[$__rate_interval])) > 0)",
                         "legendFormat": "{{instance}}",
                         "range": true
                       }
@@ -444,7 +444,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_exporter_client_dns_cache_total{job=\"meraki_dashboard\"}",
+                        "expr": "meraki_exporter_client_dns_cache_total{job=~\"$job\"}",
                         "legendFormat": "total {{instance}}",
                         "range": true
                       }
@@ -464,7 +464,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_exporter_client_dns_cache_valid{job=\"meraki_dashboard\"}",
+                        "expr": "meraki_exporter_client_dns_cache_valid{job=~\"$job\"}",
                         "legendFormat": "valid {{instance}}",
                         "range": true
                       }
@@ -484,7 +484,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_exporter_client_dns_cache_expired{job=\"meraki_dashboard\"}",
+                        "expr": "meraki_exporter_client_dns_cache_expired{job=~\"$job\"}",
                         "legendFormat": "expired {{instance}}",
                         "range": true
                       }
@@ -543,7 +543,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_exporter_client_store_total{job=\"meraki_dashboard\"}",
+                        "expr": "meraki_exporter_client_store_total{job=~\"$job\"}",
                         "legendFormat": "clients {{instance}}",
                         "range": true
                       }
@@ -563,7 +563,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_exporter_client_store_networks{job=\"meraki_dashboard\"}",
+                        "expr": "meraki_exporter_client_store_networks{job=~\"$job\"}",
                         "legendFormat": "networks {{instance}}",
                         "range": true
                       }
@@ -622,7 +622,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "count(meraki_client_status{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"} == 0)",
+                        "expr": "count(meraki_client_status{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"} == 0)",
                         "legendFormat": "Offline",
                         "range": true
                       }
@@ -683,7 +683,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_exporter_clients_over_cap{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_exporter_clients_over_cap{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "legendFormat": "Over cap",
                         "range": true
                       }
@@ -744,7 +744,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (network_id) (meraki_client_status{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"} == 1)",
+                        "expr": "sum by (network_id) (meraki_client_status{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"} == 1)",
                         "legendFormat": "{{network_id}}",
                         "range": true
                       }
@@ -803,7 +803,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_clients_per_ssid_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_clients_per_ssid_count{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "legendFormat": "{{ssid}}",
                         "range": true
                       }
@@ -862,7 +862,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_clients_per_vlan_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_clients_per_vlan_count{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "legendFormat": "{{vlan}}",
                         "range": true
                       }
@@ -921,7 +921,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "meraki_client_info{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "expr": "meraki_client_info{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"}",
                         "format": "table",
                         "instant": true,
                         "legendFormat": ""
@@ -995,7 +995,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (network_id) (meraki_client_usage_total_bytes{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum by (network_id) (meraki_client_usage_total_bytes{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "legendFormat": "{{network_id}}",
                         "range": true
                       }
@@ -1055,7 +1055,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_client_usage_sent_bytes{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_client_usage_sent_bytes{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "legendFormat": "Sent",
                         "range": true
                       }
@@ -1075,7 +1075,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(meraki_client_usage_recv_bytes{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "expr": "sum(meraki_client_usage_recv_bytes{job=~\"$job\", org_id=~\"$organization\", network_id=~\"$network\"})",
                         "legendFormat": "Received",
                         "range": true
                       }
@@ -1421,29 +1421,25 @@
         "spec": {
           "allowCustomValue": true,
           "current": {
-            "text": [
-              "All"
-            ],
-            "value": [
-              "$__all"
-            ]
+            "text": "meraki_dashboard",
+            "value": "meraki_dashboard"
           },
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "definition": "label_values(meraki_device_up{job=\"meraki_dashboard\"}, org_id)",
+          "definition": "label_values(meraki_exporter_build_info, job)",
           "hide": "dontHide",
-          "includeAll": true,
-          "label": "Organization",
+          "includeAll": false,
+          "label": "Job",
           "multi": true,
-          "name": "organization",
+          "name": "job",
           "options": [],
           "query": {
             "kind": "prometheus",
             "spec": {
               "qryType": 1,
-              "query": "label_values(meraki_device_up{job=\"meraki_dashboard\"}, org_id)",
+              "query": "label_values(meraki_exporter_build_info, job)",
               "refId": "PrometheusVariableQueryEditor-VariableQuery"
             }
           },
@@ -1469,7 +1465,44 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "definition": "label_values(meraki_client_status{job=\"meraki_dashboard\", org_id=~\"$organization\"}, network_id)",
+          "definition": "label_values(meraki_device_up{job=~\"$job\"}, org_id)",
+          "hide": "dontHide",
+          "includeAll": true,
+          "label": "Organization",
+          "multi": true,
+          "name": "organization",
+          "options": [],
+          "query": {
+            "kind": "prometheus",
+            "spec": {
+              "qryType": 1,
+              "query": "label_values(meraki_device_up{job=~\"$job\"}, org_id)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            }
+          },
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": "alphabeticalAsc"
+        }
+      },
+      {
+        "kind": "QueryVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": [
+              "All"
+            ],
+            "value": [
+              "$__all"
+            ]
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "definition": "label_values(meraki_client_status{job=~\"$job\", org_id=~\"$organization\"}, network_id)",
           "hide": "dontHide",
           "includeAll": true,
           "label": "Network",
@@ -1480,7 +1513,7 @@
             "kind": "prometheus",
             "spec": {
               "qryType": 1,
-              "query": "label_values(meraki_client_status{job=\"meraki_dashboard\", org_id=~\"$organization\"}, network_id)",
+              "query": "label_values(meraki_client_status{job=~\"$job\", org_id=~\"$organization\"}, network_id)",
               "refId": "PrometheusVariableQueryEditor-VariableQuery"
             }
           },

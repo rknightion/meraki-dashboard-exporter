@@ -49,7 +49,7 @@ Pre-built Grafana dashboards (Grafana **v2 schema**, tabbed) live in the [`grafa
 - `meraki-clients.json` – client tracking (counts, usage, DNS resolution health)
 - `meraki-client-telemetry.json` – per-client data-log telemetry (signal quality / packet loss / webhook delivery)
 
-Each dashboard uses an `org_id` template variable, so one dashboard serves every organisation you monitor, and all panels target the standard Prometheus scrape path (native metric names).
+The Prometheus dashboards use a `job` variable to select the scrape job and target native metric names. Their organisation selector lets one dashboard serve every organisation you monitor. Select only scrape jobs to avoid counting duplicate bridge data.
 
 ## Alerting
 Use PromQL rules with metrics such as `meraki_device_up` or `meraki_exporter_collection_errors_total` to trigger alerts.

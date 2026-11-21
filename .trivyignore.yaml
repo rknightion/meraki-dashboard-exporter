@@ -1,20 +1,3 @@
 {
-  "vulnerabilities": [
-    {
-      "id": "CVE-2025-47273",
-      "purls": [
-        "pkg:pypi/setuptools"
-      ],
-      "statement": "setuptools. Not an installed distribution in this image. Re-verified on the Alpine 3.23 base on 2026-09-21: no setuptools dist-info exists anywhere in the image, and nothing matching setuptools is present under /app/.venv/lib/python3.14/site-packages or /usr/local/lib/python3.14/site-packages. The finding comes from pip's vendored pkg_resources copy in the base image, which this repository does not install, import or execute. Not in uv.lock. Re-evaluate when the base image ships a newer pip.",
-      "expired_at": "2026-12-01T00:00:00Z"
-    },
-    {
-      "id": "GHSA-6v7p-g79w-8964",
-      "purls": [
-        "pkg:pypi/msgpack"
-      ],
-      "statement": "msgpack. Not an installed distribution in this image. Re-verified on the Alpine 3.23 base on 2026-09-21: no msgpack dist-info exists anywhere in the image, and nothing matching msgpack is present under /app/.venv/lib/python3.14/site-packages or /usr/local/lib/python3.14/site-packages. The finding comes from pip's vendored msgpack copy in the base image, which this repository does not install, import or execute. Not in uv.lock. Re-evaluate when the base image ships a newer pip.",
-      "expired_at": "2026-12-01T00:00:00Z"
-    }
-  ]
+  "vulnerabilities": []
 }
