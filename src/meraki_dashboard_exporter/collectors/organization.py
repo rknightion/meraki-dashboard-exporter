@@ -192,6 +192,9 @@ class OrganizationCollector(MetricCollector):
         # Create API helper
         self.api_helper = create_api_helper(self)
         self._last_network_tags: dict[str, set[tuple[str, str]]] = {}
+        # (network_id, network_name) pairs emitted last pass, per org, so a rename
+        # or a removed network retires its meraki_network_info series in the same pass.
+        self._last_network_info: dict[str, set[tuple[str, str]]] = {}
 
         # Initialize sub-collectors
         self.api_usage_collector = APIUsageCollector(self)
@@ -944,14 +947,27 @@ class OrganizationCollector(MetricCollector):
         # freezing forever. This is the id->name carrier every network_name
         # join across the exporter depends on.
         if self._network_info:
-            for network in networks:
-                network_id = network.get("id", "")
-                if not network_id:
-                    continue
+            # Expire what the previous pass emitted and this one no longer does
+            # (a renamed or removed network), so each network keeps exactly one
+            # right-hand series for name joins (#990).
+            current_info = {
+                (network["id"], network.get("name", ""))
+                for network in networks
+                if network.get("id")
+            }
+            for network_id, network_name in (
+                self._last_network_info.get(org_id, set()) - current_info
+            ):
+                self._expire_metric_series(
+                    self._network_info,
+                    create_labels(org_id=org_id, network_id=network_id, network_name=network_name),
+                    NetworkMetricName.NETWORK_INFO.value,
+                )
+            for network_id, network_name in sorted(current_info):
                 info_labels = create_labels(
                     org_id=org_id,
                     network_id=network_id,
-                    network_name=network.get("name", ""),
+                    network_name=network_name,
                 )
                 self._set_metric(
                     self._network_info,
@@ -959,6 +975,7 @@ class OrganizationCollector(MetricCollector):
                     1,
                     NetworkMetricName.NETWORK_INFO.value,
                 )
+            self._last_network_info[org_id] = current_info
         else:
             logger.error("_network_info metric not initialized")
 

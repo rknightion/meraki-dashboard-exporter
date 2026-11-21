@@ -8,6 +8,7 @@ import pytest
 
 from meraki_dashboard_exporter.collectors.organization import OrganizationCollector
 from meraki_dashboard_exporter.core.constants import (
+    DeviceMetricName,
     NetworkMetricName,
     OrgMetricName,
 )
@@ -1171,8 +1172,9 @@ class TestOrganizationCollector(BaseCollectorTest):
         """NI-1: a deleted/filtered network's info series expires (not frozen).
 
         Emitting via _set_metric registers the series with the expiration
-        manager; once the network stops being emitted its series is retired on
-        the next cleanup, while surviving networks are refreshed and kept.
+        manager. A network that leaves the list is retired in the same pass
+        (#990), and the cleanup sweep afterwards finds nothing further to
+        drop, while surviving networks are refreshed and kept.
         """
         from unittest.mock import patch
 
@@ -1225,6 +1227,99 @@ class TestOrganizationCollector(BaseCollectorTest):
         assert samples == [
             (frozenset({"org_id": org_id, "network_id": "N_1", "network_name": "HQ"}.items()), 1.0)
         ]
+
+    async def test_network_info_rename_leaves_one_series(self, collector, isolated_registry):
+        """#990: a renamed network never exposes the old and new name together."""
+        org_id, org_name = "org-r", "Rename Org"
+
+        collector.api_helper.get_organization_networks = AsyncMock(  # type: ignore[method-assign]
+            return_value=[{"id": "N_1", "name": "Old"}]
+        )
+        await collector._collect_network_metrics(org_id, org_name)
+        assert len(self._network_info_samples(isolated_registry)) == 1
+
+        collector.api_helper.get_organization_networks = AsyncMock(  # type: ignore[method-assign]
+            return_value=[{"id": "N_1", "name": "New"}]
+        )
+        await collector._collect_network_metrics(org_id, org_name)
+
+        assert self._network_info_samples(isolated_registry) == [
+            (
+                frozenset({"org_id": org_id, "network_id": "N_1", "network_name": "New"}.items()),
+                1.0,
+            )
+        ]
+
+    async def test_network_info_not_expired_when_fetch_fails(self, collector, isolated_registry):
+        """#990: a failed fallback fetch expires no network info series."""
+        org_id, org_name = "org-f", "Fail Org"
+
+        collector.api_helper.get_organization_networks = AsyncMock(  # type: ignore[method-assign]
+            return_value=[{"id": "N_1", "name": "HQ"}]
+        )
+        await collector._collect_network_metrics(org_id, org_name)
+
+        collector.inventory = None
+        collector.api_helper._fetch_networks_direct = AsyncMock(return_value=None)  # type: ignore[method-assign]
+        await collector._collect_network_metrics(org_id, org_name)
+
+        assert len(self._network_info_samples(isolated_registry)) == 1
+
+    @staticmethod
+    def _device_firmware_info_samples(registry) -> list[dict[str, str]]:
+        return [
+            dict(sample.labels)
+            for metric in registry.collect()
+            for sample in metric.samples
+            if sample.name == DeviceMetricName.DEVICE_FIRMWARE_INFO.value
+        ]
+
+    async def test_device_firmware_info_change_leaves_one_series(
+        self, collector, isolated_registry
+    ):
+        """#990: a firmware change never leaves two series for one serial."""
+        org_id, org_name = "org-fw", "Firmware Org"
+        device = {
+            "serial": "Q2AA-1111-2222",
+            "model": "MR46",
+            "productType": "wireless",
+            "networkId": "N_1",
+            "firmware": "a",
+        }
+        collector.inventory.get_devices = AsyncMock(return_value=[dict(device)])  # type: ignore[method-assign]
+        await collector.firmware_collector._emit_device_firmware_info(org_id, org_name)
+        assert len(self._device_firmware_info_samples(isolated_registry)) == 1
+
+        collector.inventory.get_devices = AsyncMock(  # type: ignore[method-assign]
+            return_value=[{**device, "firmware": "b"}]
+        )
+        await collector.firmware_collector._emit_device_firmware_info(org_id, org_name)
+
+        samples = self._device_firmware_info_samples(isolated_registry)
+        assert len(samples) == 1
+        assert samples[0]["serial"] == "Q2AA-1111-2222"
+        assert samples[0]["firmware"] == "b"
+
+    async def test_device_firmware_info_not_expired_when_fetch_fails(
+        self, collector, isolated_registry
+    ):
+        """#990: a failed device fetch expires no firmware info series."""
+        org_id, org_name = "org-fw2", "Firmware Org"
+        device = {
+            "serial": "Q2AA-1111-2222",
+            "model": "MR46",
+            "productType": "wireless",
+            "networkId": "N_1",
+            "firmware": "a",
+        }
+        collector.inventory.get_devices = AsyncMock(return_value=[device])  # type: ignore[method-assign]
+        await collector.firmware_collector._emit_device_firmware_info(org_id, org_name)
+
+        collector.inventory.get_devices = AsyncMock(side_effect=RuntimeError("boom"))  # type: ignore[method-assign]
+        with pytest.raises(RuntimeError):
+            await collector.firmware_collector._emit_device_firmware_info(org_id, org_name)
+
+        assert len(self._device_firmware_info_samples(isolated_registry)) == 1
 
     async def test_network_info_excluded_network_has_no_series(
         self, mock_api_builder, settings, isolated_registry, metrics

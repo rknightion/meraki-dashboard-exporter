@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 
 from ...core.api_facade import facade_for
+from ...core.constants import DeviceMetricName
 from ...core.constants.device_constants import DeviceType
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_device_labels, create_org_labels
@@ -49,6 +50,9 @@ class FirmwareCollector(BaseOrganizationCollector):
         # combos that are absent this cycle instead of leaving a stale non-zero value.
         self._seen_upgrade_keys: dict[str, set[tuple[str, str]]] = {}
         self._seen_pending_product_types: dict[str, set[str]] = {}
+        # Last emitted meraki_device_firmware_info label set per org and serial, so a
+        # firmware upgrade or network move retires the old series in the same pass.
+        self._last_firmware_info: dict[str, dict[str, dict[str, str]]] = {}
 
     @log_api_call("getOrganizationFirmwareUpgrades")
     async def _fetch_firmware_upgrades(self, org_id: str) -> list[dict[str, Any]]:
@@ -370,7 +374,10 @@ class FirmwareCollector(BaseOrganizationCollector):
         if self.inventory is None:
             return
 
+        # get_devices raises on a failed fetch, so nothing below runs (and nothing
+        # is expired) unless the device list is current.
         devices = await self.inventory.get_devices(org_id)
+        current: dict[str, dict[str, str]] = {}
         for device in devices:
             serial = device.get("serial")
             if not serial:
@@ -382,6 +389,16 @@ class FirmwareCollector(BaseOrganizationCollector):
             )
             # value 1: this is a name/attribute join carrier, joined on serial.
             self._set_metric_value("_device_firmware_info", labels, 1)
+            current[serial] = labels
+
+        for serial, previous in self._last_firmware_info.get(org_id, {}).items():
+            if current.get(serial) != previous:
+                self.parent._expire_metric_series(
+                    self.parent._device_firmware_info,
+                    previous,
+                    DeviceMetricName.DEVICE_FIRMWARE_INFO.value,
+                )
+        self._last_firmware_info[org_id] = current
 
     @staticmethod
     def _is_switch_or_ap(device: dict[str, Any]) -> bool:
