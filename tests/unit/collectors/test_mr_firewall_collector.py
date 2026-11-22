@@ -8,12 +8,154 @@ from unittest.mock import MagicMock
 import pytest
 from prometheus_client import Gauge
 
+from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.collectors.devices.mr.firewall import MRFirewallCollector
 from meraki_dashboard_exporter.core.constants.metrics_constants import MRMetricName
+from meraki_dashboard_exporter.core.fanout_cursor import FanoutCursor
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
+from tests.helpers.base import BaseCollectorTest
 
 if TYPE_CHECKING:
     pass
+
+
+class TestRealFirewallPath(BaseCollectorTest):
+    """Exercise the real owner, facade, fetchers and registry with an SDK fake."""
+
+    collector_class = DeviceCollector
+
+    async def test_bounded_sweep_emits_each_enabled_ssid(
+        self, collector, mock_api, settings, isolated_registry
+    ) -> None:
+        """A budget smaller than the fleet yields every enabled SSID's real metric."""
+        settings.api.per_fetch_deadline_seconds = 2
+        settings.api.rate_limit_requests_per_second = 3
+        settings.api.rate_limit_shared_fraction = 1
+        networks = [{"id": f"net-{n}", "productTypes": ["wireless"]} for n in range(4)]
+        calls: list[tuple[str, str]] = []
+
+        def discover(network):
+            calls.append(("discovery", network))
+            count = {"net-0": 3, "net-1": 1, "net-2": 0, "net-3": 1}[network]
+            return [{"number": n, "name": f"ssid-{n}", "enabled": True} for n in range(count)]
+
+        def l3(network, number):
+            calls.append(("L3", network))
+            return {"rules": [], "allowLanAccess": True}
+
+        def l7(network, number):
+            calls.append(("L7", network))
+            return {"rules": []}
+
+        mock_api.wireless.getNetworkWirelessSsids.side_effect = discover
+        mock_api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules.side_effect = l3
+        mock_api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules.side_effect = l7
+        for _ in range(12):
+            before = len(calls)
+            await collector.mr_collector.firewall.collect_ssid_firewall("org", "Org", networks)
+            assert len(calls) - before <= 3
+        samples = {
+            (sample.labels["network_id"], sample.labels["ssid"], sample.labels["rule_type"])
+            for metric in isolated_registry.collect()
+            if metric.name == "meraki_mr_ssid_firewall_rules"
+            for sample in metric.samples
+        }
+        assert samples == {
+            (network, ssid, kind)
+            for network, ssid in [
+                ("net-0", "ssid-0"),
+                ("net-0", "ssid-1"),
+                ("net-0", "ssid-2"),
+                ("net-1", "ssid-0"),
+                ("net-3", "ssid-0"),
+            ]
+            for kind in ("L3", "L7")
+        }
+
+    async def test_planning_work_scales_with_fleet_not_fleet_times_budget(
+        self, collector, mock_api, settings, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Count real cursor inputs while a large first sweep makes bounded progress."""
+        settings.api.per_fetch_deadline_seconds = 20
+        settings.api.rate_limit_requests_per_second = 3
+        settings.api.rate_limit_shared_fraction = 1
+        networks = [{"id": f"net-{n}", "productTypes": ["wireless"]} for n in range(40)]
+        mock_api.wireless.getNetworkWirelessSsids.return_value = [{"number": 0, "enabled": True}]
+        mock_api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules.return_value = {"rules": []}
+        mock_api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules.return_value = {"rules": []}
+        original = FanoutCursor.select
+        scanned = [0]
+
+        def count_select(cursor, keys, **kwargs):
+            scanned[0] += len(keys)
+            return original(cursor, keys, **kwargs)
+
+        monkeypatch.setattr(FanoutCursor, "select", count_select)
+        await collector.mr_collector.firewall.collect_ssid_firewall("org", "Org", networks)
+        assert mock_api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules.call_count > 0
+        assert scanned[0] <= 2 * len(networks) + 30
+
+    async def test_failed_refresh_does_not_renew_stale_rules(
+        self, collector, mock_api, settings, isolated_registry, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A failed refresh blocks stale rules until discovery recovers with changed SSIDs."""
+        now = [100.0]
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.collectors.devices.mr.firewall.monotonic", lambda: now[0]
+        )
+        settings.api.per_fetch_deadline_seconds = 20
+        settings.api.rate_limit_requests_per_second = 2
+        settings.api.rate_limit_shared_fraction = 1
+        networks = [{"id": n, "productTypes": ["wireless"]} for n in ("bad", "good")]
+        mode = ["initial"]
+        calls: list[tuple[str, str, str]] = []
+
+        def discover(network):
+            calls.append(("discovery", network, ""))
+            if network == "bad" and mode[0] == "failed":
+                raise ValueError("offline")
+            if network == "bad" and mode[0] == "recovered":
+                return [
+                    {"number": 0, "name": "old", "enabled": False},
+                    {"number": 1, "name": "new", "enabled": True},
+                ]
+            return [{"number": 0, "name": "old", "enabled": True}]
+
+        def l3(network, number):
+            calls.append(("L3", network, number))
+            return {"rules": [], "allowLanAccess": True}
+
+        def l7(network, number):
+            calls.append(("L7", network, number))
+            return {"rules": []}
+
+        mock_api.wireless.getNetworkWirelessSsids.side_effect = discover
+        mock_api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules.side_effect = l3
+        mock_api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules.side_effect = l7
+        firewall = collector.mr_collector.firewall
+        await firewall.collect_ssid_firewall("org", "Org", networks)
+        assert ("L7", "bad", "0") in calls
+        calls.clear()
+        mode[0] = "failed"
+        now[0] += 901
+        await firewall.collect_ssid_firewall("org", "Org", networks)
+        await firewall.collect_ssid_firewall("org", "Org", networks)
+        assert ("discovery", "bad", "") in calls
+        assert not any(kind in {"L3", "L7"} and network == "bad" for kind, network, _ in calls)
+        assert ("L7", "good", "0") in calls
+        calls.clear()
+        mode[0] = "recovered"
+        now[0] += 301
+        await firewall.collect_ssid_firewall("org", "Org", networks)
+        assert ("L7", "bad", "1") in calls
+        assert ("L7", "bad", "0") not in calls
+        assert (
+            isolated_registry.get_sample_value(
+                "meraki_mr_ssid_firewall_rules",
+                {"org_id": "org", "network_id": "bad", "ssid": "new", "rule_type": "L7"},
+            )
+            == 0
+        )
 
 
 def _make_gauge(name: str, description: str, labelnames: list[str]) -> Gauge:
@@ -60,6 +202,157 @@ class TestMRFirewallCollector:
         return [
             {"number": n, "name": f"SSID {n}", "enabled": n in enabled_numbers} for n in numbers
         ]
+
+    async def test_budgeted_sweep_resumes_across_networks_and_ssids(
+        self, firewall_collector: MRFirewallCollector, mock_api: MagicMock, mock_parent: MagicMock
+    ) -> None:
+        """A small raw-call budget still reaches each enabled SSID over successive wakes."""
+        mock_parent.settings.api.per_fetch_deadline_seconds = 2
+        mock_parent.settings.api.rate_limit_requests_per_second = 3
+        mock_parent.settings.api.rate_limit_shared_fraction = 1
+        mock_parent._group_interval.return_value = 900
+        networks = [{"id": f"net-{n}", "productTypes": ["wireless"]} for n in range(4)] + [
+            {"id": "wired", "productTypes": ["switch"]}
+        ]
+        rows = {
+            "net-0": self._ssids(enabled_numbers=[0, 1, 2], all_numbers=[0, 1, 2, 3]),
+            "net-1": self._ssids(enabled_numbers=[0]),
+            "net-2": [],
+            "net-3": self._ssids(enabled_numbers=[1], all_numbers=[0, 1]),
+        }
+        calls: list[tuple[str, str, str]] = []
+
+        def discover(network: str) -> list[dict]:
+            calls.append(("discovery", network, ""))
+            return rows[network]
+
+        def rules(kind: str, network: str, number: str) -> dict:
+            calls.append((kind, network, number))
+            return {"rules": []}
+
+        mock_api.wireless.getNetworkWirelessSsids.side_effect = discover
+        mock_api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules.side_effect = (
+            lambda network, number: rules("L3", network, number)
+        )
+        mock_api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules.side_effect = (
+            lambda network, number: rules("L7", network, number)
+        )
+        for _ in range(12):
+            before = len(calls)
+            await firewall_collector.collect_ssid_firewall("org", "Org", networks)
+            assert len(calls) - before <= 3
+
+        assert {(network, number) for kind, network, number in calls if kind == "L7"} == {
+            ("net-0", "0"),
+            ("net-0", "1"),
+            ("net-0", "2"),
+            ("net-1", "0"),
+            ("net-3", "1"),
+        }
+        assert {network for kind, network, _ in calls if kind == "discovery"} == set(rows)
+
+    async def test_one_call_floor_and_refresh_disabled_ssid(
+        self,
+        firewall_collector: MRFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The one-item floor permits a pair, not discovery plus a pair; refresh removes disabled keys."""
+        now = [100.0]
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.collectors.devices.mr.firewall.monotonic",
+            lambda: now[0],
+            raising=False,
+        )
+        mock_parent.settings.api.per_fetch_deadline_seconds = 1
+        mock_parent.settings.api.rate_limit_requests_per_second = 1
+        mock_parent.settings.api.rate_limit_shared_fraction = 1
+        mock_parent._group_interval.return_value = 10
+        networks = [{"id": "net-0", "productTypes": ["wireless"]}]
+        enabled = [True]
+        calls: list[str] = []
+
+        def discover(network: str) -> list[dict]:
+            calls.append("discovery")
+            return [{"number": 0, "name": "guest", "enabled": enabled[0]}]
+
+        def rules(kind: str, network: str, number: str) -> dict:
+            calls.append(kind)
+            return {"rules": []}
+
+        mock_api.wireless.getNetworkWirelessSsids.side_effect = discover
+        mock_api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules.side_effect = lambda n, s: (
+            rules("L3", n, s)
+        )
+        mock_api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules.side_effect = lambda n, s: (
+            rules("L7", n, s)
+        )
+        for _ in range(2):
+            before = len(calls)
+            await firewall_collector.collect_ssid_firewall("org", "Org", networks)
+            attempt = calls[before:]
+            assert attempt in (["discovery"], ["L3", "L7"])
+        assert calls == ["discovery", "L3", "L7"]
+
+        enabled[0] = False
+        now[0] += 11
+        await firewall_collector.collect_ssid_firewall("org", "Org", networks)
+        await firewall_collector.collect_ssid_firewall("org", "Org", networks)
+        assert calls == ["discovery", "L3", "L7", "discovery"]
+
+    async def test_failed_items_do_not_starve_siblings_and_retry(
+        self,
+        firewall_collector: MRFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Failures consume allowance but other networks progress, then retries recover."""
+        now = [100.0]
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.collectors.devices.mr.firewall.monotonic",
+            lambda: now[0],
+            raising=False,
+        )
+        mock_parent.settings.api.per_fetch_deadline_seconds = 1
+        mock_parent.settings.api.rate_limit_requests_per_second = 1
+        mock_parent.settings.api.rate_limit_shared_fraction = 1
+        mock_parent.settings.scheduler.failure_retry_seconds = 5
+        mock_parent._group_interval.return_value = 100
+        networks = [{"id": n, "productTypes": ["wireless"]} for n in ("bad", "good")]
+        broken = [True]
+        calls: list[tuple[str, str]] = []
+
+        def discover(network: str) -> list[dict]:
+            calls.append(("discover", network))
+            if network == "bad" and broken[0]:
+                raise ValueError("offline")
+            return [{"number": 0, "enabled": True}]
+
+        def l3(network: str, number: str) -> dict:
+            calls.append(("L3", network))
+            return {"rules": []}
+
+        def l7(network: str, number: str) -> dict:
+            calls.append(("L7", network))
+            return {"rules": []}
+
+        mock_api.wireless.getNetworkWirelessSsids.side_effect = discover
+        mock_api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules.side_effect = l3
+        mock_api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules.side_effect = l7
+        for _ in range(3):
+            before = len(calls)
+            await firewall_collector.collect_ssid_firewall("org", "Org", networks)
+            assert len(calls) - before <= 2
+            now[0] += 6
+        assert ("L7", "good") in calls
+        assert calls.count(("discover", "bad")) == 1
+        broken[0] = False
+        now[0] += 6
+        for _ in range(2):
+            await firewall_collector.collect_ssid_firewall("org", "Org", networks)
+        assert ("L7", "bad") in calls
 
     # ------------------------------------------------------------------
     # Initialisation
@@ -108,7 +401,9 @@ class TestMRFirewallCollector:
             return_value={"rules": []}
         )
 
-        await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
+        await firewall_collector.collect_ssid_firewall(
+            "org1", "Test Org", [{"id": "N_1", "productTypes": ["wireless"]}]
+        )
 
         assert mock_api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules.call_count == 1
         assert mock_api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules.call_count == 1
@@ -143,7 +438,9 @@ class TestMRFirewallCollector:
             return_value={"rules": []}
         )
 
-        await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
+        await firewall_collector.collect_ssid_firewall(
+            "org1", "Test Org", [{"id": "N_1", "productTypes": ["wireless"]}]
+        )
 
         l3_calls = [
             c
@@ -180,7 +477,9 @@ class TestMRFirewallCollector:
             }
         )
 
-        await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
+        await firewall_collector.collect_ssid_firewall(
+            "org1", "Test Org", [{"id": "N_1", "productTypes": ["wireless"]}]
+        )
 
         l7_calls = [
             c
@@ -213,7 +512,9 @@ class TestMRFirewallCollector:
             return_value={"rules": []}
         )
 
-        await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
+        await firewall_collector.collect_ssid_firewall(
+            "org1", "Test Org", [{"id": "N_1", "productTypes": ["wireless"]}]
+        )
 
         lan_calls = [
             c
@@ -240,7 +541,9 @@ class TestMRFirewallCollector:
             return_value={"rules": []}
         )
 
-        await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
+        await firewall_collector.collect_ssid_firewall(
+            "org1", "Test Org", [{"id": "N_1", "productTypes": ["wireless"]}]
+        )
 
         lan_calls = [
             c
@@ -267,7 +570,9 @@ class TestMRFirewallCollector:
             return_value={"rules": []}
         )
 
-        await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
+        await firewall_collector.collect_ssid_firewall(
+            "org1", "Test Org", [{"id": "N_1", "productTypes": ["wireless"]}]
+        )
 
         lan_calls = [
             c
@@ -297,8 +602,10 @@ class TestMRFirewallCollector:
             return_value={"rules": []}
         )
 
-        # Should not raise: the per-SSID try/except in collect_for_network absorbs it.
-        await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
+        # Should not raise: the per-SSID failure is isolated.
+        await firewall_collector.collect_ssid_firewall(
+            "org1", "Test Org", [{"id": "N_1", "productTypes": ["wireless"]}]
+        )
 
         mock_parent._set_metric.assert_not_called()
 
@@ -311,7 +618,9 @@ class TestMRFirewallCollector:
         """An error listing SSIDs must not propagate — @with_error_handling absorbs it."""
         mock_api.wireless.getNetworkWirelessSsids = MagicMock(side_effect=Exception("API timeout"))
 
-        await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
+        await firewall_collector.collect_ssid_firewall(
+            "org1", "Test Org", [{"id": "N_1", "productTypes": ["wireless"]}]
+        )
 
         mock_parent._set_metric.assert_not_called()
 
@@ -326,7 +635,9 @@ class TestMRFirewallCollector:
             return_value=self._ssids(enabled_numbers=[], all_numbers=[0, 1])
         )
 
-        await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
+        await firewall_collector.collect_ssid_firewall(
+            "org1", "Test Org", [{"id": "N_1", "productTypes": ["wireless"]}]
+        )
 
         mock_api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules.assert_not_called()
         mock_parent._set_metric.assert_not_called()
@@ -367,8 +678,8 @@ class TestMRFirewallCollector:
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """#617: a closed mr_ssid_firewall gate must skip the fan-out entirely."""
-        mock_parent._should_run_group = MagicMock(return_value=False)
+        """A disabled or shed group must skip the self-paced fan-out entirely."""
+        mock_parent.scheduler.is_enabled.return_value = False
         networks = [{"id": "net1", "name": "N1", "productTypes": ["wireless"]}]
 
         await firewall_collector.collect_ssid_firewall("org1", "Test Org", networks)
