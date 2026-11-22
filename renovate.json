@@ -37,6 +37,16 @@
       "description": "OpenTelemetry Python packages (api, sdk, exporter-otlp, instrumentation-*) release in lockstep — group them into one PR.",
       "matchPackageNames": ["/^opentelemetry/"],
       "groupName": "opentelemetry"
+    },
+    {
+      "description": "A Python minor moves the image interpreter away from the version the test job, mypy and ruff run on. Hold every python minor or major update (Dockerfile base, setup-python pins, requires-python) in one pull request that needs Dependency Dashboard approval and is never automerged.",
+      "matchDepNames": ["python"],
+      "matchManagers": ["dockerfile", "github-actions", "pep621"],
+      "matchUpdateTypes": ["major", "minor"],
+      "groupName": "python minor",
+      "group": { "branchTopic": "python-minor" },
+      "dependencyDashboardApproval": true,
+      "automerge": false
     }
   ]
 }

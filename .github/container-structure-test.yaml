@@ -57,3 +57,7 @@ commandTests:
     command: "which"
     args: ["python"]
     expectedOutput: ["^/app/\\.venv/bin/python"]
+  - name: "interpreter is the Python minor the test suite runs on"
+    command: "python"
+    args: ["--version"]
+    expectedOutput: ["^Python 3\\.14\\."]
