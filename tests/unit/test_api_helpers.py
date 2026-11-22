@@ -185,21 +185,17 @@ class TestAPIHelper:
         """Test fetching devices with both product type and model filtering."""
         mock_devices = [
             {"serial": "Q2XX-XXXX-XXXX", "model": "MR36", "productType": "wireless"},
-            {"serial": "Q2YY-YYYY-YYYY", "model": "MS225", "productType": "switch"},
-            {"serial": "Q2ZZ-ZZZZ-ZZZZ", "model": "MX64", "productType": "appliance"},
+            {"serial": "Q2YY-YYYY-YYYY", "model": "MS225", "productType": "wireless"},
+            {"serial": "Q2ZZ-ZZZZ-ZZZZ", "model": "MR46", "productType": "switch"},
+            {"serial": "Q2AA-AAAA-AAAA", "model": "MX64", "productType": "appliance"},
         ]
-        # Only the wireless device is returned; the local product_types
-        # post-filter (APIORG-23) would also drop the others even if the
-        # mock returned all three, since the SDK call is no longer given a
-        # productTypes request parameter.
-        mock_collector.api.organizations.getOrganizationDevices.return_value = [mock_devices[0]]
+        mock_collector.api.organizations.getOrganizationDevices.return_value = mock_devices
 
         result = await api_helper.get_organization_devices(
             "123", product_types=["wireless"], models=["MR"]
         )
 
-        assert len(result) == 1
-        assert result[0]["model"] == "MR36"
+        assert result == [mock_devices[0]]
 
     async def test_get_organization_devices_with_product_types_respects_network_filter(
         self, api_helper, mock_collector
@@ -313,17 +309,27 @@ class TestAPIHelper:
         items = list(range(25))
         mock_collector.settings.api.batch_size = 7  # Non-standard batch size
 
+        mock_collector.settings.api.concurrency_limit = 25
         processed_count = 0
+        running = 0
+        peak = 0
 
         async def count_items(item: int) -> int:
-            nonlocal processed_count
+            nonlocal processed_count, running, peak
             processed_count += 1
+            running += 1
+            peak = max(peak, running)
+            try:
+                await asyncio.sleep(0)
+            finally:
+                running -= 1
             return item
 
         results = await api_helper.process_in_batches(items, count_items, description="test")
 
         assert len(results) == 25
         assert processed_count == 25
+        assert peak == 7
 
     def test_create_api_helper(self, mock_collector):
         """Test create_api_helper factory function."""

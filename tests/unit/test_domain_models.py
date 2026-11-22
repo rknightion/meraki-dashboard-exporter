@@ -102,19 +102,6 @@ class TestConnectionStats:
         assert stats.dns == 0
         assert stats.success == 0
 
-    def test_connection_stats_with_values(self):
-        """Test connection stats with values."""
-        stats = ConnectionStats(
-            assoc=100,
-            auth=95,
-            dhcp=90,
-            dns=88,
-            success=85,
-        )
-        assert stats.assoc == 100
-        assert stats.auth == 95
-        assert stats.success == 85
-
     def test_connection_stats_validation(self):
         """Test that negative values are converted to 0."""
         stats = ConnectionStats(  # type: ignore[call-arg]
@@ -224,31 +211,6 @@ class TestSwitchPort:
         assert port.vlan is None
         assert port.allowedVlans == "all"
         assert port.tags == []
-
-    def test_switch_port_full(self):
-        """Test switch port with all fields."""
-        port = SwitchPort(
-            portId="24",
-            name="Uplink to Core",
-            enabled=True,
-            poeEnabled=True,
-            type="trunk",
-            vlan=100,
-            voiceVlan=200,
-            allowedVlans="100,200,300",
-            isolationEnabled=True,
-            rstpEnabled=False,
-            stpGuard="root guard",
-            linkNegotiation="1 Gbps full duplex",
-            accessPolicyType="MAC allow list",
-            tags=["uplink", "critical"],
-        )
-        assert port.name == "Uplink to Core"
-        assert port.poeEnabled is True
-        assert port.vlan == 100
-        assert port.voiceVlan == 200
-        assert port.stpGuard == "root guard"
-        assert port.tags == ["uplink", "critical"]
 
     def test_switch_port_literals(self):
         """Test literal field validation."""

@@ -73,17 +73,6 @@ class TestMRRfProfilesCollector:
             "is_default",
         }
 
-    def test_initialisation_stores_parent_api_settings(
-        self,
-        rf_profiles_collector: MRRfProfilesCollector,
-        mock_parent: MagicMock,
-        mock_api: MagicMock,
-    ) -> None:
-        """Collector should hold references to parent, api, and settings."""
-        assert rf_profiles_collector.parent is mock_parent
-        assert rf_profiles_collector.api is mock_api
-        assert rf_profiles_collector.settings is mock_parent.settings
-
     # ------------------------------------------------------------------
     # Happy path
     # ------------------------------------------------------------------

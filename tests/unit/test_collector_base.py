@@ -159,38 +159,6 @@ class TestMetricCollector(BaseCollectorTest):
         # Note: The collector performance metrics are on the global registry, not isolated
         # So we just verify the exception was raised properly above
 
-    async def test_collect_tracks_duration(self, collector, mock_api_builder, metrics):
-        """Test that collection tracks duration."""
-        # Set up test data
-        org = OrganizationFactory.create(org_id="123", name="Test Org")
-
-        # Configure mock API
-        api = mock_api_builder.with_organizations([org]).build()
-        collector.api = api
-
-        # Run collection
-        await self.run_collector(collector)
-
-        # Collection should complete successfully
-        # The duration histogram is on the global registry, not the isolated one
-        # Just verify no exception was raised
-
-    async def test_collect_updates_last_success(self, collector, mock_api_builder, metrics):
-        """Test that successful collection updates last success timestamp."""
-        # Set up test data
-        org = OrganizationFactory.create(org_id="123", name="Test Org")
-
-        # Configure mock API
-        api = mock_api_builder.with_organizations([org]).build()
-        collector.api = api
-
-        # Run collection
-        await self.run_collector(collector)
-
-        # Collection should complete successfully
-        # The last success timestamp is on the global registry, not the isolated one
-        # Just verify no exception was raised
-
     def test_track_api_call(self, collector, metrics):
         """Test API call tracking."""
         # Track multiple API calls
@@ -220,11 +188,6 @@ class TestMetricCollector(BaseCollectorTest):
         # All collections should complete without exceptions
         for result in results:
             assert result is None  # collect() returns None on success
-
-    def test_collector_name(self, collector, metrics):
-        """Test that collector name is properly set."""
-        # The collector should have the correct class name
-        assert collector.__class__.__name__ == "DummyCollectorImpl"
 
 
 class TestEndpointGroupPlumbing(BaseCollectorTest):

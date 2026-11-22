@@ -472,26 +472,32 @@ class TestWebhookHandlerSecurity:
     def test_failure_path_no_unbounded_label_series(self, webhook_handler: WebhookHandler) -> None:
         """F-051: many distinct malformed payloads must not create unbounded label series."""
         for i in range(50):
-            webhook_handler.process_webhook({
+            result = webhook_handler.process_webhook({
                 "version": "1.0",
+                "sharedSecret": "test_secret_123",
                 "organizationId": f"attacker_org_{i}",
                 "alertType": f"attacker_alert_{i}",
                 # Missing required fields -> ValidationError on the failure path.
             })
+            assert result.outcome == WebhookOutcome.REJECTED
+            assert result.failure_reason == WebhookFailureReason.VALIDATION
 
         series: set[tuple] = set()
         leaked: set[str] = set()
+        failures = 0.0
         for metric_family in REGISTRY.collect():
             for sample in metric_family.samples:
                 if sample.name == "meraki_webhook_events_failed_total":
                     series.add(tuple(sorted(sample.labels.items())))
+                    failures += sample.value
                     for value in sample.labels.values():
                         if "attacker" in value:
                             leaked.add(value)
 
         assert not leaked, f"attacker-controlled values leaked into label series: {leaked}"
         # A single bounded series (error_type=validation_error) regardless of 50 payloads.
-        assert len(series) == 1, f"unbounded cardinality on failure path: {series}"
+        assert series == {(("error_type", "validation_error"),)}
+        assert failures == 50
 
     def test_validation_failure_does_not_log_secret(
         self, webhook_handler: WebhookHandler, monkeypatch: pytest.MonkeyPatch
@@ -500,23 +506,18 @@ class TestWebhookHandlerSecurity:
         fake_logger = MagicMock()
         monkeypatch.setattr(webhook_handler_module, "logger", fake_logger)
 
-        secret = "SUPER_SECRET_SENTINEL_VALUE_9f3a"  # pragma: allowlist secret
-        webhook_handler.process_webhook({
+        secret = "test_secret_123"  # Synthetic value configured by webhook_handler.
+        result = webhook_handler.process_webhook({
             "version": "1.0",
             "sharedSecret": secret,
             # Missing required fields -> ValidationError; pydantic embeds the raw
             # input (including sharedSecret) in errors()[i]["input"].
         })
+        assert result.outcome == WebhookOutcome.REJECTED
+        assert result.failure_reason == WebhookFailureReason.VALIDATION
 
-        logged = " ".join(
-            repr(call)
-            for call in (
-                *fake_logger.error.call_args_list,
-                *fake_logger.exception.call_args_list,
-                *fake_logger.warning.call_args_list,
-                *fake_logger.info.call_args_list,
-            )
-        )
+        assert fake_logger.error.called, "validation failure was not logged"
+        logged = repr(fake_logger.mock_calls)
         assert secret not in logged, "sharedSecret value leaked into logs on validation failure"
 
 

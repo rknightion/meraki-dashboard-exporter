@@ -192,8 +192,6 @@ class TestAsyncMerakiClientShutdown:
 
         assert await client.close() is True
 
-        executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
-        session.close.assert_called_once_with()
         assert ordered.mock_calls == [
             call.executor.shutdown(wait=True, cancel_futures=True),
             call.session.close(),
