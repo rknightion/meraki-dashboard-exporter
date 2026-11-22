@@ -184,7 +184,7 @@ groups:
       - alert: MerakiDeviceDownFastPath
         # Enable this variant only if MERAKI_EXPORTER_WEBHOOKS__ENABLED is true (webhook-driven
         # near-real-time down detection).
-        expr: meraki_device_up{job="meraki_dashboard"} == 0
+        expr: meraki_device_up{job="meraki_dashboard"} == 0 unless on (job, instance, org_id, serial) meraki_device_status_info{job="meraki_dashboard",status=~"alerting|dormant"}
         for: 5m
         labels:
           severity: critical
@@ -198,7 +198,7 @@ groups:
 
       - alert: MerakiDeviceDown
         # Enable this variant when webhooks are disabled (pure poll-path detection).
-        expr: meraki_device_up{job="meraki_dashboard"} == 0
+        expr: meraki_device_up{job="meraki_dashboard"} == 0 and on (job, instance, org_id, serial) meraki_device_status_info{job="meraki_dashboard",status="offline"}
         for: 15m
         labels:
           severity: critical

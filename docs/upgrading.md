@@ -110,6 +110,14 @@ or a staleness rule.
 
 ## Changes after 2.3.0
 
+Device-down alerts no longer fire for devices Meraki reports as dormant or alerting. To alert on
+alerting devices, add a separate rule using `meraki_device_status_info{status="alerting"}`. The
+rules match status and up series by job, instance, organization and serial, so a relay must preserve
+matching job and instance labels for both metrics. The poll rule needs an offline status; the
+webhook rule can still fire before the next status poll, including when status is missing. The
+Grafana mirror selects only the `meraki_dashboard` job; the chart and example retain their existing
+unscoped job selectors.
+
 The following previously accepted configurations now prevent startup:
 
 - Set `MERAKI_EXPORTER_API__MAX_RETRIES` to at least 1. A value of 1 makes a single SDK attempt.

@@ -175,7 +175,7 @@ spec:
         - alert: MerakiDeviceDown
           # Default assumption: webhooks disabled (poll-path only). MEDIUM-tier
           # row: "meraki_device_up == 0, webhooks disabled" -> for: 12m-15m.
-          expr: meraki_device_up == 0
+          expr: meraki_device_up == 0 and on (job, instance, org_id, serial) meraki_device_status_info{status="offline"}
           for: 15m
           labels:
             severity: critical
@@ -190,7 +190,7 @@ spec:
           # Use this variant INSTEAD of MerakiDeviceDown if webhooks.enabled=true
           # and device_down/gateway_down alert types are configured to fire
           # webhooks: "meraki_device_up == 0, webhooks enabled" -> for: 3m-5m.
-          expr: meraki_device_up == 0
+          expr: meraki_device_up == 0 unless on (job, instance, org_id, serial) meraki_device_status_info{status=~"alerting|dormant"}
           for: 5m
           labels:
             severity: critical
