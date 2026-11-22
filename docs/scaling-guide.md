@@ -398,7 +398,7 @@ debugging/transition fallback, not a recommended steady-state choice.
 | `meraki_exporter_task_expired_before_start_total{phase="collector_admission"}` | Exporter saturation: runs whose single wall-clock budget expired in the admission queue; these do not count as collector endpoint failures |
 | `meraki_exporter_api_rate_limiter_throttled_total` | Client-side rate-limit pressure (rising = over budget; also drives AIMD backoff) |
 | `meraki_exporter_api_rate_limiter_tokens` | Remaining tokens in the per-org bucket |
-| `meraki_exporter_cardinality_limit_reached_total` | Metric shedding is active (cardinality cap hit) |
+| `meraki_exporter_cardinality_limit_reached_total` | Per-family cardinality cap hit; rises in both `warn` and `drop` modes |
 | `meraki_exporter_org_collection_status` | Per-org collection health (`0` = every sub-collection failed) |
 | `meraki_exporter_collector_duration_seconds` | How long the admitted collector body executes; it excludes admission queue wait |
 | `meraki_network_filter_networks` | How many networks survive the filter (verify your cuts landed) |
@@ -429,11 +429,10 @@ debugging/transition fallback, not a recommended steady-state choice.
 
 ### Cardinality spikes / OOM
 
-- **Symptom:** `meraki_exporter_cardinality_limit_reached = 1`, or the pod OOM-kills.
+- **Symptom:** `meraki_exporter_cardinality_limit_reached_total` keeps rising, or the pod is OOM-killed.
 - **Fix:** size memory from observed RSS (see [Resource sizing](#resource-sizing-memory-cpu)),
-  keep the clients collector off, and reduce the tracked fleet with the filter. Raising
-  `MERAKI_EXPORTER_MONITORING__MAX_CARDINALITY_PER_COLLECTOR` trades memory for retention — it is
-  not free.
+  keep the clients collector off, and reduce the tracked fleet with the filter. In `drop` mode,
+  raising `MERAKI_EXPORTER_CARDINALITY__MAX_SERIES_PER_FAMILY` trades memory for retention.
 
 ### Per-org backoff
 
