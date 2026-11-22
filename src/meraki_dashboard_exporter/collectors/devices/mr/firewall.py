@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 from collections import deque
@@ -127,6 +128,25 @@ class MRFirewallCollector:
         if scheduler is not None and scheduler.is_enabled(group) is False:
             return
 
+        cutoff = self.parent.ssid_firewall_cutoff
+        if cutoff is not None and asyncio.get_running_loop().time() >= cutoff:
+            return
+        window = asyncio.timeout_at(cutoff)
+        try:
+            async with window:
+                await self._sweep(org_id, networks, cutoff)
+        except TimeoutError:
+            if not window.expired():
+                raise
+            # Cancel only this sweep. Any interrupted item stays incomplete,
+            # ordered behind unattempted items, without counting as an API error.
+            logger.debug("Deferring SSID firewall work at device cycle cutoff", org_id=org_id)
+
+    async def _sweep(
+        self, org_id: str, networks: list[dict[str, Any]], cutoff: float | None
+    ) -> None:
+        """Process due discoveries and rule pairs until the call or time budget ends."""
+        group = EndpointGroupName.MR_SSID_FIREWALL
         network_ids = list(
             dict.fromkeys(
                 n["id"] for n in networks if n.get("id") and "wireless" in n.get("productTypes", [])
@@ -181,8 +201,12 @@ class MRFirewallCollector:
         discovery_queue = deque(due_discovery)
         rule_queue = deque(key for key in due_rules if by_key[key][0] not in blocked)
         queued_rules = set(rule_queue)
+        clock = asyncio.get_running_loop().time
 
         while remaining > 0:
+            # Do not admit another item even if the timeout callback has not run yet.
+            if cutoff is not None and clock() >= cutoff:
+                break
             while rule_queue and (
                 rule_queue[0] not in by_key or by_key[rule_queue[0]][0] in blocked
             ):
@@ -194,6 +218,9 @@ class MRFirewallCollector:
                 queued_rules.discard(key)
                 network_id, ssid = by_key[key]
                 rules.record_attempt(key, monotonic())
+                self._prefer_rules[org_id] = prefer_rules = False
+                remaining -= 2
+                did_work = True
                 ttl = sweep_ttl_seconds(
                     self.parent._group_ttl_seconds(group),
                     interval,
@@ -218,14 +245,14 @@ class MRFirewallCollector:
                     )
                 else:
                     rules.record_success(key, monotonic())
-                remaining -= 2
-                did_work = True
-                prefer_rules = False
             elif discovery_queue:
                 network_id = discovery_queue.popleft()
                 discoveries.record_attempt(network_id, monotonic())
+                self._prefer_rules[org_id] = prefer_rules = True
+                remaining -= 1
+                did_work = True
                 try:
-                    parsed = await self._discover_ssids(org_id, network_id)
+                    parsed = await self._discover_ssids(org_id=org_id, network_id=network_id)
                 except Exception as exc:
                     self._track_item_error(exc)
                     blocked.add(network_id)
@@ -256,13 +283,9 @@ class MRFirewallCollector:
                         if key not in queued_rules:
                             rule_queue.append(key)
                             queued_rules.add(key)
-                remaining -= 1
-                did_work = True
-                prefer_rules = True
             else:
                 break
 
-        self._prefer_rules[org_id] = prefer_rules
         keys = [
             json.dumps([network_id, ssid.number])
             for network_id, ssids in cached.items()
@@ -291,9 +314,18 @@ class MRFirewallCollector:
     async def _discover_ssids(self, org_id: str, network_id: str) -> list[WirelessSsid]:
         """Fetch validated, enabled, numbered SSIDs for one network."""
         with LogContext(org_id=org_id, network_id=network_id):
-            raw = await facade_for(self).call(
-                "getNetworkWirelessSsids", self.api.wireless.getNetworkWirelessSsids, network_id
-            )
+            try:
+                raw = await facade_for(self).call(
+                    "getNetworkWirelessSsids", self.api.wireless.getNetworkWirelessSsids, network_id
+                )
+            except Exception as exc:
+                # Discovery is optional on these networks. Consume the structured
+                # status here, before the API decorator can log 402 as an error.
+                status = getattr(exc, "status", None)
+                if not isinstance(status, int) or status not in {402, 404}:
+                    raise
+                logger.debug("SSID discovery not available", status=status)
+                return []
         data = validate_response_format(
             raw, expected_type=list, operation="getNetworkWirelessSsids"
         )

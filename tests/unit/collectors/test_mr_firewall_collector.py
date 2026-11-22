@@ -2,28 +2,154 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
+from threading import Event
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
 from prometheus_client import Gauge
+from structlog.testing import capture_logs
 
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.collectors.devices.mr.firewall import MRFirewallCollector
+from meraki_dashboard_exporter.collectors.manager import CollectorManager
+from meraki_dashboard_exporter.core.api_facade import MerakiApiFacade
 from meraki_dashboard_exporter.core.constants.metrics_constants import MRMetricName
 from meraki_dashboard_exporter.core.fanout_cursor import FanoutCursor
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 from tests.helpers.base import BaseCollectorTest
+from tests.helpers.mock_api import HTTPError
 
 if TYPE_CHECKING:
     pass
+
+
+async def _no_pacing_delay(*args, **kwargs) -> None:
+    """Keep pacer delay out of the independently controlled SDK latency."""
 
 
 class TestRealFirewallPath(BaseCollectorTest):
     """Exercise the real owner, facade, fetchers and registry with an SDK fake."""
 
     collector_class = DeviceCollector
+
+    @pytest.mark.parametrize(("timeout", "sdk_latency"), [(30, 5), (240, 39)])
+    async def test_cycle_yields_before_cap_and_resumes_unattempted_networks(
+        self, settings, mock_api_builder, isolated_registry, monkeypatch, timeout, sdk_latency
+    ) -> None:
+        """Run the manager, device cycle and facade against a latency-controlled SDK."""
+        settings.collectors.collector_timeout = timeout
+        settings.collectors.enabled_collectors = {"device"}
+        settings.api.per_fetch_deadline_seconds = timeout // 3
+        allowed = [f"net-{n}" for n in range(6)]
+        settings.network_filter.include_ids = allowed
+        networks = ["excluded", *allowed]
+        api = (
+            mock_api_builder
+            .with_organizations([{"id": "org", "name": "Org"}])
+            .with_networks([
+                {"id": network, "name": network, "productTypes": ["wireless"]}
+                for network in networks
+            ])
+            .with_devices(
+                [{"serial": "test-ap", "model": "MR46", "networkId": allowed[0]}], org_id="org"
+            )
+            .build()
+        )
+        manager = CollectorManager(client=MagicMock(api=api), settings=settings)
+        collector = manager.get_collector_by_class_name("DeviceCollector")
+        assert isinstance(collector, DeviceCollector)
+
+        # Keep the real facade timeouts and SDK executor; elapse virtual seconds
+        # one timer turn at a time while the synchronous SDK call is pending.
+        loop = asyncio.get_running_loop()
+        real_time = loop.time
+        offset = 0
+        monkeypatch.setattr(loop, "time", lambda: real_time() + offset)
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.collectors.devices.mr.firewall.monotonic", loop.time
+        )
+        monkeypatch.setattr(manager.rate_limiter, "acquire", _no_pacing_delay)
+        latency = sdk_latency
+
+        def pause_sdk() -> None:
+            complete = Event()
+
+            def tick(remaining: int) -> None:
+                nonlocal offset
+                if remaining:
+                    offset += 1
+                    loop.call_soon(tick, remaining - 1)
+                else:
+                    complete.set()
+
+            loop.call_soon_threadsafe(tick, latency)
+            assert complete.wait(2), "virtual SDK clock stopped"
+
+        discovered: list[str] = []
+        sibling_times: list[float] = []
+
+        def discover(network):
+            discovered.append(network)
+            pause_sdk()
+            return [{"number": 0, "name": "guest", "enabled": True}]
+
+        def rules(network, number):
+            pause_sdk()
+            return {"rules": []}
+
+        def ethernet(*args, **kwargs):
+            sibling_times.append(loop.time())
+            return []
+
+        api.wireless.getNetworkWirelessSsids.side_effect = discover
+        api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules.side_effect = rules
+        api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules.side_effect = rules
+        api.wireless.getOrganizationWirelessDevicesEthernetStatuses.side_effect = ethernet
+
+        started = loop.time()
+        await manager.run_collector_once(collector)
+        health = manager.collector_health["DeviceCollector"]
+        assert health["total_successes"] == 1, "firewall consumed the manager's cycle cap"
+        # The next group's real SDK fetch is reached while the manager still has time.
+        assert len(sibling_times) == 1 and sibling_times[0] - started < timeout - 2
+        assert 0 < len(discovered) < len(allowed)
+        first = discovered.copy()
+        assert set(first) <= set(allowed)
+        assert (
+            isolated_registry.get_sample_value(
+                "meraki_exporter_collector_errors_total",
+                {"collector": "DeviceCollector", "error_type": "timeout"},
+            )
+            is None
+        )
+
+        def collected_rules(network):
+            return [
+                isolated_registry.get_sample_value(
+                    "meraki_mr_ssid_firewall_rules",
+                    {"org_id": "org", "network_id": network, "ssid": "guest", "rule_type": kind},
+                )
+                for kind in ("L3", "L7")
+            ]
+
+        assert collected_rules(first[0]) == [0, 0]
+        latency = 0
+        await manager.run_collector_once(collector)
+        assert health["total_successes"] == 2
+        assert sorted(discovered) == sorted(allowed)
+        for network in set(allowed) - set(first):
+            assert collected_rules(network) == [0, 0]
+
+        # An interrupted pair was not declared fresh; it can complete after the
+        # incomplete-attempt spacing without rediscovering already-fresh networks.
+        offset += settings.scheduler.failure_retry_seconds + 1
+        await manager.run_collector_once(collector)
+        assert health["total_successes"] == 3
+        assert sorted(discovered) == sorted(allowed)
+        assert all(collected_rules(network) == [0, 0] for network in allowed)
 
     async def test_bounded_sweep_emits_each_enabled_ssid(
         self, collector, mock_api, settings, isolated_registry
@@ -116,6 +242,59 @@ class TestRealFirewallPath(BaseCollectorTest):
             )
             == 1
         )
+
+    @pytest.mark.parametrize("status", [402, 404])
+    async def test_unavailable_discovery_is_empty_and_quiet(
+        self, collector, mock_api, settings, isolated_registry, monkeypatch, status
+    ) -> None:
+        """Expected unavailability is a normal empty sweep, not a failed retry."""
+        now = 100.0
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.collectors.devices.mr.firewall.monotonic", lambda: now
+        )
+        settings.scheduler.failure_retry_seconds = 60
+        networks = [{"id": n, "productTypes": ["wireless"]} for n in ("unlicensed", "broken")]
+        calls: list[str] = []
+
+        def discover(network):
+            calls.append(network)
+            if network == "unlicensed":
+                raise HTTPError("Feature unavailable", status)
+            raise HTTPError(f"Server failure referring to {status}", 500)
+
+        mock_api.wireless.getNetworkWirelessSsids.side_effect = discover
+        firewall = collector.mr_collector.firewall
+        with capture_logs() as logs:
+            await firewall.collect_ssid_firewall("org", "Org", networks)
+        assert calls == ["unlicensed", "broken"]
+        errors = {
+            sample.labels["error_type"]: sample.value
+            for metric in isolated_registry.collect()
+            if metric.name == "meraki_exporter_collector_errors"
+            for sample in metric.samples
+            if sample.name == "meraki_exporter_collector_errors_total"
+            and sample.labels["collector"] == "DeviceCollector"
+        }
+        assert errors == {"api_server_error": 1}
+        # The inner API logger and the outer sweep must both avoid error noise.
+        noisy = [log for log in logs if log["log_level"] in {"error", "warning", "exception"}]
+        assert {log.get("network_id") for log in noisy} == {"broken"}
+        attempts = MerakiApiFacade.requests_total().collect()[0].samples
+        assert any(
+            sample.name.endswith("_total")
+            and sample.labels
+            == {
+                "endpoint": "getNetworkWirelessSsids",
+                "method": "GET",
+                "status_code": str(status),
+            }
+            and sample.value == 1
+            for sample in attempts
+        )
+
+        now += 61
+        await firewall.collect_ssid_firewall("org", "Org", networks)
+        assert calls == ["unlicensed", "broken", "broken"]
 
     async def test_fetch_deadline_isolated_from_healthy_sibling(
         self, collector, mock_api, settings, isolated_registry
@@ -261,6 +440,7 @@ class TestMRFirewallCollector:
         # which builds asyncio.Semaphore(max_concurrency).
         parent.settings.api.concurrency_limit = 5
         parent.rate_limiter = None
+        parent.ssid_firewall_cutoff = None
         # No inventory means no NetworkFilter — collector emits all rows.
         parent.inventory = None
         parent._create_gauge = MagicMock(side_effect=_make_gauge)

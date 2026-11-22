@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from ..core.api_facade import facade_for
@@ -476,6 +477,9 @@ class DeviceCollector(MetricCollector):
         # SOURCE_DEVICE failure domain so device-endpoint failures engage backoff
         # even when the organization collector is healthy or disabled.
         self.org_health_tracker = org_health_tracker
+        self._ssid_firewall_cutoff: ContextVar[float | None] = ContextVar(
+            "ssid_firewall_cutoff", default=None
+        )
 
         # Initialize device-specific collectors
         self.mg_collector = MGCollector(self)
@@ -609,13 +613,23 @@ class DeviceCollector(MetricCollector):
             ],
         )
 
+    @property
+    def ssid_firewall_cutoff(self) -> float | None:
+        """Latest loop time for SSID firewall work, or None outside a device cycle."""
+        return self._ssid_firewall_cutoff.get()
+
     async def _collect_impl(self) -> None:
         """Collect device metrics with parallel organization processing.
 
         Organizations are processed in parallel with bounded concurrency
         to significantly improve performance for multi-org deployments.
         """
-        start_time = asyncio.get_event_loop().time()
+        start_time = asyncio.get_running_loop().time()
+        timeout = self.settings.collectors.collector_timeout
+        # The manager starts its clock before admission. Reserve headroom for
+        # admission and later groups, scaled down for short configured cycles.
+        # This is a firewall-only cutoff, not a deadline for the other groups.
+        firewall_cutoff = start_time + timeout - min(10.0, timeout / 5)
         metrics_collected = 0
         organizations_processed = 0
         api_calls_made = 0
@@ -638,28 +652,29 @@ class DeviceCollector(MetricCollector):
         # worker so an all-in-backoff cycle can be distinguished from a
         # genuine success (#509 frozen coordinator rule).
         skipped_backoff = 0
-        async with ManagedTaskGroup(
-            name="device_collector_orgs",
-            max_concurrency=self.settings.api.concurrency_limit,
-        ) as group:
-            for org in organizations:
-                org_id = org["id"]
-                if (
-                    self.org_health_tracker is not None
-                    and not self.org_health_tracker.should_collect(org_id, source=SOURCE_DEVICE)
-                ):
-                    skipped_backoff += 1
-                    logger.debug(
-                        "Skipping device collection for organization in backoff",
-                        org_id=org_id,
-                        org_name=org.get("name", org_id),
+        with self._ssid_firewall_cutoff.set(firewall_cutoff):
+            async with ManagedTaskGroup(
+                name="device_collector_orgs",
+                max_concurrency=self.settings.api.concurrency_limit,
+            ) as group:
+                for org in organizations:
+                    org_id = org["id"]
+                    if (
+                        self.org_health_tracker is not None
+                        and not self.org_health_tracker.should_collect(org_id, source=SOURCE_DEVICE)
+                    ):
+                        skipped_backoff += 1
+                        logger.debug(
+                            "Skipping device collection for organization in backoff",
+                            org_id=org_id,
+                            org_name=org.get("name", org_id),
+                        )
+                        continue
+                    await group.create_task(
+                        self._collect_org_devices(org_id, org.get("name", org_id)),
+                        name=f"org_{org_id}",
                     )
-                    continue
-                await group.create_task(
-                    self._collect_org_devices(org_id, org.get("name", org_id)),
-                    name=f"org_{org_id}",
-                )
-                organizations_processed += 1
+                    organizations_processed += 1
 
         attempted = len(organizations) - skipped_backoff
         if (
