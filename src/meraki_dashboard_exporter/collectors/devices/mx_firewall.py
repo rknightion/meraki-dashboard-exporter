@@ -79,7 +79,7 @@ class MXFirewallCollector(SubCollectorMixin):
         self._last_security_config_collection: dict[str, float] = {}
         self._last_nat_config_collection: dict[str, float] = {}
         self._last_vlan_config_collection: dict[str, float] = {}
-        # Keys emitted by the previous successful security-event pass, per org (#992).
+        # Keys emitted since the last successful attribution pass, per org (#992).
         # A key absent from the next successful window is written once as 0 so a burst
         # is not re-exported for a second window.
         self._seen_security_event_types: dict[str, set[str]] = {}
@@ -870,9 +870,9 @@ class MXFirewallCollector(SubCollectorMixin):
         # emitted by the previous successful window and absent from this one are written
         # once as 0 (#992), then the stored sets are replaced. A failed fetch raised
         # above, so it writes nothing and leaves the stored sets as they were (F-015);
-        # a failed device-inventory read does the same for the zeroing and the stored
-        # sets. Stale by-network keys for a network the NetworkFilter now excludes are
-        # dropped without a sample (F-173).
+        # a failed device-inventory read skips zeroing and preserves stored keys while
+        # retaining any newly emitted org-wide types. Stale by-network keys for a network
+        # the NetworkFilter now excludes are dropped without a sample (F-173).
 
         ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_SECURITY_EVENTS)
         seen_event_types = self._seen_security_event_types.setdefault(org_id, set())
@@ -928,9 +928,9 @@ class MXFirewallCollector(SubCollectorMixin):
 
         if attribution_ok:
             seen_event_types.clear()
-            seen_event_types.update(counts.keys())
             seen_by_network.clear()
             seen_by_network.update(by_network.keys())
+        seen_event_types.update(counts.keys())
 
         # Mark after a successful org-wide fetch (failures retry next cycle).
         self.parent._mark_group_ran(EndpointGroupName.MX_SECURITY_EVENTS)

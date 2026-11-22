@@ -818,6 +818,58 @@ class TestMXFirewallCollector:
         assert firewall_collector._seen_security_event_types["org1"] == seen_types
         assert firewall_collector._seen_security_events_by_network["org1"] == seen_by_network
 
+    async def test_inventory_failure_new_type_is_zeroed_after_recovery(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An unattributed new type is retained until a successful empty window."""
+
+        def write_gauge(gauge: Gauge, labels: dict, value: float, **kwargs: object) -> None:
+            gauge.labels(**labels).set(value)
+
+        mock_parent._set_metric.side_effect = write_gauge
+        fetch = MagicMock(return_value=[self._LIVE_EVENTS[0]])
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = fetch
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value=None)
+        mock_parent.inventory.get_devices = AsyncMock(return_value=self._DEVICES)
+
+        def scrape(gauge: Gauge) -> dict[tuple[str, ...], float]:
+            return {
+                tuple(sample.labels.values()): sample.value
+                for metric in gauge.collect()
+                for sample in metric.samples
+            }
+
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+        assert scrape(firewall_collector._security_events_count) == {("org1", "IDS Alert"): 1.0}
+        network_before = scrape(firewall_collector._security_events_by_network_count)
+        assert network_before == {("org1", "N_1", "IDS Alert", "true", "1"): 1.0}
+
+        mock_parent._set_metric.reset_mock()
+        mock_parent.inventory.get_devices = AsyncMock(side_effect=RuntimeError("boom"))
+        fetch.return_value = [{"eventType": "File Scanned", "deviceMac": "aa:bb:cc:00:00:01"}]
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+        assert all(call.args[2] != 0.0 for call in mock_parent._set_metric.call_args_list)
+        assert scrape(firewall_collector._security_events_count) == {
+            ("org1", "IDS Alert"): 1.0,
+            ("org1", "File Scanned"): 1.0,
+        }
+        assert scrape(firewall_collector._security_events_by_network_count) == network_before
+
+        mock_parent.inventory.get_devices = AsyncMock(return_value=self._DEVICES)
+        fetch.return_value = []
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+        assert scrape(firewall_collector._security_events_count) == {
+            ("org1", "IDS Alert"): 0.0,
+            ("org1", "File Scanned"): 0.0,
+        }
+        assert scrape(firewall_collector._security_events_by_network_count) == {
+            ("org1", "N_1", "IDS Alert", "true", "1"): 0.0
+        }
+
     async def test_security_events_zero_skips_network_now_excluded_by_filter(
         self,
         firewall_collector: MXFirewallCollector,
