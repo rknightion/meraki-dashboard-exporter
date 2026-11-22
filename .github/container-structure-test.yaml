@@ -16,6 +16,9 @@ metadataTest:
   exposedPorts: ["9099"]
   user: "exporter"
   workdir: "/app"
+  labels:
+    - key: "org.opencontainers.image.licenses"
+      value: "Apache-2.0"
 
 fileExistenceTests:
   - name: "entrypoint script present"
@@ -26,6 +29,15 @@ fileExistenceTests:
   - name: "application package present"
     path: "/app/meraki_dashboard_exporter"
     shouldExist: true
+  - name: "application bytecode present"
+    path: "/app/meraki_dashboard_exporter/__pycache__"
+    shouldExist: true
+  - name: "pytest absent"
+    path: "/app/.venv/bin/pytest"
+    shouldExist: false
+  - name: "ruff absent"
+    path: "/app/.venv/bin/ruff"
+    shouldExist: false
   - name: "baked-in virtualenv present"
     path: "/app/.venv"
     shouldExist: true
