@@ -49,6 +49,11 @@ If you set either value, it now takes effect.
 
 ## Changes after 3.0.0
 
+### Built-in API documentation removed
+
+The built-in `/docs`, `/redoc`, `/openapi.json` and `/docs/oauth2-redirect` routes are no longer
+served, regardless of UI or token settings. Use the published documentation instead.
+
 ### Batch fan-outs are capped at `api.concurrency_limit`
 
 The batch fan-outs in the device, network health, alerts, clients and config collectors now honour

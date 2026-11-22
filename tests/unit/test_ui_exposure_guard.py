@@ -157,6 +157,19 @@ class TestUiGuardDecision:
         )
 
 
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json", "/docs/oauth2-redirect"])
+@pytest.mark.parametrize("ui_mode", ["default", "disabled", "token"])
+def test_builtin_api_docs_are_unavailable(path: str, ui_mode: str) -> None:
+    """Framework documentation is absent regardless of the UI guard configuration."""
+    settings = _settings(api_token="secrettoken" if ui_mode == "token" else None)
+    if ui_mode == "disabled":
+        settings.server.ui_enabled = False
+    client = TestClient(ExporterApp(settings).create_app(), follow_redirects=False)
+
+    assert client.get("/health").status_code == 200
+    assert client.get(path).status_code == 404
+
+
 class TestTokenGateIntegration:
     """End-to-end middleware behaviour on the real app."""
 
