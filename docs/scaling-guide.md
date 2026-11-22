@@ -67,13 +67,9 @@ API fetch to an **endpoint group** with its own volatility floor, and automatica
 lower-priority groups' intervals when combined demand would exceed the budget. The math below
 still matters, though: it estimates the **unstretched, floor-level demand** — i.e. what the
 exporter would ask for if every group ran flat-out at its natural floor. That's the number the
-solver starts from before it stretches anything, and it's also the number that determines
-whether a *single* collector's own run can finish inside its `collector_timeout` (240 s
-default) — the solver can lengthen a group's *polling interval*, but it cannot make one
-already-in-flight collection cycle's page-fetch loop finish faster. Almost all of this
-unstretched demand sits in a handful of endpoint groups that would historically have been
-called "MEDIUM" (≈300 s floor). The dominant, operator-actionable terms per **300 s baseline
-cycle** are:
+solver starts from before it stretches anything. Stretching a polling interval reduces average
+demand; it does not speed up any API calls already in flight. The dominant, operator-actionable
+terms per **300 s baseline cycle** are:
 
 $$
 \text{calls}_{\text{baseline}} \approx
@@ -112,9 +108,23 @@ groups keep their floors. If the solved plan remains over budget, it defers lowe
 and exposes `meraki_exporter_scheduler_over_budget` plus the shed group labels. Set
 `MERAKI_EXPORTER_COLLECTORS__PROFILE` explicitly to `availability`, `standard`, or `full` above
 the computed full-plan threshold; the threshold is calculated from the actual implicit plan and
-inventory shape, never a raw network count. Separately, if network-health's *own single run* needs more calls than the budget can drain
-inside 240 s, that collector's run will not finish before `collector_timeout` regardless of how
-the scheduler paces the *next* run — see the LARGE example below.
+inventory shape, never a raw network count.
+
+The **per-network health sweep resumes across collector wakes**. For each organization, it takes
+up to one call budget per wake (half the per-fetch deadline times the effective request rate,
+rounded down with a minimum of one call). This caps logical endpoint fetches, not individual
+pagination requests or retries. The due-sweep column above is the cost of all that work, not a
+requirement to finish it in one run. Only due network/group pairs spend the budget. For
+example, a network can be due for Bluetooth while its connection stats are still fresh. A failed
+pair is retried after its retry spacing without refetching fresh siblings, and a group the scheduler
+defers keeps its progress until it is enabled again. Progress is in memory and resets when the
+exporter restarts. The two latency calls for a network are scheduled together, so latency waits if
+the attempt budget falls below two calls. The separate org-wide channel-utilization fetch is not
+part of this cap.
+
+Large sweeps can therefore take several collector wakes to reach every network. Series lifetimes
+are extended to account for the longer sweep, but resuming does not increase API capacity or
+promise the solved refresh interval when work takes multiple wakes.
 
 ### Worked example — SMALL (≈100 devices, 10 networks)
 
@@ -142,9 +152,9 @@ A university-shaped org: $W=400$ wireless nets, 4,000 MR, 700 MS, 150 MX, 100 MV
 
 **~10.6 req/s is still above the 10 req/s org budget** (and 133% of the 8 req/s default ceiling).
 The adaptive scheduler will stretch lower-priority groups here (network health is priority 3).
-The largest due sweep is not the 1,041.3-call equivalent: it is the per-network 3,600-second groups
-together, so capacity planning must distinguish that sweep from steady-state demand. More
-CPU/memory does not increase the API budget; see #701 for the remaining large-org demand limit.
+Use the steady-state equivalent to estimate ongoing load. On a cold start, the per-network groups
+are all due, but they spread that work over multiple wakes. More CPU or memory does not increase
+the API budget.
 
 ### Practical single-org envelope today
 

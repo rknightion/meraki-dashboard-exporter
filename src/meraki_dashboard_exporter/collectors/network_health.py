@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import math
 from collections.abc import Awaitable, Callable
+from contextvars import ContextVar
+from time import monotonic
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from ..core.async_utils import ManagedTaskGroup
@@ -16,6 +19,12 @@ from ..core.error_handling import (
     NothingCollectedError,
     categorize_error,
     with_error_handling,
+)
+from ..core.fanout_cursor import (
+    FanoutCursor,
+    failure_retry_spacing,
+    per_attempt_call_budget,
+    sweep_ttl_seconds,
 )
 from ..core.logging import get_logger
 from ..core.logging_decorators import log_batch_operation
@@ -47,18 +56,18 @@ from ..core.org_health import SOURCE_NETWORK_HEALTH
 logger = get_logger(__name__)
 
 
-# Per-network endpoint groups gated once per collection cycle before the
-# per-network fan-out (#617 §2). NH_CHANNEL_UTILIZATION is org-wide (#271) and
-# gated separately, so it is NOT part of this bundle set.
-_BUNDLE_GROUPS: tuple[EndpointGroupName, ...] = (
-    EndpointGroupName.NH_CONNECTION_STATS,
-    EndpointGroupName.NH_DATA_RATES,
-    EndpointGroupName.NH_BLUETOOTH,
-    EndpointGroupName.NH_FAILED_CONNECTIONS,
-    EndpointGroupName.NH_LATENCY_STATS,
-    EndpointGroupName.NH_AIR_MARSHAL,
-    EndpointGroupName.NH_MESH,
-)
+# Latency fetches both device and client aggregates; every other bundle group
+# makes one logical endpoint call. Org-wide channel utilization is separate.
+_LATENCY_CALLS = 2
+_BUNDLE_CALL_COSTS = {
+    EndpointGroupName.NH_CONNECTION_STATS: 1,
+    EndpointGroupName.NH_DATA_RATES: 1,
+    EndpointGroupName.NH_BLUETOOTH: 1,
+    EndpointGroupName.NH_FAILED_CONNECTIONS: 1,
+    EndpointGroupName.NH_LATENCY_STATS: _LATENCY_CALLS,
+    EndpointGroupName.NH_AIR_MARSHAL: 1,
+    EndpointGroupName.NH_MESH: 1,
+}
 
 
 @register_collector
@@ -92,6 +101,7 @@ class NetworkHealthCollector(MetricCollector):
             name=EndpointGroupName.NH_CONNECTION_STATS,
             priority=3,
             floor_seconds=1800,
+            self_paced=True,
             cost_fn=lambda shape: float(shape.wireless_network_count),
             enabled_fn=lambda s: s.wireless_network_count > 0,
         ),
@@ -99,6 +109,7 @@ class NetworkHealthCollector(MetricCollector):
             name=EndpointGroupName.NH_DATA_RATES,
             priority=3,
             floor_seconds=300,
+            self_paced=True,
             cost_fn=lambda shape: float(shape.wireless_network_count),
             enabled_fn=lambda s: s.wireless_network_count > 0,
         ),
@@ -106,6 +117,7 @@ class NetworkHealthCollector(MetricCollector):
             name=EndpointGroupName.NH_BLUETOOTH,
             priority=3,
             floor_seconds=300,
+            self_paced=True,
             cost_fn=lambda shape: float(shape.wireless_network_count),
             enabled_fn=lambda s: s.wireless_network_count > 0,
         ),
@@ -113,6 +125,7 @@ class NetworkHealthCollector(MetricCollector):
             name=EndpointGroupName.NH_FAILED_CONNECTIONS,
             priority=3,
             floor_seconds=3600,
+            self_paced=True,
             cost_fn=lambda shape: float(shape.wireless_network_count),
             enabled_fn=lambda s: s.wireless_network_count > 0,
         ),
@@ -120,6 +133,7 @@ class NetworkHealthCollector(MetricCollector):
             name=EndpointGroupName.NH_LATENCY_STATS,
             priority=3,
             floor_seconds=3600,
+            self_paced=True,
             cost_fn=lambda shape: 2.0 * shape.wireless_network_count,
             enabled_fn=lambda s: s.wireless_network_count > 0,
         ),
@@ -127,6 +141,7 @@ class NetworkHealthCollector(MetricCollector):
             name=EndpointGroupName.NH_AIR_MARSHAL,
             priority=3,
             floor_seconds=3600,
+            self_paced=True,
             cost_fn=lambda shape: float(shape.wireless_network_count),
             enabled_fn=lambda s: s.wireless_network_count > 0,
         ),
@@ -136,6 +151,7 @@ class NetworkHealthCollector(MetricCollector):
             name=EndpointGroupName.NH_MESH,
             priority=3,
             floor_seconds=3600,
+            self_paced=True,
             cost_fn=lambda shape: float(shape.wireless_network_count),
             enabled_fn=lambda s: s.wireless_network_count > 0,
         ),
@@ -171,6 +187,11 @@ class NetworkHealthCollector(MetricCollector):
         # SOURCE_NETWORK_HEALTH failure domain so network-endpoint failures engage
         # backoff even when the organization collector is healthy or disabled.
         self.org_health_tracker = org_health_tracker
+        self._bundle_cursors: dict[str, dict[EndpointGroupName, FanoutCursor]] = {}
+        # Parallel org workers and their network tasks inherit their own sweep TTLs.
+        self._bundle_ttls: ContextVar[dict[EndpointGroupName, float | None] | None] = ContextVar(
+            "network_health_bundle_ttls", default=None
+        )
 
         # Initialize sub-collectors
         self.rf_health_collector = RFHealthCollector(self)
@@ -338,6 +359,9 @@ class NetworkHealthCollector(MetricCollector):
 
         # Get organizations (raises on total failure; no blanket swallow).
         organizations = await self._fetch_organizations()
+        if organizations is not None:
+            for org_id in self._bundle_cursors.keys() - {org["id"] for org in organizations}:
+                del self._bundle_cursors[org_id]
         if not organizations:
             logger.warning("No organizations found for network health collection")
             return
@@ -484,6 +508,7 @@ class NetworkHealthCollector(MetricCollector):
                 if ProductType.WIRELESS in network.get("productTypes", [])
             ]
             if not wireless_networks:
+                self._bundle_cursors.pop(org_id, None)
                 return
 
             # Channel utilization is an org-wide fetch (#271) gated on its own
@@ -500,43 +525,7 @@ class NetworkHealthCollector(MetricCollector):
                 if channel_util_ok:
                     self._mark_group_ran(EndpointGroupName.NH_CHANNEL_UTILIZATION)
 
-            # The six per-network groups share one per-network fan-out. Consult
-            # each group's gate ONCE for this cycle (before the fan-out), run the
-            # fan-out only for the groups that are due, then mark each ran.
-            due_groups = frozenset(g for g in _BUNDLE_GROUPS if self._should_run_group(g))
-            if due_groups:
-                results = await process_in_batches_with_errors(
-                    wireless_networks,
-                    functools.partial(self._collect_network_health_bundle, due_groups=due_groups),
-                    batch_size=self.settings.api.network_batch_size,
-                    delay_between_batches=self.settings.api.batch_delay,
-                    spread_over_seconds=self._get_smoothing_window(),
-                    initial_delay=self._get_smoothing_offset(f"{org_id}:network_health"),
-                    min_batch_delay=self.settings.api.smoothing_min_batch_delay,
-                    max_batch_delay=self.settings.api.smoothing_max_batch_delay,
-                    max_concurrency=self.settings.api.concurrency_limit,
-                    item_description="network health",
-                    error_context_func=lambda network: {
-                        "org_id": org_id,
-                        "org_name": org_name or org_id,
-                        "network_id": network.get("id"),
-                        "network_name": network.get("name"),
-                    },
-                    on_error=lambda error: self._track_error(categorize_error(error)),
-                )
-                # Mark each group ran only if >=1 network fetched THAT group's
-                # data this cycle (#629). Each bundle call reports the set of
-                # groups it fetched successfully for its network; the union
-                # across networks is the set of groups that achieved >=1 success.
-                # A group that failed for every network stays open so the next
-                # cycle retries it (partial fan-out success still counts).
-                succeeded_groups: set[EndpointGroupName] = set()
-                for _network, result in results:
-                    if isinstance(result, frozenset):
-                        succeeded_groups |= result
-                for group in due_groups:
-                    if group in succeeded_groups:
-                        self._mark_group_ran(group)
+            await self._collect_network_health_fanout(org_id, org_name or org_id, wireless_networks)
         except Exception as exc:
             nh_failed = True
             failure_category = categorize_error(exc)
@@ -584,36 +573,131 @@ class NetworkHealthCollector(MetricCollector):
                 org_id, org_name, source=SOURCE_NETWORK_HEALTH, category=category
             )
 
+    def _bundle_group_enabled(self, group: EndpointGroupName) -> bool:
+        """Honor the solved profile and shedding, without admitting a group-level attempt."""
+        return self.scheduler is None or self.scheduler.is_enabled(group)
+
+    def _bundle_cadence_seconds(self) -> float:
+        """Upper bound on the wake interval set by channel utilization and the resolve cap."""
+        cap = float(self.settings.scheduler.resolve_interval_seconds)
+        channel_group = EndpointGroupName.NH_CHANNEL_UTILIZATION
+        if self._bundle_group_enabled(channel_group):
+            return min(cap, float(self._group_interval(channel_group)))
+        return cap
+
+    def _group_ttl_seconds(self, group: EndpointGroupName) -> float | None:
+        """Use the sweep TTL only for writes inside the requesting org's fan-out."""
+        ttls = self._bundle_ttls.get()
+        if ttls is not None and group in ttls:
+            return ttls[group]
+        return super()._group_ttl_seconds(group)
+
+    async def _collect_network_health_fanout(
+        self, org_id: str, org_name: str, networks: list[dict[str, Any]]
+    ) -> None:
+        """Run one call-budgeted pass over the org's independently due network/group pairs."""
+        by_id = {network["id"]: network for network in networks}
+        keys = list(by_id)
+        cursors = self._bundle_cursors.setdefault(org_id, {})
+        budget = per_attempt_call_budget(self.settings, self.rate_limiter)
+        now = monotonic()
+        intervals: dict[EndpointGroupName, float] = {}
+        due: list[tuple[str, EndpointGroupName]] = []
+        for group, cost in _BUNDLE_CALL_COSTS.items():
+            cursor = cursors.setdefault(group, FanoutCursor())
+            cursor.prune(keys)
+            if cost > budget or not self._bundle_group_enabled(group):
+                continue
+            interval = intervals[group] = float(self._group_interval(group))
+            due.extend(
+                (key, group)
+                for key in cursor.select(
+                    keys,
+                    interval=interval,
+                    retry_spacing=failure_retry_spacing(self.settings, interval),
+                    limit=len(keys),
+                    now=now,
+                )
+            )
+
+        def last_served(pair: tuple[str, EndpointGroupName]) -> float:
+            key, group = pair
+            cursor = cursors[group]
+            # Never attempted first; otherwise a failed fetch joins the back of
+            # the queue when it becomes retryable, rather than starving siblings.
+            return max(
+                cursor.last_success.get(key, -math.inf), cursor.last_attempt.get(key, -math.inf)
+            )
+
+        due.sort(key=last_served)
+        remaining = budget
+        selected: dict[str, set[EndpointGroupName]] = {}
+        for key, group in due:
+            cost = _BUNDLE_CALL_COSTS[group]
+            if cost <= remaining:
+                selected.setdefault(key, set()).add(group)
+                remaining -= cost
+                if remaining == 0:
+                    break
+        if not selected:
+            return
+
+        # Size TTLs for the full sweep if the enabled groups all come due
+        # together. A two-call group can leave the last slot of a pass unused.
+        sweep_calls = len(keys) * sum(_BUNDLE_CALL_COSTS[group] for group in intervals)
+        sweep_budget = budget - int(
+            sweep_calls > budget
+            and budget % _LATENCY_CALLS != 0
+            and EndpointGroupName.NH_LATENCY_STATS in intervals
+        )
+        cadence = self._bundle_cadence_seconds()
+        token = self._bundle_ttls.set({
+            group: sweep_ttl_seconds(
+                self._group_ttl_seconds(group), interval, sweep_calls, sweep_budget, cadence
+            )
+            for group, interval in intervals.items()
+        })
+        try:
+            results = await process_in_batches_with_errors(
+                [by_id[key] for key in selected],
+                functools.partial(
+                    self._collect_network_health_bundle, selected=selected, cursors=cursors
+                ),
+                batch_size=self.settings.api.network_batch_size,
+                delay_between_batches=self.settings.api.batch_delay,
+                spread_over_seconds=self._get_smoothing_window(),
+                initial_delay=self._get_smoothing_offset(f"{org_id}:network_health"),
+                min_batch_delay=self.settings.api.smoothing_min_batch_delay,
+                max_batch_delay=self.settings.api.smoothing_max_batch_delay,
+                max_concurrency=self.settings.api.concurrency_limit,
+                item_description="network health",
+                error_context_func=lambda network: {
+                    "org_id": org_id,
+                    "org_name": org_name,
+                    "network_id": network.get("id"),
+                    "network_name": network.get("name"),
+                },
+                on_error=lambda error: self._track_error(categorize_error(error)),
+            )
+        finally:
+            self._bundle_ttls.reset(token)
+
+        # Retain #629 success reporting without letting mark_ran gate the next
+        # pass. These self-paced groups never record a group-level admission.
+        succeeded_groups: set[EndpointGroupName] = set()
+        for _network, result in results:
+            if isinstance(result, frozenset):
+                succeeded_groups |= result
+        for group in succeeded_groups:
+            self._mark_group_ran(group)
+
     async def _collect_network_health_bundle(
-        self, network: dict[str, Any], due_groups: frozenset[EndpointGroupName]
+        self,
+        network: dict[str, Any],
+        selected: dict[str, set[EndpointGroupName]],
+        cursors: dict[EndpointGroupName, FanoutCursor],
     ) -> frozenset[EndpointGroupName]:
-        """Collect the per-network health sub-metrics for a single network.
-
-        Only the endpoint groups in ``due_groups`` (decided once per cycle by
-        the coordinator's per-group gate) run this pass. Channel utilization is
-        NOT here — it is an org-wide fetch handled once in
-        ``_collect_org_network_health`` (#271).
-
-        Each due group runs under its own guard so one group failing for this
-        network does not abort the siblings (per-group isolation, #629). The
-        returned set drives the coordinator's per-group ``mark_ran`` decision:
-        a group is marked ran only if it fetched successfully for >=1 network
-        across the whole fan-out.
-
-        Parameters
-        ----------
-        network : dict[str, Any]
-            Network data (already wireless-filtered by the coordinator).
-        due_groups : frozenset[EndpointGroupName]
-            The per-network groups that are due this cycle.
-
-        Returns
-        -------
-        frozenset[EndpointGroupName]
-            The subset of ``due_groups`` whose fetch succeeded for this network
-            (a successful fetch returning empty still counts as success).
-
-        """
+        """Run the budgeted groups for a network, stamping each successful fetch in place."""
         # (group, per-network collect coroutine factory) in bundle order.
         group_calls: tuple[
             tuple[EndpointGroupName, Callable[[dict[str, Any]], Awaitable[None]]], ...
@@ -627,10 +711,13 @@ class NetworkHealthCollector(MetricCollector):
             (EndpointGroupName.NH_MESH, self._collect_network_mesh),
         )
 
+        network_id = network["id"]
         succeeded: set[EndpointGroupName] = set()
         for group, collect in group_calls:
-            if group not in due_groups:
+            if group not in selected[network_id]:
                 continue
+            cursor = cursors[group]
+            cursor.record_attempt(network_id, monotonic())
             try:
                 await collect(network)
             except Exception as exc:
@@ -645,6 +732,7 @@ class NetworkHealthCollector(MetricCollector):
                     network_name=network.get("name"),
                 )
             else:
+                cursor.record_success(network_id, monotonic())
                 succeeded.add(group)
         return frozenset(succeeded)
 

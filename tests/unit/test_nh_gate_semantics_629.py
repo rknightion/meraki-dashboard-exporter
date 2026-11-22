@@ -1,18 +1,8 @@
-"""#629: NetworkHealthCollector mark_ran semantics.
+"""Network-health groups report success when at least one fetch succeeds (#629).
 
-Canonical rule (#629): an endpoint group's gate is marked ran iff the cycle
-achieved >=1 SUCCESSFUL fetch for that group.
-
-- Partial fan-out success counts (one network 500'ing must NOT re-fetch the
-  whole org) -> mark ran.
-- Total failure (every network's fetch for that group failed) -> do NOT mark
-  ran -> gate stays open -> next cycle retries.
-- A SUCCESSFUL fetch returning empty is a successful cycle -> mark ran.
-
-Two fix sites:
-1. NH_CHANNEL_UTILIZATION (org-wide, via ``rf_health_collector.collect_org``).
-2. The six-per-network bundle groups sharing one ``process_in_batches_with_errors``
-   fan-out over ``_collect_network_health_bundle``.
+Channel utilization uses this to close its org-wide gate. The self-paced
+bundle groups still report partial and empty successes, but independently
+retry failed networks instead of closing the whole group's gate.
 """
 
 from __future__ import annotations
@@ -115,7 +105,8 @@ class TestBundleGroupGate(_NHGateBase):
 
     def _sched_bundle(self, due: set[EndpointGroupName]):
         sched = MagicMock()
-        sched.should_run.side_effect = lambda g: g in due
+        sched.should_run.return_value = False  # org-wide channel utilization is not due
+        sched.is_enabled.side_effect = lambda g: g in due
         return sched
 
     async def test_real_subcollector_total_failure_not_marked(
@@ -142,7 +133,7 @@ class TestBundleGroupGate(_NHGateBase):
     async def test_real_subcollector_partial_failure_marks_ran(
         self, mock_api_builder, settings, isolated_registry, inventory
     ):
-        """One answered connection fetch closes the group."""
+        """One answered connection fetch reports success for the group."""
         sched = self._sched_bundle({EndpointGroupName.NH_CONNECTION_STATS})
         collector = self._make(mock_api_builder, settings, isolated_registry, inventory, sched)
 
@@ -191,7 +182,7 @@ class TestBundleGroupGate(_NHGateBase):
         namespace,
         method,
     ):
-        """Unavailable endpoints close the gate; real failures leave it open."""
+        """Unavailable endpoints count as successful skips; real failures do not."""
         sched = self._sched_bundle({group})
         collector = self._make(mock_api_builder, settings, isolated_registry, inventory, sched)
 

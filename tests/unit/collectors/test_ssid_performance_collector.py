@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
+from meraki_dashboard_exporter.collectors import network_health
 from meraki_dashboard_exporter.collectors.network_health import NetworkHealthCollector
 from meraki_dashboard_exporter.collectors.network_health_collectors.ssid_performance import (
     SSIDPerformanceCollector,
 )
+from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import NetworkFactory, OrganizationFactory
 
@@ -258,8 +262,20 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
         api.wireless.getNetworkWirelessFailedConnections = MagicMock(return_value=rows)
         return api
 
+    @pytest.fixture
+    def advance_failed_connections_window(self, collector, monkeypatch):
+        """Advance the network-health cursor clock to the next collection window."""
+        now = 100.0
+        monkeypatch.setattr(network_health, "monotonic", lambda: now)
+
+        def advance() -> None:
+            nonlocal now
+            now += collector._group_interval(EndpointGroupName.NH_FAILED_CONNECTIONS)
+
+        return advance
+
     async def test_failed_connections_zeroed_when_window_is_empty(
-        self, collector, mock_api_builder, metrics
+        self, collector, mock_api_builder, metrics, advance_failed_connections_window
     ) -> None:
         """A burst followed by a successful empty window reads 0 for that network (#992)."""
         org = OrganizationFactory.create(org_id="org_1", name="Test Org")
@@ -287,6 +303,7 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
         )
 
         api.wireless.getNetworkWirelessFailedConnections.return_value = []
+        advance_failed_connections_window()
         await self.run_collector(collector)
 
         metrics.assert_gauge_value(
@@ -297,7 +314,7 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
         )
 
     async def test_failed_connections_zeroes_only_pairs_that_disappeared(
-        self, collector, mock_api_builder, metrics
+        self, collector, mock_api_builder, metrics, advance_failed_connections_window
     ) -> None:
         """A smaller successful window keeps present pairs and zeroes the missing one (#992)."""
         org = OrganizationFactory.create(org_id="org_1", name="Test Org")
@@ -322,6 +339,7 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
         api.wireless.getNetworkWirelessFailedConnections.return_value = [
             {"ssidNumber": 0, "failureStep": "auth", "ts": "2024-01-01T13:00:00Z"}
         ]
+        advance_failed_connections_window()
         await self.run_collector(collector)
 
         labels = {"org_id": org["id"], "network_id": network["id"]}
