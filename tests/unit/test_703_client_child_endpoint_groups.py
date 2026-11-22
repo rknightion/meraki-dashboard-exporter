@@ -114,8 +114,15 @@ def test_703_default_client_groups_sleep_until_clients_list_is_due() -> None:
 
 
 @pytest.mark.asyncio
-async def test_703_outer_loop_uses_the_client_due_interval_not_one_second_floor() -> None:
+async def test_703_outer_loop_uses_the_client_due_interval_not_one_second_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The production outer loop sleeps 270s after default client local work succeeds."""
+    # Freeze the scheduler's clock without freezing asyncio's event-loop clock.
+    monkeypatch.setattr(
+        "meraki_dashboard_exporter.core.scheduler.time",
+        SimpleNamespace(monotonic=lambda: 100.0, time=time.time),
+    )
     settings = _settings(signal_quality_enabled=False)
     scheduler = EndpointScheduler(settings, _Limiter())  # type: ignore[arg-type]
     collector = _collector(settings)
@@ -128,9 +135,8 @@ async def test_703_outer_loop_uses_the_client_due_interval_not_one_second_floor(
     waits: list[float] = []
 
     async def run_once(_: object) -> None:
-        now = time.monotonic()
-        scheduler.mark_ran(EndpointGroupName.CLIENTS_LIST, now=now)
-        scheduler.mark_ran(EndpointGroupName.CLIENTS_APP_USAGE, now=now)
+        scheduler.mark_ran(EndpointGroupName.CLIENTS_LIST)
+        scheduler.mark_ran(EndpointGroupName.CLIENTS_APP_USAGE)
 
     async def sleep(seconds: float) -> None:
         waits.append(seconds)
