@@ -49,6 +49,15 @@ If you set either value, it now takes effect.
 
 ## Changes after 3.0.0
 
+### Per-collector cardinality setting removed
+
+The former `monitoring.max_cardinality_per_collector` setting never enforced a cap and has been
+removed. Its environment variable is ignored with a startup warning; the old Helm key is ignored.
+Configure `MERAKI_EXPORTER_CARDINALITY__MAX_SERIES_PER_FAMILY` and
+`MERAKI_EXPORTER_CARDINALITY__ACTION` instead. The replacement threshold is per metric family,
+not per collector, and the old value is not migrated automatically. `warn` preserves series;
+`drop` sheds the oldest tracked series. The cardinality counter rises in both modes.
+
 ### Built-in API documentation removed
 
 The built-in `/docs`, `/redoc`, `/openapi.json` and `/docs/oauth2-redirect` routes are no longer

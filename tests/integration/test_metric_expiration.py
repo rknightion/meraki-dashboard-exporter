@@ -25,7 +25,6 @@ def mock_settings() -> MagicMock:
     """Minimal mock Settings for MetricExpirationManager."""
     settings = MagicMock()
     settings.monitoring.metric_ttl_multiplier = 2.0
-    settings.monitoring.max_cardinality_per_collector = 10000
     # Tiers are gone (#631): the fallback TTL is now
     # scheduler.resolve_interval_seconds * metric_ttl_multiplier. 300 * 2.0 = 600s,
     # matching the default TTL these tests assert against.

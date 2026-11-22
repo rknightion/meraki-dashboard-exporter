@@ -250,10 +250,10 @@ point, not a supported scale tier. Set requests and limits from a representative
 the topology, enabled collectors, cardinality, and observed RSS recorded. Keep headroom for normal
 variation. Turning the clients collector **on** raises cardinality and memory substantially.
 
-`MetricTTL` and cardinality caps are tunables, not fixes:
-`MERAKI_EXPORTER_MONITORING__MAX_CARDINALITY_PER_COLLECTOR` (default `10000`) sheds oldest label
-sets per collector, and `MERAKI_EXPORTER_CARDINALITY__MAX_SERIES_PER_FAMILY` (default `50000`)
-bounds per-family growth.
+`MetricTTL` and cardinality caps are tunables, not fixes.
+`MERAKI_EXPORTER_CARDINALITY__MAX_SERIES_PER_FAMILY` (default `50000`) sets the per-family
+threshold. `MERAKI_EXPORTER_CARDINALITY__ACTION` selects `warn`, which preserves series, or
+`drop`, which sheds the oldest tracked series. The cardinality counter rises in both modes.
 
 ### Largest populated fixture scrape render
 

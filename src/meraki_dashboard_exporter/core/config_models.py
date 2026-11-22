@@ -352,12 +352,6 @@ class MonitoringSettings(BaseModel):
         le=10.0,
         description="Multiplier for metric TTL (collection_interval * multiplier)",
     )
-    max_cardinality_per_collector: int = Field(
-        10000,
-        ge=100,
-        le=1000000,
-        description="Maximum number of tracked label sets per collector before shedding oldest",
-    )
     liveness_max_stale_seconds: int = Field(
         0,
         ge=0,
@@ -1403,10 +1397,11 @@ KNOWN_NON_SCHEMA_ENV_VARS: frozenset[str] = frozenset({
     "MERAKI_EXPORTER_COMMIT",
 })
 
-# Env vars removed at v1 (the de-tiering, #631). pydantic-settings silently
-# ignores them, so an operator still setting one gets no effect and no clue.
+# Removed env vars are silently ignored by pydantic-settings, so an operator
+# still setting one gets no effect and no clue.
 # Each maps to the surviving replacement the startup warning points at.
 REMOVED_ENV_VARS: dict[str, str] = {
+    "MERAKI_EXPORTER_MONITORING__MAX_CARDINALITY_PER_COLLECTOR": "MERAKI_EXPORTER_CARDINALITY__MAX_SERIES_PER_FAMILY",
     "MERAKI_EXPORTER_UPDATE_INTERVALS__FAST": "MERAKI_EXPORTER_SCHEDULER__GROUP_INTERVAL_OVERRIDES",
     "MERAKI_EXPORTER_UPDATE_INTERVALS__MEDIUM": "MERAKI_EXPORTER_SCHEDULER__GROUP_INTERVAL_OVERRIDES",
     "MERAKI_EXPORTER_UPDATE_INTERVALS__SLOW": "MERAKI_EXPORTER_SCHEDULER__GROUP_INTERVAL_OVERRIDES",
@@ -1421,8 +1416,8 @@ def find_removed_env_vars(
 ) -> list[tuple[str, str]]:
     """Return ``(original_key, replacement_hint)`` for each set, now-removed env var.
 
-    Removed at v1 by the de-tiering (#631); pydantic-settings silently ignores
-    them. The caller emits an explicit startup WARNING naming each and pointing
+    Pydantic-settings silently ignores these. The caller emits an explicit
+    startup WARNING naming each and pointing
     at the surviving knob. Values are never returned.
     """
     found: list[tuple[str, str]] = []
@@ -1448,8 +1443,8 @@ def find_unrecognized_env_vars(
     returns the offending original key names (values are never returned) so the
     caller can emit a startup WARN (#515). A ``<KNOWN>_FILE`` variant (the
     file-based secret convention, #587) is treated as recognised, as are the
-    directly-consumed build-metadata vars (#634) and the vars removed at v1
-    (#631, reported separately with migration guidance by
+    directly-consumed build-metadata vars (#634) and removed vars
+    (reported separately with migration guidance by
     :func:`find_removed_env_vars`).
     """
     known = known_env_var_names(model_cls, prefix=prefix, delimiter=delimiter)
@@ -1464,7 +1459,7 @@ def find_unrecognized_env_vars(
         # Non-schema build metadata consumed directly via os.environ (#634).
         if upper in KNOWN_NON_SCHEMA_ENV_VARS:
             continue
-        # Removed at v1 — reported with migration guidance elsewhere (#631).
+        # Removed vars are reported with migration guidance elsewhere.
         if upper in REMOVED_ENV_VARS:
             continue
         # Accept the file-based secret convention: MERAKI_EXPORTER_..._FILE

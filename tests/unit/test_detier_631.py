@@ -250,6 +250,27 @@ class TestForceRunGate:
 class TestRemovedEnvVarWarning:
     """Removed tier env vars are reported with migration guidance (#631)."""
 
+    def test_removed_collector_cardinality_env_does_not_block_settings(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An obsolete value is ignored, not validated or leaked, with migration guidance."""
+        from structlog.testing import capture_logs
+
+        from meraki_dashboard_exporter.core.config import Settings
+
+        old_key = "MERAKI_EXPORTER_MONITORING__MAX_CARDINALITY_PER_COLLECTOR"
+        replacement = "MERAKI_EXPORTER_CARDINALITY__MAX_SERIES_PER_FAMILY"
+        old_value = "not-a-number-private-marker"
+        monkeypatch.setenv(old_key, old_value)
+        with capture_logs() as logs:
+            settings = Settings(meraki={"api_key": "a" * 40})
+        assert "max_cardinality_per_collector" not in type(settings.monitoring).model_fields
+        warnings = [entry for entry in logs if entry.get("env_var") == old_key]
+        assert len(warnings) == 1
+        assert warnings[0]["use_instead"] == replacement
+        assert "removed" in warnings[0]["event"]
+        assert old_value not in str(logs)
+
     def test_find_removed_env_vars_maps_to_replacements(self) -> None:
         """Find removed env vars maps to replacements."""
         from meraki_dashboard_exporter.core.config_models import find_removed_env_vars
