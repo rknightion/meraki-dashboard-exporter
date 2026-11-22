@@ -78,6 +78,8 @@ class InsightApplication(BaseModel):
     (spec-only) response until Phase-6 live verification.
     """
 
+    __meraki_op__ = "getOrganizationInsightApplications"
+
     model_config = ConfigDict(extra="allow")
 
     applicationId: str | None = None
@@ -91,6 +93,8 @@ class InsightHealthBucket(BaseModel):
     with no traffic, and the newest bucket may be incomplete. ``goodput`` fields
     are modelled but deliberately never emitted (no documented unit).
     """
+
+    __meraki_op__ = "getNetworkInsightApplicationHealthByTime"
 
     model_config = ConfigDict(extra="allow")
 

@@ -35,6 +35,8 @@ logger = get_logger(__name__)
 class _PowerModeEvent(BaseModel):
     """One power-mode change event for an AP (#325)."""
 
+    __meraki_derived__ = True
+
     model_config = ConfigDict(extra="allow")
 
     ts: str | None = None
@@ -46,6 +48,8 @@ class _PowerModeRow(BaseModel):
 
     Lenient (``extra="allow"``); only the newest event's ``powerMode`` is used.
     """
+
+    __meraki_op__ = "getOrganizationWirelessDevicesPowerModeHistory"
 
     model_config = ConfigDict(extra="allow")
 

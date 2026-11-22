@@ -39,6 +39,8 @@ class ApiRequestEntry(BaseModel):
     so PII can never reach a metric label even by accident (#274).
     """
 
+    __meraki_op__ = "getOrganizationApiRequests"
+
     model_config = ConfigDict(extra="ignore")
 
     operationId: str | None = None

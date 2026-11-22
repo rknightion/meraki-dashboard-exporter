@@ -43,7 +43,7 @@ _UNION_ORIGINS = frozenset({typing.Union, types.UnionType})
 # correct pattern in this codebase (e.g. getNetworkClients firstSeen/lastSeen).
 _TYPE_MAP: dict[str, tuple[type, ...]] = {
     "string": (str, datetime.datetime, datetime.date),
-    "integer": (int, datetime.datetime, datetime.date),
+    "integer": (int, float, datetime.datetime, datetime.date),
     "number": (float, int, datetime.datetime, datetime.date),
     "boolean": (bool,),
     "array": (list, tuple),

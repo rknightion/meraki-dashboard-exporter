@@ -74,6 +74,8 @@ class _LossDirection(BaseModel):
     Lenient (``extra="allow"``) so renamed/added fields never break parsing.
     """
 
+    __meraki_derived__ = True
+
     model_config = ConfigDict(extra="allow")
 
     total: int | None = None
@@ -84,6 +86,8 @@ class _LossDirection(BaseModel):
 class _ClientRef(BaseModel):
     """Client identity block on a per-client packet-loss row."""
 
+    __meraki_derived__ = True
+
     model_config = ConfigDict(extra="allow")
 
     id: str | None = None
@@ -92,6 +96,8 @@ class _ClientRef(BaseModel):
 
 class _NetworkRef(BaseModel):
     """Network identity block on a per-client packet-loss row."""
+
+    __meraki_derived__ = True
 
     model_config = ConfigDict(extra="allow")
 
@@ -108,6 +114,8 @@ class _PacketLossByClientRow(BaseModel):
     the associated AP serial, so ``device.serial`` is deliberately not emitted.
     """
 
+    __meraki_op__ = "getOrganizationWirelessDevicesPacketLossByClient"
+
     model_config = ConfigDict(extra="allow")
 
     downstream: _LossDirection | None = None
@@ -118,6 +126,8 @@ class _PacketLossByClientRow(BaseModel):
 
 class _SignalQualityRow(BaseModel):
     """One signal-quality-history bucket (``snr`` dB / ``rssi`` dBm)."""
+
+    __meraki_op__ = "getNetworkWirelessSignalQualityHistory"
 
     model_config = ConfigDict(extra="allow")
 

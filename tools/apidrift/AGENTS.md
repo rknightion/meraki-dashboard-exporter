@@ -42,9 +42,9 @@ exporter actually consumes, and checks the exporter's Pydantic models against li
   undescribed response, so a model with any untyped mapped op reports one `spec-untyped` finding and
   has its `model-extra` findings suppressed. Do not "fix" it by deleting model fields.
 - Deprecation is checked over the consumed operation set, not the mapped models
-  (`check_deprecated_operations`), because `conformance_models()` collects only models defined in
-  `core/api_models.py` and `core/domain_models.py` and would miss one that lives in a collector
-  module. Deprecated in both specs is `INFO op-deprecated`, non-gating on purpose so a years-old
+  (`check_deprecated_operations`), so operations without mapped models are covered too.
+  `conformance_models()` discovers response models throughout the package, excluding nonresponse
+  modules. Deprecated in both specs is `INFO op-deprecated`, non-gating on purpose so a years-old
   deprecation cannot pin the tracking issue open; deprecated in live only is
   `WARNING op-newly-deprecated`, and re-vendoring the baseline is its acknowledge path. Ops absent
   from the live spec are skipped: `BREAKING missing-op` already covers removal, and the consumed set

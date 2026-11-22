@@ -11,21 +11,58 @@ def conformance_models() -> list[type]:
     *defined in* the model modules are returned — re-exported ``BaseModel`` and
     foreign subclasses are excluded.
     """
+    import importlib
+    import pkgutil
+    import sys
+
+    import structlog
     from pydantic import BaseModel
 
-    # Explicit submodule imports: mypy rejects `from ...core import api_models`
-    # (attr-defined) because the submodules aren't re-exported from core/__init__.
-    import meraki_dashboard_exporter.core.api_models as api_models  # noqa: PLR0402
-    import meraki_dashboard_exporter.core.domain_models as domain_models  # noqa: PLR0402
+    import meraki_dashboard_exporter
 
-    models: list[type] = []
-    for module in (api_models, domain_models):
-        for obj in vars(module).values():
-            if (
-                isinstance(obj, type)
-                and issubclass(obj, BaseModel)
-                and obj is not BaseModel
-                and obj.__module__ == module.__name__
-            ):
-                models.append(obj)
-    return models
+    excluded = {
+        "meraki_dashboard_exporter.app",
+        "meraki_dashboard_exporter.core.config",
+        "meraki_dashboard_exporter.core.config_models",
+        "meraki_dashboard_exporter.models.webhook",
+    }
+    config = structlog.get_config()
+    was_configured = structlog.is_configured()
+
+    def raise_import_error(name: str) -> None:
+        error = sys.exception()
+        if error is None:
+            raise RuntimeError(f"Package walk failed for {name} without an exception")
+        raise error
+
+    try:
+        structlog.configure(
+            logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
+            cache_logger_on_first_use=False,
+        )
+        module_names = sorted(
+            info.name
+            for info in pkgutil.walk_packages(
+                meraki_dashboard_exporter.__path__,
+                meraki_dashboard_exporter.__name__ + ".",
+                onerror=raise_import_error,
+            )
+            if info.name not in excluded and info.name.rsplit(".", 1)[-1] != "__main__"
+        )
+        models: list[type] = []
+        for name in module_names:
+            module = importlib.import_module(name)
+            for obj in vars(module).values():
+                if (
+                    isinstance(obj, type)
+                    and issubclass(obj, BaseModel)
+                    and obj is not BaseModel
+                    and obj.__module__ == module.__name__
+                ):
+                    models.append(obj)
+        return models
+    finally:
+        if was_configured:
+            structlog.configure(**config)
+        else:
+            structlog.reset_defaults()

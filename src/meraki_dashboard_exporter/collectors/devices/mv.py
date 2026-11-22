@@ -36,6 +36,8 @@ class CameraSenseConfig(BaseModel):
     ``extra="allow"`` keeps parsing forward-compatible until then.
     """
 
+    __meraki_op__ = "getDeviceCameraSense"
+
     senseEnabled: bool | None = None
     mqttBrokerId: str | int | None = None
 
@@ -44,6 +46,8 @@ class CameraSenseConfig(BaseModel):
 
 class CameraOnboardingNetworkRef(BaseModel):
     """The ``network`` object of a camera onboarding-status entry (#306)."""
+
+    __meraki_derived__ = True
 
     id: str | None = None
 
@@ -58,6 +62,8 @@ class CameraOnboardingStatusEntry(BaseModel):
     accepted (only one is expected to actually appear) so parsing degrades
     gracefully either way; ``extra="allow"`` keeps it forward-compatible.
     """
+
+    __meraki_op__ = "getOrganizationCameraOnboardingStatuses"
 
     serial: str | None = None
     networkId: str | None = None
@@ -90,6 +96,8 @@ class CameraAnalyticsRecentZone(BaseModel):
     during the #617 integration/wiring pass — it lives here to keep the MV lane
     within its owned file set while ``domain_models.py`` is a shared seam.
     """
+
+    __meraki_op__ = "getDeviceCameraAnalyticsRecent"
 
     zoneId: str | int | None = None
     entrances: float | None = None

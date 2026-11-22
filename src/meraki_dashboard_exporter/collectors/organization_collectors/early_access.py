@@ -55,6 +55,8 @@ class EarlyAccessOptIn(BaseModel):
     collector rather than failing the whole run.
     """
 
+    __meraki_op__ = "getOrganizationEarlyAccessFeaturesOptIns"
+
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     id: str | None = None
