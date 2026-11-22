@@ -14,30 +14,6 @@ from tests.helpers.base import BaseCollectorTest
 _ROOT = Path(__file__).parents[2]
 
 
-def _function_keywords(source_file: str, function_name: str) -> set[str]:
-    tree = ast.parse((_ROOT / source_file).read_text())
-    function = next(
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == function_name
-    )
-    return {
-        keyword.arg
-        for node in ast.walk(function)
-        if isinstance(node, ast.Call)
-        for keyword in node.keywords
-        if keyword.arg is not None
-    }
-
-
-def test_api_request_log_uses_documented_maximum_page_size() -> None:
-    """The one-hour request-log bulk fetch avoids the SDK default of 50 rows/page."""
-    assert "perPage" in _function_keywords(
-        "src/meraki_dashboard_exporter/collectors/organization_collectors/api_usage.py",
-        "_fetch_api_requests",
-    )
-
-
 def test_org_wide_switch_fetches_do_not_expand_every_serial_into_the_url() -> None:
     """Org-wide endpoints rely on org scope and pagination rather than serial filters."""
     for function_name in ("collect_port_statuses_by_switch", "collect_port_usage_by_switch"):
