@@ -8,9 +8,9 @@ Collectors run and are organized as summarized below.
 - **Sub-collectors** are registered by their parent coordinator.
 
 ## Execution Model
-- **Update schedules**: Collectors run on configurable schedules (see [Metrics Overview](../metrics/overview.md) for tier definitions).
+- **Update schedules**: Collectors run on scheduler-solved cadences (see [Scheduler Architecture](../observability/scheduler.md)).
 - **Shared inventory**: Cached org/network/device inventories reduce duplicate API calls across collectors.
 - **Metric lifecycle**: Metrics set through expiration-aware helpers are cleaned up when stale.
 - **Health & cardinality**: The exporter emits collector health and cardinality metrics for operational visibility.
 
-For the full list of collectors and their tiers, see the generated [Collector Reference](reference.md).
+For the full list of collectors, see the generated [Collector Reference](reference.md).

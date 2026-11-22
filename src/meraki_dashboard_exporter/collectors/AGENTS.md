@@ -10,8 +10,9 @@
 - Sub-collectors are instantiated by hand in their parent coordinator's `__init__` and never carry
   the decorator.
 - A registered class is matched against `settings.collectors.active_collectors` by
-  `ClassName.replace("Collector", "").lower()`. A configured name matching no class only warns, so a
-  typo disables a collector quietly.
+  `ClassName.replace("Collector", "").lower()`. A name in `enabled_collectors` matching no class
+  only warns, so a typo disables a collector quietly; a name in `disable_collectors` matching no class
+  is ignored without a log line, so a typo there leaves the collector running.
 - Implement `_initialize_metrics()` and `_collect_impl()`. Never override `collect()`: it wraps
   `_collect_impl()` with tracing and the duration/error/success metrics.
 

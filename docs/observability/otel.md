@@ -101,7 +101,7 @@ export MERAKI_EXPORTER_OTEL__CLIENT_KEY_PATH=/etc/otel/client-key.pem
 
 Per-entity signals whose population is unbounded or churny — a client ID/MAC, a per-delivery
 webhook attempt, any row that fans out per-request rather than per-inventory-item — must never
-become a labelled Prometheus series (see the cardinality rules in the root `CLAUDE.md`). Instead
+become a labelled Prometheus series (see the cardinality rules in the root `AGENTS.md`). Instead
 they are emitted as structured OTLP **log** records through a dedicated `DataLogEmitter`
 (`core/otel_data_logs.py`):
 
@@ -113,7 +113,7 @@ they are emitted as structured OTLP **log** records through a dedicated `DataLog
 - New per-client (or otherwise unbounded per-entity) signals route to the data-log emitter, not to
   a new labelled metric. The existing opt-in `meraki_client_*`/`meraki_clients_*` surface
   (`collectors/clients.py`) is grandfathered under the ID-only + `meraki_client_info` join
-  contract (#533) — it predates this doctrine and is not migrated by it.
+  contract — it predates this doctrine and is not migrated by it.
 
 This channel is completely independent of tracing: an operator can enable data logs without
 tracing, or vice versa. It is also independent of the app's own stdout logging — the emitter

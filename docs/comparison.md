@@ -25,7 +25,8 @@ page is about architecture and positioning, not a feature checklist.
 ## Design choices specific to this exporter
 
 **Async collection with bounded concurrency.** The Meraki Python SDK is synchronous, so
-collectors run it via `asyncio.to_thread()` and fan out per-device/per-network work through
+every call goes through one facade that runs it on an executor thread behind the per-organization
+rate limiter, and collectors fan out per-device/per-network work through
 `ManagedTaskGroup`, which caps in-flight requests at `settings.api.concurrency_limit` rather
 than firing an unbounded `asyncio.gather()`. This keeps a single collection cycle from
 saturating the Meraki API's per-organization rate limit even against large estates.

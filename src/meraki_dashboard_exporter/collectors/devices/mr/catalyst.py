@@ -25,6 +25,8 @@ logger = get_logger(__name__)
 class _ControllerRef(BaseModel):
     """The wireless controller an AP is associated with."""
 
+    __meraki_derived__ = True
+
     model_config = ConfigDict(extra="allow")
 
     serial: str | None = None
@@ -32,6 +34,8 @@ class _ControllerRef(BaseModel):
 
 class _NetworkRef(BaseModel):
     """Network reference on a wireless-controller row."""
+
+    __meraki_derived__ = True
 
     model_config = ConfigDict(extra="allow")
 
@@ -45,6 +49,8 @@ class _WirelessControllerRow(BaseModel):
     with CW* hardware verifies the shape. The ``tags``/``details`` arrays are
     deliberately NOT modelled here because they are never emitted.
     """
+
+    __meraki_op__ = "getOrganizationWirelessDevicesWirelessControllersByDevice"
 
     model_config = ConfigDict(extra="allow")
 

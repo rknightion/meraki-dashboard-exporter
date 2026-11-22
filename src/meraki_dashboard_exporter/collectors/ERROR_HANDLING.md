@@ -2,7 +2,7 @@
 
 ## When to use `@with_error_handling()` decorator
 
-- All methods that make API calls (directly or via `asyncio.to_thread`)
+- All methods that make API calls (through `facade_for(self).call(...)`)
 - All top-level `_collect_impl()` and `collect()` methods
 - Parameters: `continue_on_error=True` for non-critical collectors, appropriate `ErrorCategory`
 

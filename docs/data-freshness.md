@@ -106,7 +106,7 @@ observe a device transitioning to offline, Cisco Meraki's own cloud has to notic
 stopped checking in and flip its dashboard status. Cisco does not publish an exact, universal
 heartbeat/threshold figure in its documentation for this.
 
-!!! warning "⚠ Unverified figure — flagged for #619"
+!!! warning "Unverified figure"
     We could not confirm a precise, documented number for Meraki's own offline-detection delay.
     Commonly observed behavior (community reports and casual Meraki documentation references,
     **not** an authoritative published SLA) puts this in the **low single-digit minutes** range
@@ -114,7 +114,7 @@ heartbeat/threshold figure in its documentation for this.
     explicitly documented with their own multi-minute thresholds (Cisco's own example: a Auto VPN
     down alert requires the tunnel down for "more than 5 minutes" before firing). Treat any
     specific number here as an **approximate range of a few minutes**, not a guarantee, until
-    Phase 6 live verification confirms it against a real deployment.
+    it is confirmed against a real deployment.
 
 ## Worst-case device-down visibility
 

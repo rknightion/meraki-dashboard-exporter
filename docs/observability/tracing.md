@@ -38,10 +38,10 @@ Child spans follow parent sampling decisions.
 
 | Component | What's traced |
 |---|---|
-| Meraki SDK (requests) | API call timing, status, rate-limit headers. The Meraki Python SDK still uses `requests` under the hood, so every Dashboard API call produces a span via `RequestsInstrumentor`. |
-| httpx | Any httpx usage is traced |
+| Meraki SDK (httpx) | API call timing, status and rate-limit headers, traced through `HTTPXClientInstrumentor`. |
+| httpx | Other httpx usage is also traced |
 | FastAPI | All endpoints except `/health` and `/metrics` (the `/status` health-dashboard page is traced) |
-| Threading | `asyncio.to_thread()` operations |
+| Threading | Work the SDK facade runs on executor threads |
 | Logging | Trace IDs added to structured log output |
 
 ## Span Attributes
@@ -52,7 +52,6 @@ Common attributes include:
 - `api.duration_seconds`
 - `api.retry_count`
 - `meraki.request_id`, `meraki.retry_after`, `meraki.rate_limit.remaining`
-- `http.response.size`
 
 ## Span-derived Metrics
 

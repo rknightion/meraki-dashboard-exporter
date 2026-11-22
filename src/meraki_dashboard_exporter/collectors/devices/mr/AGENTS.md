@@ -45,6 +45,8 @@ means folding it into a pass that already carries `org_id`/`org_name` rather tha
 - `catalyst.collect_wireless_controllers` inside `collect_ssid_status`, gated on
   `MR_WIRELESS_CONTROLLER`, whose `enabled_fn` disables the group when `catalyst_ap_count == 0`.
   The response's `tags` and `details` arrays are deliberately not emitted.
+- `rf_profiles.collect_rf_profile_assignments` inside `collect_ssid_status`, gated on `MR_RF_PROFILES`.
+- `firewall.collect_ssid_firewall` inside `collect_connection_stats`, gated on `MR_SSID_FIREWALL`.
 - `client_logs.collect_client_logs` inside `collect_ssid_usage`.
 - `performance.collect_power_mode` inside `collect_ethernet_status`.
 

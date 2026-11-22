@@ -51,6 +51,8 @@ class _SignalQualityRow(BaseModel):
     break parsing.
     """
 
+    __meraki_op__ = "getNetworkWirelessSignalQualityHistory"
+
     model_config = ConfigDict(extra="allow")
 
     startTs: str | None = None

@@ -19,7 +19,7 @@ Start here for a quick overall picture, before diving into a specific symptom be
 curl -s http://<host>:9099/health   # liveness: process is not wedged
 curl -s http://<host>:9099/ready    # readiness: every priority<=3 collector has completed once
 curl -s http://<host>:9099/status   # self-health dashboard: auth, backoff, staleness, rate limits
-curl -s http://<host>:9099/config   # redacted effective configuration (#312)
+curl -s http://<host>:9099/config   # redacted effective configuration
 ```
 
 ## 401/403 errors (bad API key or org API access disabled)

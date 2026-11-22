@@ -15,7 +15,6 @@ from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExport
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.instrumentation.logging import LoggingInstrumentor
-from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.instrumentation.threading import ThreadingInstrumentor
 from opentelemetry.propagate import set_global_textmap
 from opentelemetry.sdk.resources import Resource
@@ -298,16 +297,10 @@ class TracingConfig:
 
     def _instrument_libraries(self) -> None:
         """Instrument all relevant libraries for tracing."""
-        # Instrument requests (used by Meraki SDK)
-        RequestsInstrumentor().instrument(
-            tracer_provider=self._tracer_provider,
-            response_hook=self._requests_response_hook,
-        )
-        logger.debug("Instrumented requests library")
-
-        # Instrument httpx (we use it, might as well trace it)
+        # Instrument httpx, used by the Meraki SDK
         HTTPXClientInstrumentor().instrument(
             tracer_provider=self._tracer_provider,
+            response_hook=self._httpx_response_hook,
         )
         logger.debug("Instrumented httpx library")
 
@@ -324,41 +317,16 @@ class TracingConfig:
         )
         logger.debug("Instrumented logging")
 
-    def _requests_response_hook(self, span: Any, request: Any, response: Any) -> None:
-        """Response hook to enrich requests spans with additional attributes.
-
-        The opentelemetry-instrumentation-requests API exposes ``response_hook``
-        with the signature ``(span, request, response)``; the previously-used
-        ``span_callback`` kwarg is not supported by the instrumentor and was
-        silently dropped, so this enrichment never ran (F-022).
-
-        Parameters
-        ----------
-        span : Any
-            The span being recorded.
-        request : Any
-            The outgoing request object (unused, present for the hook signature).
-        response : Any
-            The HTTP response object.
-
-        """
-        if span and response:
-            # Add Meraki-specific attributes
-            if hasattr(response, "headers"):
-                # Add rate limit headers if present
-                if "X-Request-Id" in response.headers:
-                    span.set_attribute("meraki.request_id", response.headers["X-Request-Id"])
-                if "Retry-After" in response.headers:
-                    span.set_attribute("meraki.retry_after", response.headers["Retry-After"])
-                if "X-Rate-Limit-Remaining" in response.headers:
-                    span.set_attribute(
-                        "meraki.rate_limit.remaining",
-                        response.headers["X-Rate-Limit-Remaining"],
-                    )
-
-            # Add response size
-            if hasattr(response, "content"):
-                span.set_attribute("http.response.size", len(response.content))
+    def _httpx_response_hook(self, span: Any, request: Any, response: Any) -> None:
+        """Enrich a sync httpx span with response headers when present."""
+        if span and response and response.headers is not None:
+            headers = response.headers
+            if "X-Request-Id" in headers:
+                span.set_attribute("meraki.request_id", headers["X-Request-Id"])
+            if "Retry-After" in headers:
+                span.set_attribute("meraki.retry_after", headers["Retry-After"])
+            if "X-Rate-Limit-Remaining" in headers:
+                span.set_attribute("meraki.rate_limit.remaining", headers["X-Rate-Limit-Remaining"])
 
     def instrument_fastapi(self, app: FastAPI) -> None:
         """Instrument FastAPI application.

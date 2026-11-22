@@ -29,9 +29,9 @@ hostname, a user-supplied description, DNS-resolved hostname, IP address, and th
 attached to. Depending on your environment and local law, some of these (MAC address, hostname,
 resolved DNS name) may constitute personal data under GDPR or similar regimes.
 
-## The current data contract (post-#533): ID-only numeric series + one join carrier
+## The current data contract: ID-only numeric series + one join carrier
 
-As of #533, **every numeric Prometheus client series carries only `client_id`** — a stable Meraki
+**Every numeric Prometheus client series carries only `client_id`** — a stable Meraki
 identifier — as its client-scoped label, never mac/hostname/description/ssid. Confirmed in
 `collectors/clients.py::_initialize_metrics`: `client_status`, `client_usage_sent/recv/total_bytes`,
 `client_app_usage_*_bytes`, and the signal-quality gauges (`wireless_client_rssi`/`_snr`) all label
@@ -136,7 +136,7 @@ or diagnoses client metrics. It may also record associated counts and network/or
 ## OTel data logs: the other PII surface, and its own opt-in gate
 
 Independently of Prometheus metrics, the exporter has an optional OTLP **data-log** emitter
-(`otel.logs`, `core/otel_data_logs.py`, #622) for high-cardinality per-client signals (e.g. per-client
+(`otel.logs`, `core/otel_data_logs.py`) for high-cardinality per-client signals (e.g. per-client
 wireless packet loss) that must never become a labelled Prometheus series — see
 [OpenTelemetry → data logs vs. metrics](observability/otel.md#data-logs-vs-metrics-the-boundary-rule)
 for the full boundary rule. This channel is:
@@ -172,7 +172,7 @@ for the full boundary rule. This channel is:
 
 The safest and default posture is **`clients.enabled=false`** — no client-scoped data of any kind is
 collected. If you need client visibility, the ID-only-numeric-series-plus-`meraki_client_info`-join
-design (#533) already minimises what lands in your metrics TSDB by default; the remaining exposure to
+design already minimises what lands in your metrics TSDB by default; the remaining exposure to
 actively manage is the `/clients` HTML page (gate it with `server.api_token` and/or
 `server.ui_enabled=false` if the exporter is reachable by anyone other than trusted operators) and, if
 you separately opt into OTel data logs, the `include_identifiers` flag on that channel.

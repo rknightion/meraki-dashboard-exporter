@@ -177,8 +177,9 @@ Ordered by leverage. These are the only levers that actually reduce the calls a 
    [Network Filter](#network-filter).
 2. **Disable collectors you don't need** via
    `MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS` (JSON array or CSV). Disabling
-   `mtsensor` removes the sensor-reading endpoint group entirely; disabling `network_health`
+   `mtsensor` removes the sensor-reading endpoint group entirely; disabling `networkhealth`
    removes the network-health endpoint groups (at the cost of RF/connection-quality metrics).
+   A name that matches no collector is ignored silently.
 3. **Keep the clients collector OFF** (default). It is the worst per-client fan-out; it is disabled
    by default (`MERAKI_EXPORTER_CLIENTS__ENABLED=false`) and per-client signal quality is a further
    opt-in (`MERAKI_EXPORTER_CLIENTS__SIGNAL_QUALITY_ENABLED=false`). Leave both off at scale.
@@ -401,7 +402,7 @@ debugging/transition fallback, not a recommended steady-state choice.
 | `meraki_exporter_cardinality_limit_reached_total` | Per-family cardinality cap hit; rises in both `warn` and `drop` modes |
 | `meraki_exporter_org_collection_status` | Per-org collection health (`0` = every sub-collection failed) |
 | `meraki_exporter_collector_duration_seconds` | How long the admitted collector body executes; it excludes admission queue wait |
-| `meraki_network_filter_networks` | How many networks survive the filter (verify your cuts landed) |
+| `meraki_network_filter_resolved` | How many networks survive the filter (verify your cuts landed) |
 
 ## Troubleshooting
 

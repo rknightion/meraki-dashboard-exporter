@@ -32,7 +32,7 @@ current evidence record as of **2026-08-12**.
 
 **MX**, **MG**, and **MV** are not present in the homelab. A sanitised response from a real
 deployment can move a response envelope from spec-verified to community-reported; maintainers then
-add it through the corpus and preset path tracked in #713.
+add it to the recorded response corpus described in [Failure Harness](development/failure-harness.md).
 
 ## Per-product-line coverage
 
@@ -46,7 +46,7 @@ add it through the corpus and preset path tracked in #713.
 | **MX** (security appliances) | **Spec-verified — 2026-08-12:** SDK, vendor docs, and spec only. No live MX, HA, VPN, uplink, firewall, or security-event sample. | `mx.py`, `mx_firewall.py`, `mx_ha.py`, `mx_uplink_health.py`, `mx_uplink_usage.py`, `mx_vpn.py` | ~36 dedicated metrics. |
 | **Z-series / vMX** | **Spec-verified — 2026-08-12:** code and spec through MX routing only. | MX routing | No separate live response evidence. |
 | **MG** (cellular gateways) | **Spec-verified — 2026-08-12:** SDK and spec only. No uplink, eSIM, tower, or HA sample. | `collectors/devices/mg.py` | ~11 dedicated metrics. |
-| **MV** (security cameras) | **Spec-verified — 2026-08-12:** SDK and spec only; deprecations are tracked in #691. | `collectors/devices/mv.py` | ~10 quality, retention, and Sense-configuration metrics. |
+| **MV** (security cameras) | **Spec-verified — 2026-08-12:** SDK and spec only; the camera analytics endpoints it reads are deprecated by Meraki and a migration is pending. | `collectors/devices/mv.py` | ~10 quality, retention, and Sense-configuration metrics. |
 
 Beyond the six device-specific collectors, `DeviceMetricName` (~7 metrics) and
 `NetworkMetricName`/`NetworkHealthMetricName` (device-agnostic health signals such as connection

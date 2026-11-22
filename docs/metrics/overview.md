@@ -167,7 +167,7 @@ per-client/per-entity signals route to the OTel data-log emitter instead; see [O
 vs. metrics](../observability/otel.md#data-logs-vs-metrics-the-boundary-rule) for the full
 doctrine, config, and record shape. The existing opt-in `meraki_client_*`/`meraki_clients_*`
 numeric series (`collectors/clients.py`) are grandfathered under the ID-only +
-`meraki_client_info` join contract (#533, see the [Stability
+`meraki_client_info` join contract (see the [Stability
 Policy](../stability.md#name-labels-are-not-part-of-numeric-series)) — they predate this doctrine
 and are not migrated by it.
 

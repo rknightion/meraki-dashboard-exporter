@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictFloat
 
 from apidrift.conformance import check_models, coverage
 
@@ -153,6 +153,20 @@ def test_structured_submodel_vs_bare_object_is_info_not_gating() -> None:
     assert not [f for f in findings if f.severity == "WARNING"]
     narrower = [f for f in findings if f.kind == "model-narrower"]
     assert narrower and all(f.severity == "INFO" for f in narrower)
+
+
+def test_integer_response_is_accepted_by_float_models() -> None:
+    class FloatModel(BaseModel):
+        __meraki_op__ = "getTyped"
+        count: float
+
+    class StrictFloatModel(BaseModel):
+        __meraki_op__ = "getTyped"
+        count: StrictFloat
+
+    for model in (FloatModel, StrictFloatModel):
+        assert model.model_validate_json('{"count": 7}').count == 7.0
+        assert check_models([model], SPEC) == []
 
 
 def test_real_type_mismatch_still_warns() -> None:

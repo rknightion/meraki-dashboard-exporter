@@ -30,12 +30,10 @@ docker run -d \
   health metrics (`meraki_exporter_*`), always enabled.
 - `curl http://localhost:9099/health` should return `{"status": "healthy"}`.
 - `http://localhost:9099/status` shows the exporter self-health dashboard
-  (collector tiers, last run results, etc.). Network filter resolution is not
-  shown on `/status` yet (tracked in
-  [#311](https://github.com/rknightion/meraki-dashboard-exporter/issues/311)) —
-  it is observable via the `meraki_network_filter_*` metrics instead.
-- `http://localhost:9099/cardinality` reports appear after the first full
-  collection cycle (defaults to 15 minutes).
+  (per-collector cadence, last run results, and the effective network filter with
+  per-organization total and included network counts).
+- `http://localhost:9099/cardinality` reports appear after the first cardinality
+  analysis, about five minutes after startup.
 
 The endpoints above are the common ones; see the
 [HTTP Endpoints reference](reference/endpoints.md) for the complete list

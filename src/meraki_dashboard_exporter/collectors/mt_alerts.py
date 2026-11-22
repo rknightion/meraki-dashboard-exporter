@@ -59,6 +59,8 @@ class SensorRelatedDevice(BaseModel):
     ``CameraAnalyticsRecentZone`` for the same precedent).
     """
 
+    __meraki_derived__ = True
+
     serial: str | None = None
     productType: str | None = None
 
@@ -68,6 +70,8 @@ class SensorRelatedDevice(BaseModel):
 class SensorLivestreamRelationship(BaseModel):
     """The ``relationships.livestream`` object of a sensor-relationship entry."""
 
+    __meraki_derived__ = True
+
     relatedDevices: list[SensorRelatedDevice] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="allow")
@@ -75,6 +79,8 @@ class SensorLivestreamRelationship(BaseModel):
 
 class SensorRelationshipSet(BaseModel):
     """The ``relationships`` object of a sensor-relationship entry."""
+
+    __meraki_derived__ = True
 
     livestream: SensorLivestreamRelationship | None = None
 
@@ -84,6 +90,8 @@ class SensorRelationshipSet(BaseModel):
 class SensorRelationshipDeviceRef(BaseModel):
     """The ``device`` object of a sensor-relationship entry."""
 
+    __meraki_derived__ = True
+
     serial: str | None = None
 
     model_config = ConfigDict(extra="allow")
@@ -91,6 +99,8 @@ class SensorRelationshipDeviceRef(BaseModel):
 
 class SensorRelationshipEntry(BaseModel):
     """One row from ``getNetworkSensorRelationships`` (#308)."""
+
+    __meraki_op__ = "getNetworkSensorRelationships"
 
     device: SensorRelationshipDeviceRef | None = None
     relationships: SensorRelationshipSet | None = None
