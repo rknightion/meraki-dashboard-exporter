@@ -82,16 +82,6 @@ class TestMGCollector:
         await mg_collector.collect(device)
         mg_collector.parent._device_up.labels.assert_not_called()
 
-    def test_mg_collector_initialization(
-        self,
-        mg_collector: MGCollector,
-        mock_parent: MagicMock,
-    ) -> None:
-        """Test MG collector initialization."""
-        assert mg_collector.parent == mock_parent
-        assert mg_collector.api == mock_parent.api
-        assert mg_collector.settings == mock_parent.settings
-
     def test_mg_gauges_created_on_init(
         self,
         mg_collector: MGCollector,

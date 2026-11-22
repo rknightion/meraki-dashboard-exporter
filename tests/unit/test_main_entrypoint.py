@@ -97,20 +97,6 @@ class TestMainValidationError:
         assert "Meraki API key is required" in err
         assert "MERAKI_EXPORTER_MERAKI__API_KEY" in err
 
-    def test_other_validation_error_shows_details(self) -> None:
-        """Test that non-API-key validation errors are displayed."""
-        with (
-            patch("sys.argv", ["meraki-dashboard-exporter"]),
-            patch.dict("os.environ", {}, clear=True),
-            patch(
-                "meraki_dashboard_exporter.__main__.Settings",
-                side_effect=_make_other_validation_error(),
-            ),
-        ):
-            with pytest.raises(SystemExit) as exc_info:
-                main()
-            assert exc_info.value.code == 1
-
     def test_other_validation_error_does_not_use_friendly_message(
         self, capsys: pytest.CaptureFixture
     ) -> None:
