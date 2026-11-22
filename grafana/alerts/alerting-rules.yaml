@@ -4,7 +4,7 @@
 # The Helm chart (`charts/meraki-dashboard-exporter/templates/prometheusrule.yaml`) is the
 # SINGLE SOURCE OF TRUTH for alert *logic* — it ships a Kubernetes `PrometheusRule` CR consumed
 # by the Prometheus Operator for in-cluster deployments. This file is a de-templated, concrete
-# mirror of the exact same 15 alerts for environments that are NOT running the Prometheus
+# mirror of the same alerts for environments that are NOT running the Prometheus
 # Operator: Grafana Cloud's hosted Mimir ruler, or Grafana-managed alerting backed by a Mimir/
 # Cortex data source. If you change an alert's logic, thresholds, or annotations, change BOTH
 # files — this one does not auto-sync from the chart.
@@ -77,6 +77,26 @@ groups:
             {{ $labels.collector }} has had no successful collection in over
             3x its effective cadence (meraki_exporter_collector_cadence_seconds).
             Its metrics are stale.
+
+      - alert: MerakiExporterSchedulerGroupStale
+        expr: >-
+          time() - meraki_exporter_scheduler_group_success_timestamp_seconds{job="meraki_dashboard"}
+          > on(job, instance, group) (3 * meraki_exporter_scheduler_interval_seconds{job="meraki_dashboard"})
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Endpoint group {{ $labels.group }} is stale"
+          description: "The endpoint group has not succeeded within three solved intervals."
+
+      - alert: MerakiExporterSchedulerOverBudget
+        expr: meraki_exporter_scheduler_over_budget{job="meraki_dashboard"} == 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Meraki exporter scheduler is over budget"
+          description: "Lower-priority endpoint groups are being deferred."
 
       - alert: MerakiExporterCollectorFailureStreak
         expr: meraki_exporter_collector_failure_streak{job="meraki_dashboard"} >= 3
@@ -156,26 +176,6 @@ groups:
 
   - name: meraki-exporter-device-availability
     rules:
-      - alert: MerakiExporterSchedulerGroupStale
-        expr: >-
-          time() - meraki_exporter_scheduler_group_success_timestamp_seconds{job="meraki_dashboard"}
-          > on(job, instance, group) (3 * meraki_exporter_scheduler_interval_seconds{job="meraki_dashboard"})
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Endpoint group {{ $labels.group }} is stale"
-          description: "The endpoint group has not succeeded within three solved intervals."
-
-      - alert: MerakiExporterSchedulerOverBudget
-        expr: meraki_exporter_scheduler_over_budget{job="meraki_dashboard"} == 1
-        for: 15m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Meraki exporter scheduler is over budget"
-          description: "Lower-priority endpoint groups are being deferred."
-
       # The chart renders exactly ONE of these two (toggled by .Values.prometheusRule.webhooksEnabled)
       # since they're mutually-exclusive detection paths for the same condition. This static YAML
       # ships both — disable/delete whichever doesn't match your deployment's webhook config
