@@ -1187,25 +1187,25 @@ class TestGetMetricsStats:
         assert result["timeseries_count"] >= 0
 
     def test_get_metrics_stats_excludes_cardinality(self, exporter: ExporterApp) -> None:
-        """Test that cardinality metrics are excluded from counts."""
-        # Register a temporary cardinality metric to ensure it is excluded
+        """Count ordinary families and samples but exclude cardinality monitoring."""
         from prometheus_client import Gauge
 
-        test_gauge = Gauge(
-            "meraki_exporter_cardinality_test_metric_abc",
-            "Test cardinality metric",
+        baseline = exporter._get_metrics_stats()
+        ordinary = Gauge("test_ordinary_metric_abc", "Ordinary metric", ["kind"])
+        excluded = Gauge(
+            "meraki_exporter_cardinality_test_metric_abc", "Cardinality metric", ["kind"]
         )
         try:
-            test_gauge.set(1)
-            result = exporter._get_metrics_stats()
-            # The cardinality metric should not be counted; verify it
-            # by checking a known cardinality metric is not inflating the count
-            assert result["metric_count"] >= 0
-        finally:
-            # Clean up the test gauge from the registry
-            from prometheus_client import REGISTRY
+            for kind in ("one", "two"):
+                ordinary.labels(kind=kind).set(1)
+                excluded.labels(kind=kind).set(1)
 
-            REGISTRY.unregister(test_gauge)
+            result = exporter._get_metrics_stats()
+            assert result["metric_count"] == baseline["metric_count"] + 1
+            assert result["timeseries_count"] == baseline["timeseries_count"] + 2
+        finally:
+            REGISTRY.unregister(ordinary)
+            REGISTRY.unregister(excluded)
 
 
 # ---------------------------------------------------------------------------

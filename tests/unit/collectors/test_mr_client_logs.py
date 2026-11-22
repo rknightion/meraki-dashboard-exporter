@@ -454,7 +454,6 @@ class TestSignalQualityPacing:
             await collector.collect_client_logs("org1", "Org One")
 
         history = parent.api.wireless.getNetworkWirelessSignalQualityHistory
-        assert history.call_count == 2
         assert sorted(c.kwargs["clientId"] for c in history.call_args_list) == ["c0", "c1"]
         assert len(exp.get_finished_logs()) == 2
         warnings = [e for e in logs if e["log_level"] == "warning" and e.get("limit") == 2]

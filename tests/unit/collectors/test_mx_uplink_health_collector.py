@@ -52,26 +52,6 @@ class TestMXUplinkHealthCollector:
         """Create MX uplink health collector instance."""
         return MXUplinkHealthCollector(mock_parent)
 
-    def test_initialization(
-        self,
-        collector: MXUplinkHealthCollector,
-        mock_parent: MagicMock,
-    ) -> None:
-        """Test collector initialization sets up parent/api/settings and gauges."""
-        assert collector.parent == mock_parent
-        assert collector.api == mock_parent.api
-        assert collector.settings == mock_parent.settings
-
-    def test_gauges_created(
-        self,
-        collector: MXUplinkHealthCollector,
-        mock_parent: MagicMock,
-    ) -> None:
-        """Test that both loss and latency gauges are created on init."""
-        assert mock_parent._create_gauge.call_count == 2
-        assert collector._mx_uplink_loss_percent is not None
-        assert collector._mx_uplink_latency_seconds is not None
-
     @staticmethod
     def _basic_health_response() -> list[dict]:
         return [

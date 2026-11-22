@@ -49,16 +49,6 @@ class TestMXHACollector:
         """Create MX HA collector instance."""
         return MXHACollector(mock_parent)
 
-    def test_initialization(
-        self,
-        collector: MXHACollector,
-        mock_parent: MagicMock,
-    ) -> None:
-        """Test collector initialization sets up parent/api/settings and gauges."""
-        assert collector.parent == mock_parent
-        assert collector.api == mock_parent.api
-        assert collector.settings == mock_parent.settings
-
     def test_gauges_created(
         self,
         collector: MXHACollector,

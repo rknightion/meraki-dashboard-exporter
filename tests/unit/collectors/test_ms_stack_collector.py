@@ -178,7 +178,7 @@ class TestMSStackCollector:
             return_value=[
                 {
                     "id": "stack-1",
-                    "serials": ["QAAA-0001-0001", "QAAA-0001-0002"],
+                    "serials": ["QAAA-0001-0001"],
                     "members": [
                         {"serial": "QAAA-0001-0001", "role": "active"},
                         {"serial": "QAAA-0001-0002", "role": "standby"},

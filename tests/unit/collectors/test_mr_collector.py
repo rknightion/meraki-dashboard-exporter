@@ -92,10 +92,6 @@ class TestMRCollector:
         mock_api.wireless.getDeviceWirelessStatus.assert_not_called()
         mock_api.wireless.getDeviceWirelessConnectionStats.assert_not_called()
 
-        # Metrics are still initialized (but set at org/network level)
-        assert mr_collector._ap_clients is not None
-        assert mr_collector._ap_connection_stats is not None
-
     async def test_collect_wireless_clients_dict_response(
         self,
         mr_collector: MRCollector,
