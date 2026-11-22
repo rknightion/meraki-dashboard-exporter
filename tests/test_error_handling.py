@@ -765,10 +765,14 @@ class TestPerFetchDeadline:
         assert instance.tracked_errors == []
 
     def test_only_whole_org_coordinators_opt_out(self) -> None:
-        """Only the five whole-organisation passes omit the fetch deadline."""
+        """Only the six whole-sweep coordinators omit the fetch deadline."""
         source_root = Path(__file__).resolve().parents[1] / "src"
         expected = {
             ("meraki_dashboard_exporter/collectors/device.py", "_collect_org_devices"),
+            (
+                "meraki_dashboard_exporter/collectors/devices/mr/firewall.py",
+                "collect_ssid_firewall",
+            ),
             (
                 "meraki_dashboard_exporter/collectors/network_health.py",
                 "_collect_org_network_health",

@@ -316,15 +316,15 @@ class DeviceCollector(MetricCollector):
             cost_fn=lambda s: 2 * s.appliance_network_count,
             self_paced=True,  # per-key timestamp throttle (#789)
         ),
-        # Phase 4 (#290): L3+L7 firewall rules per enabled SSID (2 calls/SSID). OrgShape
-        # has no SSID count; estimate ~4 enabled SSIDs/network -> 2*4*wireless_network_count.
-        # This is an estimate refined at runtime by the enabled-only filter.
+        # One SSID discovery per network plus L3+L7 per enabled SSID. OrgShape
+        # has no SSID count; estimate four enabled SSIDs per wireless network.
         EndpointGroup(
             name=EndpointGroupName.MR_SSID_FIREWALL,
             priority=4,
             floor_seconds=900,
-            cost_fn=lambda s: 8 * s.wireless_network_count,
+            cost_fn=lambda s: 9 * s.wireless_network_count,
             enabled_fn=lambda s: s.ap_count > 0,  # gate only reached when present (#789)
+            self_paced=True,  # resumable per-network and per-SSID cursors
         ),
         # Phase 4 (#291): single org-wide bulk RF-profile assignments (paginated over APs)
         EndpointGroup(

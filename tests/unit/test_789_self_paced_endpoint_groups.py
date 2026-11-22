@@ -40,6 +40,7 @@ _DEVICE_SELF_PACED = {
     EndpointGroupName.MV_ANALYTICS,
     EndpointGroupName.MV_SENSE_CONFIG,
     EndpointGroupName.MR_SIGNAL_QUALITY,
+    EndpointGroupName.MR_SSID_FIREWALL,
 }
 _CLIENTS_SELF_PACED = {
     EndpointGroupName.CLIENTS_APP_USAGE,
