@@ -133,11 +133,14 @@ jobs:
       - name: Install container-structure-test
         if: matrix.arch == 'amd64'
         run: |
-          # renovate: datasource=github-releases depName=GoogleContainerTools/container-structure-test
+          set -euo pipefail
+          # Update both by hand: gh api repos/GoogleContainerTools/container-structure-test/releases/tags/v1.22.1 --jq '.assets[] | select(.name == "container-structure-test-linux-amd64") | .digest'
           CST_VERSION=1.22.1
+          CST_SHA256=fa35e89512a8978585f76cf41397956d2e3a30c62c2ad3fb857b1597074d14ca
           mkdir -p "${RUNNER_TEMP}/bin"
           curl -sSfL "https://github.com/GoogleContainerTools/container-structure-test/releases/download/v${CST_VERSION}/container-structure-test-linux-amd64" \
             -o "${RUNNER_TEMP}/bin/container-structure-test"
+          echo "${CST_SHA256}  ${RUNNER_TEMP}/bin/container-structure-test" | sha256sum --check --strict
           chmod +x "${RUNNER_TEMP}/bin/container-structure-test"
           echo "${RUNNER_TEMP}/bin" >> "${GITHUB_PATH}"
 
