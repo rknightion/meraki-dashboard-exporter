@@ -2,7 +2,7 @@
 ARG PY_VERSION=3.14
 
 # --------------------------------------------------------------------------- #
-# Builder stage - uses official slim image to compile wheels with uv
+# Builder stage - uses official Alpine image to compile wheels with uv
 # --------------------------------------------------------------------------- #
 # Digest-pinned for supply-chain immutability (#562). Renovate's built-in `dockerfile`
 # manager natively tracks `FROM image:${ARG}@sha256:digest` (expands the ARG default to
@@ -45,10 +45,11 @@ COPY pyproject.toml uv.lock ./
 
 # Create virtual environment and install dependencies with cache mount
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
-    uv sync --frozen --no-install-project
+    uv sync --frozen --no-install-project --no-dev
 
 # Copy application source code directly (not as a package)
 COPY src/meraki_dashboard_exporter ./meraki_dashboard_exporter
+RUN python -m compileall -q meraki_dashboard_exporter
 
 # --------------------------------------------------------------------------- #
 # Runtime stage - minimal Alpine-based Python image
@@ -83,11 +84,11 @@ RUN apk upgrade --no-cache \
 LABEL org.opencontainers.image.source="https://github.com/rknightion/meraki-dashboard-exporter" \
       org.opencontainers.image.description="Prometheus exporter for Cisco Meraki Dashboard API metrics" \
       org.opencontainers.image.vendor="Rob Knight" \
-      org.opencontainers.image.licenses="MIT"
+      org.opencontainers.image.licenses="Apache-2.0"
 
 WORKDIR /app
 
-# Copy the virtual environment from builder (with pre-compiled bytecode)
+# Copy the virtual environment from builder (uv compiled installed packages)
 COPY --link --from=builder --chown=1000:1000 /app/.venv /app/.venv
 
 # Copy application code from builder
@@ -110,7 +111,7 @@ ARG APP_VERSION=0.0.0+dev
 ARG GIT_COMMIT=unknown
 
 # Environment setup - use the venv Python
-# Note: PYTHONDONTWRITEBYTECODE removed since we pre-compile bytecode
+# uv compiles installed packages and compileall compiles the application package
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONFAULTHANDLER=1 \

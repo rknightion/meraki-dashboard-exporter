@@ -67,19 +67,15 @@ API fetch to an **endpoint group** with its own volatility floor, and automatica
 lower-priority groups' intervals when combined demand would exceed the budget. The math below
 still matters, though: it estimates the **unstretched, floor-level demand** — i.e. what the
 exporter would ask for if every group ran flat-out at its natural floor. That's the number the
-solver starts from before it stretches anything, and it's also the number that determines
-whether a *single* collector's own run can finish inside its `collector_timeout` (240 s
-default) — the solver can lengthen a group's *polling interval*, but it cannot make one
-already-in-flight collection cycle's page-fetch loop finish faster. Almost all of this
-unstretched demand sits in a handful of endpoint groups that would historically have been
-called "MEDIUM" (≈300 s floor). The dominant, operator-actionable terms per **300 s baseline
-cycle** are:
+solver starts from before it stretches anything. Stretching a polling interval reduces average
+demand; it does not speed up any API calls already in flight. The dominant, operator-actionable
+terms per **300 s baseline cycle** are:
 
 $$
 \text{calls}_{\text{baseline}} \approx
 \underbrace{C_{\mathrm{NH}}}_{\text{network health; current group-cost sum}}
 + \underbrace{W}_{\text{MR conn-stats}}
-+ \underbrace{\lceil D/10 \rceil}_{\text{org memory pages}}
++ \underbrace{\lceil D/20 \rceil}_{\text{org memory pages}}
 + \underbrace{\lceil \text{MS}/20 \rceil}_{\text{MS port pages}}
 + \underbrace{\lceil \text{MR}/20 \rceil}_{\text{MR CPU batches}}
 + \text{MX}_\text{phys}
@@ -112,21 +108,35 @@ groups keep their floors. If the solved plan remains over budget, it defers lowe
 and exposes `meraki_exporter_scheduler_over_budget` plus the shed group labels. Set
 `MERAKI_EXPORTER_COLLECTORS__PROFILE` explicitly to `availability`, `standard`, or `full` above
 the computed full-plan threshold; the threshold is calculated from the actual implicit plan and
-inventory shape, never a raw network count. Separately, if network-health's *own single run* needs more calls than the budget can drain
-inside 240 s, that collector's run will not finish before `collector_timeout` regardless of how
-the scheduler paces the *next* run — see the LARGE example below.
+inventory shape, never a raw network count.
+
+The **per-network health sweep resumes across collector wakes**. For each organization, it takes
+up to one call budget per wake (half the per-fetch deadline times the effective request rate,
+rounded down with a minimum of one call). This caps logical endpoint fetches, not individual
+pagination requests or retries. The due-sweep column above is the cost of all that work, not a
+requirement to finish it in one run. Only due network/group pairs spend the budget. For
+example, a network can be due for Bluetooth while its connection stats are still fresh. A failed
+pair is retried after its retry spacing without refetching fresh siblings, and a group the scheduler
+defers keeps its progress until it is enabled again. Progress is in memory and resets when the
+exporter restarts. The two latency calls for a network are scheduled together, so latency waits if
+the attempt budget falls below two calls. The separate org-wide channel-utilization fetch is not
+part of this cap.
+
+Large sweeps can therefore take several collector wakes to reach every network. Series lifetimes
+are extended to account for the longer sweep, but resuming does not increase API capacity or
+promise the solved refresh interval when work takes multiple wakes.
 
 ### Worked example — SMALL (≈100 devices, 10 networks)
 
 $W=6$, $D=100$. Network health's 300-second equivalent is $2 + 6 + 6 + 6/6 + 6/12 + 12/12 +
-6/12 + 6/12 = 17.5$ calls; MR conn-stats $6$; pagination is trivial ($\lceil100/10\rceil=10$
-memory pages); org+device bulk $\sim28$ → **~62 calls/300 s equivalent**.
+6/12 + 6/12 = 17.5$ calls; MR conn-stats $6$; pagination is trivial ($\lceil100/20\rceil=5$
+memory pages); org+device bulk $\sim28$ → **~57 calls/300 s equivalent**.
 
 $$
-\frac{62}{300} \approx \mathbf{0.21\ req/s}
+\frac{57}{300} \approx \mathbf{0.19\ req/s}
 $$
 
-That is **~2% of the 10 req/s budget** (~3% of the 8 req/s default ceiling). Comfortable — default
+That is **~2% of the 10 req/s budget** (~2% of the 8 req/s default ceiling). Comfortable — default
 settings need no tuning, registry holds ~20–50k series, RSS < 256 Mi.
 
 ### Worked example — LARGE (≈5,000 devices, 500 networks)
@@ -136,15 +146,15 @@ A university-shaped org: $W=400$ wireless nets, 4,000 MR, 700 MS, 150 MX, 100 MV
 | Load source | Calls/cycle | req/s |
 |---|---:|---:|
 | Network health (current endpoint groups) | 1,041.3 / 300 s equivalent | **3.47** |
-| Device (MR conn-stats 400 + 500 memory pages + 350 MS packet + 200 CPU batches + 167 MV + 150 MX-perf + ~20 bulk) | ~2,000 | **~6.7** |
+| Device (MR conn-stats 400 + 250 memory pages + 350 MS packet + 200 CPU batches + 167 MV + 150 MX-perf + ~20 bulk) | ~1,540 | **~5.1** |
 | Organization + Alerts + Config + sensor readings | ~120 | ~0.4 |
-| **Total unstretched demand** | | **~10.6 req/s** |
+| **Total unstretched demand** | | **~9.0 req/s** |
 
-**~10.6 req/s is still above the 10 req/s org budget** (and 133% of the 8 req/s default ceiling).
+**~9.0 req/s is 90% of the 10 req/s org budget** (and 112% of the 8 req/s default ceiling).
 The adaptive scheduler will stretch lower-priority groups here (network health is priority 3).
-The largest due sweep is not the 1,041.3-call equivalent: it is the per-network 3,600-second groups
-together, so capacity planning must distinguish that sweep from steady-state demand. More
-CPU/memory does not increase the API budget; see #701 for the remaining large-org demand limit.
+Use the steady-state equivalent to estimate ongoing load. On a cold start, the per-network groups
+are all due, but they spread that work over multiple wakes. More CPU or memory does not increase
+the API budget.
 
 ### Practical single-org envelope today
 
@@ -240,10 +250,10 @@ point, not a supported scale tier. Set requests and limits from a representative
 the topology, enabled collectors, cardinality, and observed RSS recorded. Keep headroom for normal
 variation. Turning the clients collector **on** raises cardinality and memory substantially.
 
-`MetricTTL` and cardinality caps are tunables, not fixes:
-`MERAKI_EXPORTER_MONITORING__MAX_CARDINALITY_PER_COLLECTOR` (default `10000`) sheds oldest label
-sets per collector, and `MERAKI_EXPORTER_CARDINALITY__MAX_SERIES_PER_FAMILY` (default `50000`)
-bounds per-family growth.
+`MetricTTL` and cardinality caps are tunables, not fixes.
+`MERAKI_EXPORTER_CARDINALITY__MAX_SERIES_PER_FAMILY` (default `50000`) sets the per-family
+threshold. `MERAKI_EXPORTER_CARDINALITY__ACTION` selects `warn`, which preserves series, or
+`drop`, which sheds the oldest tracked series. The cardinality counter rises in both modes.
 
 ### Largest populated fixture scrape render
 
@@ -388,7 +398,7 @@ debugging/transition fallback, not a recommended steady-state choice.
 | `meraki_exporter_task_expired_before_start_total{phase="collector_admission"}` | Exporter saturation: runs whose single wall-clock budget expired in the admission queue; these do not count as collector endpoint failures |
 | `meraki_exporter_api_rate_limiter_throttled_total` | Client-side rate-limit pressure (rising = over budget; also drives AIMD backoff) |
 | `meraki_exporter_api_rate_limiter_tokens` | Remaining tokens in the per-org bucket |
-| `meraki_exporter_cardinality_limit_reached_total` | Metric shedding is active (cardinality cap hit) |
+| `meraki_exporter_cardinality_limit_reached_total` | Per-family cardinality cap hit; rises in both `warn` and `drop` modes |
 | `meraki_exporter_org_collection_status` | Per-org collection health (`0` = every sub-collection failed) |
 | `meraki_exporter_collector_duration_seconds` | How long the admitted collector body executes; it excludes admission queue wait |
 | `meraki_network_filter_networks` | How many networks survive the filter (verify your cuts landed) |
@@ -419,11 +429,10 @@ debugging/transition fallback, not a recommended steady-state choice.
 
 ### Cardinality spikes / OOM
 
-- **Symptom:** `meraki_exporter_cardinality_limit_reached = 1`, or the pod OOM-kills.
+- **Symptom:** `meraki_exporter_cardinality_limit_reached_total` keeps rising, or the pod is OOM-killed.
 - **Fix:** size memory from observed RSS (see [Resource sizing](#resource-sizing-memory-cpu)),
-  keep the clients collector off, and reduce the tracked fleet with the filter. Raising
-  `MERAKI_EXPORTER_MONITORING__MAX_CARDINALITY_PER_COLLECTOR` trades memory for retention — it is
-  not free.
+  keep the clients collector off, and reduce the tracked fleet with the filter. In `drop` mode,
+  raising `MERAKI_EXPORTER_CARDINALITY__MAX_SERIES_PER_FAMILY` trades memory for retention.
 
 ### Per-org backoff
 

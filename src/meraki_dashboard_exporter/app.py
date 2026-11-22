@@ -1089,6 +1089,7 @@ class ExporterApp:
             title="Meraki Dashboard Exporter",
             description="Prometheus exporter for Cisco Meraki Dashboard metrics",
             version=__version__,
+            openapi_url=None,
             lifespan=self.lifespan,
         )
 

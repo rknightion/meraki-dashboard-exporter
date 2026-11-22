@@ -12,6 +12,8 @@ groma:
       file: src/meraki_dashboard_exporter/collectors/subcollector_mixin.py
     - scanner: python
       file: src/meraki_dashboard_exporter/core/__init__.py
+    - scanner: python
+      file: src/meraki_dashboard_exporter/core/fanout_cursor.py
   technology: Python
   group: Collection runtime
 description: 'MetricCollector: the contract every collector implements'

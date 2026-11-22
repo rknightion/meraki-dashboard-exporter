@@ -8,11 +8,99 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from prometheus_client import Gauge
 
+from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.collectors.devices.mx import MXCollector
+from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+from meraki_dashboard_exporter.core.network_filter import NetworkFilter
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
+from tests.helpers.base import BaseCollectorTest
 
 if TYPE_CHECKING:
     pass
+
+
+class TestMXSignalScrape(BaseCollectorTest):
+    """Exercise the real device collector and registry with a fake SDK."""
+
+    collector_class = DeviceCollector
+
+    async def test_cellular_signals_filtered_and_independently_parsed(
+        self, collector, mock_api, inventory, isolated_registry
+    ) -> None:
+        """Scrape finite cellular signals only from included networks."""
+        inventory._network_filter = NetworkFilter(NetworkFilterSettings(include_ids=["N_allowed"]))
+        mock_api.organizations.getOrganizationNetworks.return_value = [
+            {"id": "N_allowed", "name": "Allowed"},
+            {"id": "N_excluded", "name": "Excluded"},
+        ]
+
+        def row(serial, network, uplinks):
+            return {"serial": serial, "networkId": network, "model": "MX68CW", "uplinks": uplinks}
+
+        mock_api.appliance.getOrganizationApplianceUplinkStatuses.return_value = [
+            row(
+                "S_good",
+                "N_allowed",
+                [
+                    {
+                        "interface": "cellular",
+                        "status": "active",
+                        "signalStat": {"rsrp": "-79", "rsrq": "-15"},
+                    },
+                    {
+                        "interface": "wan1",
+                        "status": "active",
+                        "signalStat": {"rsrp": "-1", "rsrq": "-2"},
+                    },
+                ],
+            ),
+            row(
+                "S_partial",
+                "N_allowed",
+                [{"interface": "cellular", "signalStat": {"rsrp": "bad", "rsrq": "-12.5"}}],
+            ),
+            row(
+                "S_bad",
+                "N_allowed",
+                [{"interface": "cellular", "signalStat": {"rsrp": "NaN", "rsrq": "inf"}}],
+            ),
+            row("S_null", "N_allowed", [{"interface": "cellular", "signalStat": {"rsrp": None}}]),
+            row("S_missing", "N_allowed", [{"interface": "cellular"}]),
+            row(
+                "S_excluded",
+                "N_excluded",
+                [{"interface": "cellular", "signalStat": {"rsrp": "-50", "rsrq": "-5"}}],
+            ),
+        ]
+        mock_api.appliance.getOrganizationApplianceUplinksStatusesOverview.return_value = {}
+        await collector.mx_collector.collect_uplink_statuses("org1", "Org", {})
+
+        samples = {
+            (sample.name, sample.labels["serial"]): (sample.value, sample.labels)
+            for metric in isolated_registry.collect()
+            for sample in metric.samples
+            if sample.name
+            in {"meraki_mx_uplink_signal_rsrp_dbm", "meraki_mx_uplink_signal_rsrq_db"}
+        }
+        assert {key: value[0] for key, value in samples.items()} == {
+            ("meraki_mx_uplink_signal_rsrp_dbm", "S_good"): -79,
+            ("meraki_mx_uplink_signal_rsrq_db", "S_good"): -15,
+            ("meraki_mx_uplink_signal_rsrq_db", "S_partial"): -12.5,
+        }
+        assert samples[("meraki_mx_uplink_signal_rsrp_dbm", "S_good")][1] == {
+            "org_id": "org1",
+            "network_id": "N_allowed",
+            "serial": "S_good",
+            "model": "MX68CW",
+            "device_type": "MX",
+            "interface": "cellular",
+        }
+        mock_api.appliance.getOrganizationApplianceUplinkStatuses.assert_called_once_with(
+            "org1", total_pages="all"
+        )
+        mock_api.appliance.getOrganizationApplianceUplinksStatusesOverview.assert_called_once_with(
+            "org1"
+        )
 
 
 class TestMXCollector:

@@ -225,9 +225,6 @@ data:
   {{- if hasKey . "monitoringMetricTtlMultiplier" }}
   MERAKI_EXPORTER_MONITORING__METRIC_TTL_MULTIPLIER: {{ include "meraki-dashboard-exporter.configValue" .monitoringMetricTtlMultiplier }}
   {{- end }}
-  {{- if hasKey . "monitoringMaxCardinalityPerCollector" }}
-  MERAKI_EXPORTER_MONITORING__MAX_CARDINALITY_PER_COLLECTOR: {{ include "meraki-dashboard-exporter.configValue" .monitoringMaxCardinalityPerCollector }}
-  {{- end }}
   {{- if hasKey . "monitoringLivenessMaxStaleSeconds" }}
   MERAKI_EXPORTER_MONITORING__LIVENESS_MAX_STALE_SECONDS: {{ include "meraki-dashboard-exporter.configValue" .monitoringLivenessMaxStaleSeconds }}
   {{- end }}

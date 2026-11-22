@@ -5,8 +5,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 373
-- **Gauges:** 333
+- **Total metrics:** 375
+- **Gauges:** 335
 - **Counters:** 35
 - **Histograms:** 4
 - **Info metrics:** 1
@@ -338,6 +338,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_mx_dhcp_subnet_used_ips` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `subnet`, `vlan` | Number of IPs in use within a DHCP-served subnet on this MX |  |
 | `meraki_mx_performance_score` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | MX appliance performance score (0-100) |  |
 | `meraki_mx_uplink_info` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `interface`, `status` | MX appliance uplink status info (1 = present) |  |
+| `meraki_mx_uplink_signal_rsrp_dbm` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `interface` | MX cellular uplink RSRP signal strength in dBm |  |
+| `meraki_mx_uplink_signal_rsrq_db` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `interface` | MX cellular uplink RSRQ signal quality in dB |  |
 | `meraki_mx_uplinks_by_status` | gauge | `org_id`, `status` | Number of MX appliance uplinks by status across the organization (point-in-time snapshot) |  |
 
 ### MXFirewallCollector

@@ -147,13 +147,10 @@ class Settings(BaseSettings):
                 "(check for a typo; value not logged)",
                 env_var=key,
             )
-        # Removed-at-v1 vars are reported separately with migration guidance so
-        # an operator still setting the old tier knobs learns the replacement
-        # instead of a generic "typo" warning (#631).
+        # Removed vars get migration guidance instead of a generic typo warning.
         for key, replacement in find_removed_env_vars(os.environ):
             logger.warning(
-                "Ignoring removed MERAKI_EXPORTER_* environment variable (the "
-                "FAST/MEDIUM/SLOW tier model was removed at v1; value not logged)",
+                "Ignoring removed MERAKI_EXPORTER_* environment variable (value not logged)",
                 env_var=key,
                 use_instead=replacement,
             )

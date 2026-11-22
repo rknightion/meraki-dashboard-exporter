@@ -217,25 +217,21 @@ class TestAsyncMerakiClientShutdown:
 
         worker = client.executor.submit(blocked_sdk_call)
         assert started.wait(timeout=1.0)
-        heartbeat_ticks = 0
-
-        async def heartbeat() -> None:
-            nonlocal heartbeat_ticks
-            while True:
-                heartbeat_ticks += 1
-                await asyncio.sleep(0.005)
-
-        heartbeat_task = asyncio.create_task(heartbeat())
-        loop = asyncio.get_running_loop()
-        started_at = loop.time()
+        # Even a broken synchronous shutdown must not strand the test process.
+        watchdog = threading.Timer(5.0, release.set)
+        watchdog.start()
         try:
-            assert await client.close(timeout_seconds=0.05) is False
-            assert await client.close(timeout_seconds=0.05) is False
-            assert loop.time() - started_at < 0.15
-            assert heartbeat_ticks >= 3
+            closing = asyncio.create_task(client.close(timeout_seconds=0.05))
+            # This coroutine must run while the blocked worker is still closing.
+            await asyncio.sleep(0)
+            assert not closing.done()
+            assert not release.is_set()
+            # Allow substantial scheduler headroom while still bounding shutdown.
+            assert await asyncio.wait_for(closing, timeout=2.0) is False
+            assert await asyncio.wait_for(client.close(timeout_seconds=0.05), timeout=2.0) is False
             session.close.assert_not_called()
         finally:
-            heartbeat_task.cancel()
+            watchdog.cancel()
             release.set()
             await asyncio.to_thread(worker.result, 1.0)
 

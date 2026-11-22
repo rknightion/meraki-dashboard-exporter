@@ -82,6 +82,12 @@ meraki_mx_uplink_recv_bytes gauge
 meraki_mx_uplink_sent_bytes gauge
   help: MX per-uplink WAN bytes sent (last 5 minutes)
   labels: device_type,interface,model,network_id,org_id,serial
+meraki_mx_uplink_signal_rsrp_dbm gauge
+  help: MX cellular uplink RSRP signal strength in dBm
+  labels: device_type,interface,model,network_id,org_id,serial
+meraki_mx_uplink_signal_rsrq_db gauge
+  help: MX cellular uplink RSRQ signal quality in dB
+  labels: device_type,interface,model,network_id,org_id,serial
 meraki_mx_uplinks_by_status gauge
   help: Number of MX appliance uplinks by status across the organization (point-in-time snapshot)
   labels: org_id,status

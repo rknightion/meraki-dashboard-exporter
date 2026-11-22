@@ -2,18 +2,18 @@
 
 Covers the Wave-2 fetch-site gating for the network-health lane: the eight
 ``nh_*`` endpoint groups declared on ``NetworkHealthCollector`` (seven
-original + ``NH_MESH`` added by #307/#618), the per-group
-``_should_run_group``/``_mark_group_ran`` gates threaded through
-``_collect_org_network_health`` (org-wide channel-util) and
-``_collect_network_health_bundle`` (the seven per-network groups), and the
+original + ``NH_MESH`` added by #307/#618), the org-wide channel utilization
+gate, the seven independently paced per-network groups, and the
 ``ttl_seconds`` threading into sub-collector metric writes.
 """
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
+from meraki_dashboard_exporter.collectors import network_health
 from meraki_dashboard_exporter.collectors.network_health import NetworkHealthCollector
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName, OrgShape
 from tests.helpers.base import BaseCollectorTest
@@ -56,19 +56,27 @@ def _sample_shape() -> OrgShape:
 
 
 class FakeScheduler:
-    """Minimal scheduler double: controls should_run and records mark_ran."""
+    """Supply group eligibility, the org-wide gate and solved timing."""
 
-    def __init__(self, due: set[EndpointGroupName] | None = None, ttl: float = 1234.0) -> None:
-        """Store the due-group set (None => all due) and the TTL to return."""
-        self._due = due
+    def __init__(
+        self,
+        due: set[EndpointGroupName] | None = None,
+        ttl: float = 1234.0,
+        intervals: dict[EndpointGroupName, float] | None = None,
+    ) -> None:
+        """Store the initial group eligibility, solved intervals and TTL."""
+        self.groups = due
+        self.intervals = intervals or {}
         self._ttl = ttl
         self.marked: list[EndpointGroupName] = []
 
     def should_run(self, group: EndpointGroupName, now: float | None = None) -> bool:
         """Return whether the group is due (True for all when due is None)."""
-        if self._due is None:
-            return True
-        return group in self._due
+        return self.is_enabled(group)
+
+    def is_enabled(self, group: EndpointGroupName) -> bool:
+        """Return whether the solved plan includes this group."""
+        return self.groups is None or group in self.groups
 
     def mark_ran(self, group: EndpointGroupName, now: float | None = None) -> None:
         """Record a mark_ran call for later assertion."""
@@ -79,8 +87,8 @@ class FakeScheduler:
         return self._ttl
 
     def interval_for(self, group: EndpointGroupName) -> float:
-        """Return a fixed interval."""
-        return 300.0
+        """Return the simulated solved interval."""
+        return self.intervals.get(group, 300.0)
 
 
 class TestEndpointGroupDeclarations:
@@ -210,10 +218,10 @@ class TestNetworkHealthGating(BaseCollectorTest):
             assert calls[key] == ["N1"], key
         assert set(scheduler.marked) == _ALL_NH_GROUPS
 
-    async def test_only_due_groups_run(
+    async def test_only_enabled_groups_run(
         self, settings, isolated_registry, inventory, mock_api_builder
     ):
-        """Only the due groups' sub-collectors run and only they are marked ran."""
+        """Only the enabled groups' sub-collectors run and report success."""
         due = {EndpointGroupName.NH_CHANNEL_UTILIZATION, EndpointGroupName.NH_CONNECTION_STATS}
         scheduler = FakeScheduler(due=due)
         collector = self._build(settings, isolated_registry, inventory, mock_api_builder, scheduler)
@@ -250,10 +258,10 @@ class TestNetworkHealthGating(BaseCollectorTest):
         for key in ("conn", "data", "bt", "ssid", "lat", "air", "mesh"):
             assert calls[key] == ["N1"], key
 
-    async def test_nothing_due_marks_nothing(
+    async def test_no_groups_enabled_marks_nothing(
         self, settings, isolated_registry, inventory, mock_api_builder
     ):
-        """No group due => nothing runs and nothing is marked ran."""
+        """If no group is allowed, nothing runs or reports success."""
         scheduler = FakeScheduler(due=set())
         collector = self._build(settings, isolated_registry, inventory, mock_api_builder, scheduler)
         calls = self._instrument(collector)
@@ -267,6 +275,116 @@ class TestNetworkHealthGating(BaseCollectorTest):
         for key, seen in calls.items():
             assert seen == [], key
         assert scheduler.marked == []
+
+
+class TestResumableNetworkHealth(BaseCollectorTest):
+    """Drive the collector against synthetic inventory and SDK responses."""
+
+    collector_class = NetworkHealthCollector
+
+    net_ids = ("N1", "N2", "N3")
+
+    def _build(self, settings, isolated_registry, inventory, mock_api_builder, scheduler):
+        """Build a synthetic three-network org with a two-call fan-out budget."""
+        settings.api.per_fetch_deadline_seconds = 1
+        org = OrganizationFactory.create(org_id="O1")
+        nets = [
+            NetworkFactory.create(network_id=net_id, product_types=["wireless"], org_id="O1")
+            for net_id in self.net_ids
+        ]
+        api = mock_api_builder.with_organizations([org]).with_networks(nets, org_id="O1").build()
+        inventory.api = api
+        limiter = MagicMock()
+        limiter.acquire = AsyncMock()
+        limiter.effective_rate_per_second.return_value = 4.0
+        return NetworkHealthCollector(
+            api=api,
+            settings=settings,
+            registry=isolated_registry,
+            inventory=inventory,
+            rate_limiter=limiter,
+            scheduler=scheduler,
+        )
+
+    async def test_sweep_covers_every_network_within_each_attempt_budget(
+        self, settings, isolated_registry, inventory, mock_api_builder
+    ):
+        """A one-call group and a two-call group share a two-call attempt budget."""
+        scheduler = FakeScheduler(
+            due={EndpointGroupName.NH_BLUETOOTH, EndpointGroupName.NH_LATENCY_STATS}
+        )
+        collector = self._build(settings, isolated_registry, inventory, mock_api_builder, scheduler)
+        endpoints = (
+            collector.api.networks.getNetworkBluetoothClients,
+            collector.api.wireless.getNetworkWirelessDevicesLatencyStats,
+            collector.api.wireless.getNetworkWirelessClientsLatencyStats,
+        )
+        for endpoint in endpoints:
+            endpoint.return_value = []
+
+        attempt_calls: list[int] = []
+        for _ in range(5):
+            prior_calls = sum(endpoint.call_count for endpoint in endpoints)
+            await collector.collect()
+            attempt_calls.append(sum(endpoint.call_count for endpoint in endpoints) - prior_calls)
+
+        assert all(0 < count <= 2 for count in attempt_calls), attempt_calls
+        for endpoint in endpoints:
+            assert Counter(call.args[0] for call in endpoint.call_args_list) == Counter(
+                self.net_ids
+            )
+
+    async def test_shed_group_and_failed_network_do_not_reset_progress(
+        self, settings, isolated_registry, inventory, mock_api_builder, monkeypatch
+    ):
+        """Resume across shedding and retry only the failed, independently due pair."""
+        bt_group = EndpointGroupName.NH_BLUETOOTH
+        conn_group = EndpointGroupName.NH_CONNECTION_STATS
+        scheduler = FakeScheduler(due={conn_group}, intervals={conn_group: 1800.0})
+        collector = self._build(settings, isolated_registry, inventory, mock_api_builder, scheduler)
+        settings.scheduler.failure_retry_seconds = 10
+        now = 100.0
+        monkeypatch.setattr(network_health, "monotonic", lambda: now, raising=False)
+        failed_network = self.net_ids[0]
+        connection_attempts: Counter[str] = Counter()
+
+        def fetch_connection(network_id, **kwargs):
+            connection_attempts[network_id] += 1
+            if network_id == failed_network and connection_attempts[network_id] == 1:
+                raise RuntimeError("Connection error")
+            return {}
+
+        connection = collector.api.wireless.getNetworkWirelessConnectionStats
+        connection.side_effect = fetch_connection
+        bluetooth = collector.api.networks.getNetworkBluetoothClients
+        bluetooth.return_value = []
+
+        await collector.collect()
+        connection_calls_before_shedding = connection.call_count
+
+        scheduler.groups = {bt_group}  # connection group is shed on this attempt
+        await collector.collect()
+        assert connection.call_count == connection_calls_before_shedding
+        assert bluetooth.call_count > 0
+
+        scheduler.groups = {conn_group, bt_group}
+        await collector.collect()
+        assert Counter(call.args[0] for call in connection.call_args_list) == Counter(self.net_ids)
+        assert Counter(call.args[0] for call in bluetooth.call_args_list) == Counter(self.net_ids)
+
+        now += 11.0  # failed connection fetch becomes retryable; successful siblings stay fresh
+        await collector.collect()
+        assert [call.args[0] for call in connection.call_args_list[3:]] == [failed_network]
+        assert bluetooth.call_count == 3
+
+        now += 301.0  # only Bluetooth's interval has elapsed
+        await collector.collect()
+        assert bluetooth.call_count == 5  # no budget charged for fresh connection stats
+        await collector.collect()
+        assert Counter(call.args[0] for call in bluetooth.call_args_list) == Counter(
+            self.net_ids * 2
+        )
+        assert connection.call_count == 4
 
 
 class TestTtlThreading(BaseCollectorTest):

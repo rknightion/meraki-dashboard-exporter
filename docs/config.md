@@ -154,7 +154,6 @@ Internal monitoring and alerting configuration
 | `MERAKI_EXPORTER_MONITORING__HISTOGRAM_BUCKETS` | `list[float]` | `[0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0]` | Histogram buckets for collector duration metrics |
 | `MERAKI_EXPORTER_MONITORING__LICENSE_EXPIRATION_WARNING_DAYS` | `int` | `30` | Days before license expiration to start warning (min: 7, max: 90) |
 | `MERAKI_EXPORTER_MONITORING__METRIC_TTL_MULTIPLIER` | `float` | `2.0` | Multiplier for metric TTL (collection_interval * multiplier) (min: 1.0, max: 10.0) |
-| `MERAKI_EXPORTER_MONITORING__MAX_CARDINALITY_PER_COLLECTOR` | `int` | `10000` | Maximum number of tracked label sets per collector before shedding oldest (min: 100, max: 1000000) |
 | `MERAKI_EXPORTER_MONITORING__LIVENESS_MAX_STALE_SECONDS` | `int` | `0` | Dead-man switch threshold. /health returns 503 once no collector has completed a successful run within this many seconds, so Kubernetes/Docker restart a wedged exporter instead of leaving it serving stale metrics. 0 (default) auto-derives the threshold as 3x the fastest solved endpoint-group interval, so a stalled fast poll trips liveness promptly while slower groups never cause false positives (the threshold widens automatically as the scheduler stretches intervals). Set a large value to effectively disable. (min: 0, max: 86400) |
 
 ## Collector Settings

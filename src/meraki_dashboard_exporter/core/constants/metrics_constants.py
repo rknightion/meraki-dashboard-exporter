@@ -293,6 +293,8 @@ class MXMetricName(StrEnum):
     """MX (Security Appliance) specific metric names."""
 
     MX_UPLINK_INFO = "meraki_mx_uplink_info"
+    MX_UPLINK_SIGNAL_RSRP_DBM = "meraki_mx_uplink_signal_rsrp_dbm"
+    MX_UPLINK_SIGNAL_RSRQ_DB = "meraki_mx_uplink_signal_rsrq_db"
 
     # Per-uplink WAN-link quality (org-wide uplinksLossAndLatency endpoint)
     MX_UPLINK_LOSS_PERCENT = "meraki_mx_uplink_loss_percent"

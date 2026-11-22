@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import math
 import time
 from typing import TYPE_CHECKING, Any
 
 from ...core.api_facade import facade_for
 from ...core.constants import MXMetricName
-from ...core.domain_models import ApplianceDhcpSubnet
+from ...core.domain_models import ApplianceDhcpSubnet, CellularGatewayUplinkSignalStat
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
@@ -88,6 +89,25 @@ class MXCollector(BaseDeviceCollector):
                 LabelName.INTERFACE,
                 LabelName.STATUS,
             ],
+        )
+
+        signal_labels = [
+            LabelName.ORG_ID,
+            LabelName.NETWORK_ID,
+            LabelName.SERIAL,
+            LabelName.MODEL,
+            LabelName.DEVICE_TYPE,
+            LabelName.INTERFACE,
+        ]
+        self._mx_signal_rsrp = self.parent._create_gauge(
+            MXMetricName.MX_UPLINK_SIGNAL_RSRP_DBM,
+            "MX cellular uplink RSRP signal strength in dBm",
+            labelnames=signal_labels,
+        )
+        self._mx_signal_rsrq = self.parent._create_gauge(
+            MXMetricName.MX_UPLINK_SIGNAL_RSRQ_DB,
+            "MX cellular uplink RSRQ signal quality in dB",
+            labelnames=signal_labels,
         )
 
         self._mx_performance_score = self.parent._create_gauge(
@@ -528,12 +548,30 @@ class MXCollector(BaseDeviceCollector):
                     status=status,
                 )
 
-                self.parent._set_metric(
-                    self._mx_uplink_info,
-                    labels,
-                    1,
-                    ttl_seconds=self.parent._group_ttl_seconds(EndpointGroupName.MX_UPLINK_STATUS),
+                ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_UPLINK_STATUS)
+                self.parent._set_metric(self._mx_uplink_info, labels, 1, ttl_seconds=ttl_seconds)
+
+                signal_data = uplink.get("signalStat")
+                if interface != "cellular" or not isinstance(signal_data, dict):
+                    continue
+                signal = CellularGatewayUplinkSignalStat.model_validate(signal_data)
+                signal_labels = create_device_labels(
+                    device_data, org_id=org_id, org_name=org_name, interface=interface
                 )
+                for raw, gauge, metric_name in (
+                    (signal.rsrp, self._mx_signal_rsrp, MXMetricName.MX_UPLINK_SIGNAL_RSRP_DBM),
+                    (signal.rsrq, self._mx_signal_rsrq, MXMetricName.MX_UPLINK_SIGNAL_RSRQ_DB),
+                ):
+                    if isinstance(raw, bool):
+                        continue
+                    try:
+                        value = float(raw)
+                    except TypeError, ValueError, OverflowError:
+                        continue
+                    if math.isfinite(value):
+                        self.parent._set_metric(
+                            gauge, signal_labels, value, metric_name.value, ttl_seconds=ttl_seconds
+                        )
 
         # Mark after a successful org-wide fetch (failures retry next cycle).
         self.parent._mark_group_ran(EndpointGroupName.MX_UPLINK_STATUS)
