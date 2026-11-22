@@ -5,10 +5,9 @@
 # `rule_files` entry instead (it is valid Prometheus recording/alerting-rule YAML
 # either way - only the `apiVersion`/`kind`/`metadata` envelope is Operator-specific).
 #
-# This file is the single source of truth for the rule content: the Helm chart
-# template `charts/meraki-dashboard-exporter/templates/prometheusrule.yaml` embeds
-# the SAME rules (gated behind `prometheusRule.enabled`, default false). Keep the
-# two in sync by hand when editing either.
+# This file and `grafana/alerts/alerting-rules.yaml` mirror the Helm chart template
+# `charts/meraki-dashboard-exporter/templates/prometheusrule.yaml`, the source of
+# truth. Change the chart first and keep all three in sync.
 #
 # `for:` durations are taken verbatim from the "Recommended alert `for:` durations"
 # table in docs/data-freshness.md - that table is the source of truth; if you change
@@ -16,7 +15,7 @@
 # below is verified against core/constants/metrics_constants.py (*MetricName enums)
 # and core/metrics.py (LabelName) as of the #618 v1-readiness program.
 #
-# Substitute `job="meraki-dashboard-exporter"` below with whatever `job` label your
+# Substitute `job=~"meraki-dashboard-exporter"` below with whatever `job` label your
 # scrape config / ServiceMonitor actually produces if it differs.
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
@@ -35,7 +34,7 @@ spec:
     - name: meraki-exporter-self-health
       rules:
         - alert: MerakiExporterDown
-          expr: up{job="meraki-dashboard-exporter"} == 0
+          expr: up{job=~"meraki-dashboard-exporter"} == 0
           for: 5m
           labels:
             severity: critical
@@ -46,35 +45,45 @@ spec:
               5 minutes. No Meraki metrics are being refreshed at all while this
               fires.
 
-        - alert: MerakiExporterFastCollectorStale
-          # MTSensorCollector is the only FAST-tier (60s) collector - see
-          # docs/data-freshness.md "What runs on each tier". Staleness threshold
-          # (180s = 3 missed cycles) + `for: 3m` mirrors the "MT sensor threshold
-          # breach" FAST-tier row (2m-3m).
-          expr: time() - meraki_exporter_collector_success_timestamp_seconds{tier="fast"} > 180
-          for: 3m
+        - alert: MerakiExporterCollectorStale
+          # A collector is stale when it misses three solved cadences.
+          expr: >-
+            (time() - meraki_exporter_collector_success_timestamp_seconds)
+            > on(job, instance, collector) (3 * meraki_exporter_collector_cadence_seconds)
+          for: 5m
           labels:
             severity: warning
           annotations:
-            summary: "FAST-tier collector ({{ $labels.collector }}) has not succeeded recently"
+            summary: "Collector ({{ $labels.collector }}) has not succeeded within 3x its cadence"
             description: >-
-              {{ $labels.collector }} (tier=fast) has had no successful collection
-              in over 3 minutes. MT sensor readings are stale.
+              {{ $labels.collector }} has had no successful collection in over
+              3x its effective cadence (meraki_exporter_collector_cadence_seconds).
+              Its metrics are stale.
 
-        - alert: MerakiExporterMediumCollectorStale
-          # MEDIUM tier (300s default): DeviceCollector, NetworkHealthCollector,
-          # OrganizationCollector, AlertsCollector, MTSensorAlertsCollector, etc.
-          # Threshold (900s = 3 missed cycles) + `for: 15m` mirrors the
-          # "Organization-level" MEDIUM-tier row.
-          expr: time() - meraki_exporter_collector_success_timestamp_seconds{tier="medium"} > 900
+        - alert: MerakiExporterSchedulerGroupStale
+          # Watch endpoint groups that have missed three solved intervals.
+          expr: >-
+            time() - meraki_exporter_scheduler_group_success_timestamp_seconds
+            > on(job, instance, group) (3 * meraki_exporter_scheduler_interval_seconds)
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Endpoint group {{ $labels.group }} is stale"
+            description: >-
+              The endpoint group has not succeeded within three solved intervals.
+
+        - alert: MerakiExporterSchedulerOverBudget
+          # Watch for deferred work when the scheduler exceeds its API budget.
+          expr: meraki_exporter_scheduler_over_budget == 1
           for: 15m
           labels:
             severity: warning
           annotations:
-            summary: "MEDIUM-tier collector ({{ $labels.collector }}) has not succeeded recently"
+            summary: "Meraki exporter scheduler is over budget"
             description: >-
-              {{ $labels.collector }} (tier=medium) has had no successful
-              collection in over 15 minutes. Device/network/org metrics are stale.
+              The selected collection profile exceeds its API budget and lower-priority
+              endpoint groups are being deferred.
 
         - alert: MerakiExporterCollectorFailureStreak
           expr: meraki_exporter_collector_failure_streak >= 3
@@ -84,8 +93,8 @@ spec:
           annotations:
             summary: "{{ $labels.collector }} has failed 3+ times in a row"
             description: >-
-              Collector {{ $labels.collector }} (tier={{ $labels.tier }}) has
-              accumulated {{ $value }} consecutive failures.
+              Collector {{ $labels.collector }} has accumulated
+              {{ $value }} consecutive failures.
 
     # ------------------------------------------------------------------
     # API rate-limit exhaustion / 429 storms
@@ -138,15 +147,15 @@ spec:
               minutes - all metrics for this org are stale.
 
         - alert: MerakiCollectorErrorsHigh
-          expr: sum by (collector, tier) (increase(meraki_exporter_collector_errors_total[15m])) > 5
+          expr: sum by (collector) (increase(meraki_exporter_collector_errors_total[15m])) > 5
           for: 15m
           labels:
             severity: warning
           annotations:
             summary: "{{ $labels.collector }} is generating repeated errors"
             description: >-
-              Collector {{ $labels.collector }} (tier={{ $labels.tier }}) logged
-              more than 5 errors in the last 15 minutes.
+              Collector {{ $labels.collector }} logged more than 5 errors
+              in the last 15 minutes.
 
         - alert: MerakiCardinalityLimitReached
           # EXPORTER_CARDINALITY_LIMIT_REACHED_TOTAL: increments each cleanup cycle a metric
@@ -173,8 +182,7 @@ spec:
         # different `for:` durations per the data-freshness table.
 
         - alert: MerakiDeviceDown
-          # Default assumption: webhooks disabled (poll-path only). MEDIUM-tier
-          # row: "meraki_device_up == 0, webhooks disabled" -> for: 12m-15m.
+          # Watch confirmed offline devices with webhooks disabled (poll path).
           expr: meraki_device_up == 0 and on (job, instance, org_id, serial) meraki_device_status_info{status="offline"}
           for: 15m
           labels:
@@ -208,9 +216,8 @@ spec:
     - name: meraki-exporter-network-health
       rules:
         - alert: MerakiWirelessConnectionFailuresHigh
-          # MR_SSID_FAILED_CONNECTIONS_COUNT is a windowed count (resets each MEDIUM
-          # cycle), NOT a Counter - deliberately no rate()/increase() here, per the
-          # #531/#534 contract. Network-health MEDIUM-tier row: for: 10m-15m.
+          # MR_SSID_FAILED_CONNECTIONS_COUNT is a windowed count, not a Counter;
+          # no rate()/increase() is needed, per the #531/#534 contract.
           expr: sum by (network_id) (meraki_mr_ssid_failed_connections_count) > 20
           for: 15m
           labels:
@@ -227,7 +234,7 @@ spec:
     - name: meraki-exporter-product-signals
       rules:
         - alert: MerakiOrgLicensesExpiringSoon
-          # OrganizationCollector (via LicenseCollector) is MEDIUM tier -> org-level row: for: 15m.
+          # Watch for organization licenses nearing expiry.
           expr: meraki_org_licenses_expiring > 0
           for: 15m
           labels:
@@ -239,8 +246,7 @@ spec:
               {{ $labels.org_id }} are within their 30-day expiry window.
 
         - alert: MerakiMTWaterDetected
-          # MTSensorCollector is FAST tier (raw sensor readings). Binary detector,
-          # no site-specific threshold needed. FAST-tier row: for: 2m-3m.
+          # Watch raw water sensor readings; the detector is binary.
           expr: meraki_mt_water_detected == 1
           for: 2m
           labels:
@@ -253,10 +259,7 @@ spec:
               over 2 minutes.
 
         - alert: MerakiMTSensorAlertingActive
-          # MT_ALERTING_SENSORS_COUNT is emitted by MTSensorAlertsCollector, which
-          # is MEDIUM tier (Meraki's own configured per-sensor alert-profile
-          # evaluation, aggregated network+metric) - so this uses the MEDIUM-tier
-          # network-health row (for: 10m-15m), NOT the FAST-tier raw-reading row.
+          # Watch Meraki's configured sensor alert profiles, aggregated by network and metric.
           expr: meraki_mt_alerting_sensors_count > 0
           for: 15m
           labels:
@@ -270,9 +273,7 @@ spec:
 
         - alert: MerakiOrgHasBetaAPIRiskFlag
           # ORG_HAS_BETA_API (#278/#279): informational risk signal, not an
-          # incident - EarlyAccessCollector runs under OrganizationCollector
-          # (MEDIUM tier), so this uses the org-level row: for: 15m. Deliberately
-          # `severity: info` - opting into the beta API spec is a deliberate,
+          # incident. Deliberately `severity: info` - opting into the beta API spec is a deliberate,
           # often-desired choice, not necessarily a problem.
           expr: meraki_org_has_beta_api == 1
           for: 15m
