@@ -221,8 +221,13 @@ async def test_queued_collector_expiry_is_saturation_not_endpoint_failure() -> N
 
 
 @pytest.mark.asyncio
-async def test_queue_wait_and_execution_share_one_wall_clock_budget() -> None:
+async def test_queue_wait_and_execution_share_one_wall_clock_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Execution receives only the configured run budget left after admission."""
+    loop = asyncio.get_running_loop()
+    clock = 0.0
+    monkeypatch.setattr(loop, "time", lambda: clock)
     manager = _bare_manager(0)
     body_started = asyncio.Event()
     body_cancelled = asyncio.Event()
@@ -238,17 +243,23 @@ async def test_queue_wait_and_execution_share_one_wall_clock_budget() -> None:
     collector = _collector("SlowCollector", AsyncMock(side_effect=slow_body))
     manager.collector_health = {"SlowCollector": _health()}
 
-    async def release_admission() -> None:
-        await asyncio.sleep(0.12)
+    run = asyncio.create_task(manager._run_collector_with_timeout(collector, 0.25))
+    try:
+        # Let admission queue before advancing the controlled monotonic clock.
+        await asyncio.sleep(0)
+        clock = 0.12
         manager._collector_semaphore.release()
-
-    releaser = asyncio.create_task(release_admission())
-    loop = asyncio.get_running_loop()
-    started_at = loop.time()
-    await manager._run_collector_with_timeout(collector, 0.25)
-    elapsed = loop.time() - started_at
-    await releaser
-
-    assert body_started.is_set()
-    assert body_cancelled.is_set()
-    assert 0.20 <= elapsed < 0.32
+        await body_started.wait()
+        for _ in range(10):
+            await asyncio.sleep(0)
+        assert not body_cancelled.is_set()
+        assert not run.done()
+        clock = 0.26
+        # Drain the timer and its cancellation callbacks without advancing time.
+        for _ in range(10):
+            await asyncio.sleep(0)
+        assert body_cancelled.is_set()
+        await run
+    finally:
+        run.cancel()
+        await asyncio.gather(run, return_exceptions=True)
