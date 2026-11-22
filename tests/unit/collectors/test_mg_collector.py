@@ -1408,6 +1408,7 @@ class TestMGCollector:
             for c in mock_parent._set_metric.call_args_list
             if c[0][0] is mg_collector._mg_esim_info
         ]
+        assert info_calls
         for call in info_calls:
             labels = call[0][1]
             assert "plans" not in labels

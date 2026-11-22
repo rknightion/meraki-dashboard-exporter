@@ -176,8 +176,11 @@ class TestStartupWiresResolveLoop:
         exporter._wait_for_first_collection = AsyncMock()  # type: ignore[method-assign]
 
         started = asyncio.Event()
+        resolve_task: asyncio.Task[object] | None = None
 
         async def gated_loop() -> None:
+            nonlocal resolve_task
+            resolve_task = asyncio.current_task()
             started.set()
             await asyncio.Event().wait()  # block until cancelled
 
@@ -193,14 +196,19 @@ class TestStartupWiresResolveLoop:
         ):
             await exporter._startup_collections()
 
-        await asyncio.wait_for(started.wait(), timeout=2.0)
-        pending = [t for t in exporter._background_tasks if not t.done()]
-        assert pending, "resolve loop task must be tracked in _background_tasks"
-
-        # Cleanup: cancel and drain the tracked tasks.
-        for task in list(exporter._background_tasks):
-            task.cancel()
-        await asyncio.gather(*exporter._background_tasks, return_exceptions=True)
+        try:
+            await asyncio.wait_for(started.wait(), timeout=2.0)
+            assert resolve_task is not None
+            assert not resolve_task.done()
+            assert resolve_task in exporter._background_tasks
+        finally:
+            # Also drain the resolve task if a regression failed to track it.
+            tasks = set(exporter._background_tasks)
+            if resolve_task is not None:
+                tasks.add(resolve_task)
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
 
 
 class TestLivenessThresholdUnchangedByScheduler:

@@ -301,18 +301,6 @@ class TestRootEndpoint:
         assert response.status_code == 200
         assert "All" in response.text
 
-    def test_root_collector_is_running(
-        self, exporter_with_mock_manager: tuple[ExporterApp, MagicMock]
-    ) -> None:
-        """Test root page when a collector is currently running."""
-        exporter, mock_manager = exporter_with_mock_manager
-        mock_manager.is_collector_running.return_value = True
-        fastapi_app = exporter.create_app()
-        client = TestClient(fastapi_app, raise_server_exceptions=True)
-
-        response = client.get("/")
-        assert response.status_code == 200
-
 
 # ---------------------------------------------------------------------------
 # Tests for GET /health

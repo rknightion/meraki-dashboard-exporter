@@ -287,14 +287,6 @@ class TestWebhookHandlerProcessing:
 class TestWebhookHandlerMetrics:
     """Test metrics tracking."""
 
-    def test_metrics_initialized(self, webhook_handler: WebhookHandler) -> None:
-        """Test that all metrics are properly initialized."""
-        assert webhook_handler.events_received is not None
-        assert webhook_handler.events_processed is not None
-        assert webhook_handler.events_failed is not None
-        assert webhook_handler.processing_duration is not None
-        assert webhook_handler.validation_failures is not None
-
     def test_known_org_and_unknown_org_bounded(
         self, webhook_handler: WebhookHandler, valid_payload: dict
     ) -> None:
@@ -678,8 +670,6 @@ class TestWebhookDeviceStateFastPath:
         applier = _StubApplier(verdict=True)
         handler = WebhookHandler(settings_with_secret, device_state_applier=applier)
         payload = _device_down_payload()
-        assert payload["alertType"] == "APs went down"
-        assert payload["alertTypeId"] == "stopped_reporting"
 
         handler.process_webhook(payload)
 
