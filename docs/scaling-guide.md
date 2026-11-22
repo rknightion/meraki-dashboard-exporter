@@ -75,7 +75,7 @@ $$
 \text{calls}_{\text{baseline}} \approx
 \underbrace{C_{\mathrm{NH}}}_{\text{network health; current group-cost sum}}
 + \underbrace{W}_{\text{MR conn-stats}}
-+ \underbrace{\lceil D/10 \rceil}_{\text{org memory pages}}
++ \underbrace{\lceil D/20 \rceil}_{\text{org memory pages}}
 + \underbrace{\lceil \text{MS}/20 \rceil}_{\text{MS port pages}}
 + \underbrace{\lceil \text{MR}/20 \rceil}_{\text{MR CPU batches}}
 + \text{MX}_\text{phys}
@@ -129,14 +129,14 @@ promise the solved refresh interval when work takes multiple wakes.
 ### Worked example — SMALL (≈100 devices, 10 networks)
 
 $W=6$, $D=100$. Network health's 300-second equivalent is $2 + 6 + 6 + 6/6 + 6/12 + 12/12 +
-6/12 + 6/12 = 17.5$ calls; MR conn-stats $6$; pagination is trivial ($\lceil100/10\rceil=10$
-memory pages); org+device bulk $\sim28$ → **~62 calls/300 s equivalent**.
+6/12 + 6/12 = 17.5$ calls; MR conn-stats $6$; pagination is trivial ($\lceil100/20\rceil=5$
+memory pages); org+device bulk $\sim28$ → **~57 calls/300 s equivalent**.
 
 $$
-\frac{62}{300} \approx \mathbf{0.21\ req/s}
+\frac{57}{300} \approx \mathbf{0.19\ req/s}
 $$
 
-That is **~2% of the 10 req/s budget** (~3% of the 8 req/s default ceiling). Comfortable — default
+That is **~2% of the 10 req/s budget** (~2% of the 8 req/s default ceiling). Comfortable — default
 settings need no tuning, registry holds ~20–50k series, RSS < 256 Mi.
 
 ### Worked example — LARGE (≈5,000 devices, 500 networks)
@@ -146,11 +146,11 @@ A university-shaped org: $W=400$ wireless nets, 4,000 MR, 700 MS, 150 MX, 100 MV
 | Load source | Calls/cycle | req/s |
 |---|---:|---:|
 | Network health (current endpoint groups) | 1,041.3 / 300 s equivalent | **3.47** |
-| Device (MR conn-stats 400 + 500 memory pages + 350 MS packet + 200 CPU batches + 167 MV + 150 MX-perf + ~20 bulk) | ~2,000 | **~6.7** |
+| Device (MR conn-stats 400 + 250 memory pages + 350 MS packet + 200 CPU batches + 167 MV + 150 MX-perf + ~20 bulk) | ~1,540 | **~5.1** |
 | Organization + Alerts + Config + sensor readings | ~120 | ~0.4 |
-| **Total unstretched demand** | | **~10.6 req/s** |
+| **Total unstretched demand** | | **~9.0 req/s** |
 
-**~10.6 req/s is still above the 10 req/s org budget** (and 133% of the 8 req/s default ceiling).
+**~9.0 req/s is 90% of the 10 req/s org budget** (and 112% of the 8 req/s default ceiling).
 The adaptive scheduler will stretch lower-priority groups here (network health is priority 3).
 Use the steady-state equivalent to estimate ongoing load. On a cold start, the per-network groups
 are all due, but they spread that work over multiple wakes. More CPU or memory does not increase
