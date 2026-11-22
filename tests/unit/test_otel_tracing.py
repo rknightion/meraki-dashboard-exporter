@@ -7,7 +7,12 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import grpc
+import httpx
 import pytest
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from meraki_dashboard_exporter.__version__ import get_version
 from meraki_dashboard_exporter.core.config import Settings
@@ -16,6 +21,52 @@ from meraki_dashboard_exporter.core.otel_tracing import (
     build_otel_resource,
     build_otlp_credentials,
 )
+
+
+def test_httpx_response_hook_sets_meraki_attributes() -> None:
+    """A sync HTTP response enriches the actual exported httpx span."""
+    config = TracingConfig(MagicMock(spec=Settings))
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            headers={
+                "X-Request-Id": "synthetic-request",
+                "Retry-After": "5",
+                "X-Rate-Limit-Remaining": "3",
+            },
+        )
+    )
+    with httpx.Client(transport=transport) as client:
+        HTTPXClientInstrumentor.instrument_client(
+            client, tracer_provider=provider, response_hook=config._httpx_response_hook
+        )
+        client.get("https://example.invalid/api")
+    spans = exporter.get_finished_spans()
+    assert len(spans) == 1
+    assert spans[0].attributes["meraki.request_id"] == "synthetic-request"
+    assert spans[0].attributes["meraki.retry_after"] == "5"
+    assert spans[0].attributes["meraki.rate_limit.remaining"] == "3"
+    provider.shutdown()
+
+
+def test_instrument_libraries_registers_hook_on_httpx() -> None:
+    """Global httpx instrumentation receives the response hook, not requests."""
+    import meraki_dashboard_exporter.core.otel_tracing as tracing
+
+    config = TracingConfig(MagicMock(spec=Settings))
+    with (
+        patch.object(tracing, "HTTPXClientInstrumentor") as httpx_instrumentor,
+        patch.object(tracing, "ThreadingInstrumentor"),
+        patch.object(tracing, "LoggingInstrumentor"),
+    ):
+        config._instrument_libraries()
+    httpx_instrumentor.return_value.instrument.assert_called_once_with(
+        tracer_provider=config._tracer_provider, response_hook=config._httpx_response_hook
+    )
+    assert not hasattr(tracing, "RequestsInstrumentor")
 
 
 class TestTracingConfigSetup:
