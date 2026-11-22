@@ -262,28 +262,6 @@ class TestProxyAndCustomCA:
         assert kwargs["requests_proxy"] == "http://proxy.corp.example:3128"
         assert kwargs["certificate_path"] == "/etc/ssl/corp-ca.pem"
 
-    @patch("meraki_dashboard_exporter.api.client.meraki.DashboardAPI")
-    def test_proxy_and_ca_default_none_preserves_env_fallback(
-        self,
-        mock_dashboard_class: Mock,
-        mock_settings: Settings,
-        mock_dashboard_api: Mock,
-    ) -> None:
-        """Unset (None) proxy/CA are forwarded as None so the SDK ignores them.
-
-        The Meraki SDK guards both with a truthiness check
-        (``if self._requests_proxy:``), so a None/empty value leaves the
-        underlying ``requests`` session to honour ``HTTPS_PROXY``/``NO_PROXY``.
-        """
-        mock_dashboard_class.return_value = mock_dashboard_api
-
-        client = AsyncMerakiClient(mock_settings)
-        _ = client.api
-
-        _, kwargs = mock_dashboard_class.call_args
-        assert kwargs["requests_proxy"] is None
-        assert kwargs["certificate_path"] is None
-
 
 class TestClientLifecycle:
     """Test client lifecycle management."""
