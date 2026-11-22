@@ -210,7 +210,7 @@ What each endpoint exposes:
 | Endpoint | Method | Exposes | PII? | Mitigation |
 | --- | --- | --- | --- | --- |
 | `/metrics` | GET | All metric series: full device/network topology, label values | Low (topology) | Keep open for Prometheus; restrict at the network layer |
-| `/` | GET | Collector health, tier schedule, org count | No | `ui_enabled=false` |
+| `/` | GET | Collector health, per-collector cadence, org count | No | `ui_enabled=false` |
 | `/status` | GET | Topology-ish health, org health, network-filter state, webhook health | No | token / `ui_enabled=false` |
 | `/config` | GET | Effective configuration (secrets masked as `**********`, credentials in URLs as `***`) | No (redacted) | token / `ui_enabled=false` |
 | `/clients` | GET | **Client MAC / IP / hostname / username** | **Yes** | token / `ui_enabled=false` |

@@ -9,7 +9,7 @@ tags:
 
 # Metrics Reference
 
-The Meraki Dashboard Exporter provides comprehensive metrics for monitoring your Cisco Meraki infrastructure. This section contains detailed documentation about all available metrics, their collection tiers, and usage examples.
+The Meraki Dashboard Exporter provides comprehensive metrics for monitoring your Cisco Meraki infrastructure. This section contains detailed documentation about all available metrics, their collection cadence, and usage examples.
 
 ## Documentation Structure
 
@@ -19,7 +19,7 @@ The Meraki Dashboard Exporter provides comprehensive metrics for monitoring your
 
     ---
 
-    High-level overview of metric categories, collection tiers, and naming conventions
+    High-level overview of metric categories, collection scheduling, and naming conventions
 
 - :material-format-list-bulleted-square: **[Complete Reference](metrics.md)**
 
@@ -31,6 +31,6 @@ The Meraki Dashboard Exporter provides comprehensive metrics for monitoring your
 
 ## How to use this section
 
-1. **Start with the overview** for categories, tiers, and label conventions.
+1. **Start with the overview** for categories, scheduling, and naming and label conventions.
 2. **Use the complete reference** when you need exact metric names and labels.
 3. **Jump to Integration & Dashboards** for PromQL examples and dashboards.

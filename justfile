@@ -224,7 +224,7 @@ smoke tag="meraki-dashboard-exporter:latest":
     check_endpoint /health
     check_endpoint /metrics
 
-# the source-tree gate: exactly what the CI test job enforces
+# the source-tree gate: the CI test job runs this, then groma-check
 [group('check')]
 check: fmt-check lint typecheck gen-check api-conformance security-exceptions cloud-setup-check test
 

@@ -11,8 +11,7 @@ This exporter is distributed as a container image, plus an official Helm chart f
 
 For v1, the exporter ships as a **container image + Helm chart only** — there is no PyPI
 package, and `pip install meraki-dashboard-exporter` is not a supported install path. If you
-need to run it outside a container, clone the repository and run it with `uv` as described in
-[Getting Started](getting-started.md).
+need to run it outside a container, clone the repository, run `just setup`, then `just run`.
 
 ## Kubernetes (Helm)
 
@@ -199,7 +198,7 @@ docker compose up -d
 - Check container logs with `docker compose logs meraki_dashboard_exporter`.
 - Verify the API key and network connectivity.
 - Metrics `meraki_exporter_collector_errors_total` help identify failing collectors.
-- Open `/status` for an at-a-glance view of tier health, last collection
+- Open `/status` for an at-a-glance view of collector health, last collection
   durations, and the effective `NetworkFilter` state (parsed rules plus
   per-org total/resolved network counts, read from the same
   `meraki_network_filter_*` gauges — see [Network Filter](#network-filter)
@@ -214,12 +213,12 @@ A collector cycle can **succeed overall** — `/ready` stays `200`, and the coor
 raise — while one or more *sub-phases* inside it fail and are silently tolerated. This is
 deliberate resilience (a single broken endpoint, e.g. one MX VPN fetch or one org's config
 sub-collection, must never abort the rest of that cycle's collection), but it means the honest
-top-level failure signals introduced for [#509](https://github.com/rknightion/meraki-dashboard-exporter/issues/509)
+top-level failure signals
 (a raised `_collect_impl()`, `/health` staleness, `meraki_exporter_org_collection_status`) can stay
 green for cycles that are nonetheless degraded.
 
 Every one of those tolerated sub-phase failures increments the same counter used for full
-collector failures — **`meraki_exporter_collector_errors_total`** (labels: `collector`, `tier`,
+collector failures — **`meraki_exporter_collector_errors_total`** (labels: `collector`,
 `error_type`) — so it is the only signal that surfaces this class of degradation. Alert on its
 rate rather than waiting for a full-cycle failure:
 
@@ -231,18 +230,18 @@ classified; alert on it separately because a rise means the classifier needs ext
 
 ```promql
 # Any tolerated sub-phase failure in the last 15 minutes, broken out by
-# collector/tier/error_type so you can see which sub-system is degraded.
-sum by (collector, tier, error_type) (
+# collector/error_type so you can see which sub-system is degraded.
+sum by (collector, error_type) (
   rate(meraki_exporter_collector_errors_total[15m])
 ) > 0
 ```
 
 ```promql
-# Sustained partial failure: a collector/tier has logged errors continuously
+# Sustained partial failure: a collector has logged errors continuously
 # for the last hour. Good candidate for a paging alert (vs. the query above,
 # which is better suited to a dashboard panel or a low-severity notification).
 min_over_time(
-  (sum by (collector, tier) (rate(meraki_exporter_collector_errors_total[15m])) > 0)[1h:]
+  (sum by (collector) (rate(meraki_exporter_collector_errors_total[15m])) > 0)[1h:]
 ) == 1
 ```
 
@@ -252,8 +251,7 @@ warning (the supplied `MerakiCollectorErrorsHigh` rule uses this same `> 5` thre
 collector); page only when the org status is also `0` or `/health` is stale.
 
 Because this counter increments for tolerated *and* fatal failures alike, corroborate a firing
-alert against the [#509](https://github.com/rknightion/meraki-dashboard-exporter/issues/509) health
-signals before treating it as critical:
+alert against the top-level health signals before treating it as critical:
 
 - `up{job="meraki-dashboard-exporter"}` / `/health` - process liveness (unaffected either way).
 - `/ready` - startup-only confirmation that the initial required collection completed. It does not

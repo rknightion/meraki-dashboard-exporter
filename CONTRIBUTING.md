@@ -18,7 +18,8 @@ response shape cannot be proved that way: the vendored OpenAPI spec is wrong for
 say in the pull request whether you checked it against a live organisation, and attach a sanitised
 sample response if you can (no serials, MAC addresses, names or keys).
 
-`just check` is the same gate pull request CI runs for the `test` job. A change to the `Dockerfile`,
+The CI `test` job runs `just check` and then `just groma-check`. Run the second (it needs Node)
+when you add, delete or move a module under `src/`. A change to the `Dockerfile`,
 the entrypoint or the image's runtime shape is gated by `just ci` (it adds an image build, a
 structure test and a smoke test, and needs a Docker daemon); pull request CI runs it, so you may
 leave it to CI. When metrics, config, endpoints, collectors or the settings schema change, run

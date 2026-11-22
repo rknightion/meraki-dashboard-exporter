@@ -41,7 +41,7 @@ Child spans follow parent sampling decisions.
 | Meraki SDK (httpx) | API call timing, status and rate-limit headers, traced through `HTTPXClientInstrumentor`. |
 | httpx | Other httpx usage is also traced |
 | FastAPI | All endpoints except `/health` and `/metrics` (the `/status` health-dashboard page is traced) |
-| Threading | `asyncio.to_thread()` operations |
+| Threading | Work the SDK facade runs on executor threads |
 | Logging | Trace IDs added to structured log output |
 
 ## Span Attributes

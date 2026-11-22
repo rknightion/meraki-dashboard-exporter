@@ -40,7 +40,7 @@ The [docker-compose.yml](https://github.com/rknightion/meraki-dashboard-exporter
     Align your Prometheus scrape interval with the exporter's adaptive collector cadence to avoid unnecessary load — see [Metrics Overview](metrics/overview.md) and [Scheduler Architecture](observability/scheduler.md).
 
 ## Dashboards
-Pre-built Grafana dashboards (Grafana **v2 schema**, tabbed) live in the [`grafana/dashboards` directory](https://github.com/rknightion/meraki-dashboard-exporter/tree/main/grafana/dashboards). Import them in the Grafana UI, or deploy them with the [`gcx`](https://github.com/grafana/grafana-com-cli) CLI. The set is six consolidated, multi-tab dashboards:
+Pre-built Grafana dashboards (Grafana **v2 schema**, tabbed) live in the [`grafana/dashboards` directory](https://github.com/rknightion/meraki-dashboard-exporter/tree/main/grafana/dashboards). Import them in the Grafana UI, or deploy them with the [`gcx`](https://github.com/grafana/gcx) CLI. The set is six consolidated, multi-tab dashboards:
 
 - `self-observability.json` – the exporter's own health: collectors, adaptive scheduler, API rate limiting, plus traces and logs tabs
 - `meraki-devices.json` – all device types as tabs (MR / MS / MX / MT / MV); a tab auto-hides when the selected org has no such devices
@@ -61,7 +61,7 @@ license expiry, and the `meraki_org_has_beta_api` risk gauge — ships as a
 Prometheus Operator `PrometheusRule` at
 [`examples/prometheus-rules.yaml`](https://github.com/rknightion/meraki-dashboard-exporter/blob/main/examples/prometheus-rules.yaml).
 Each rule's `for:` duration is derived from the [Data Freshness & Alerting
-Guidance](data-freshness.md) tier table, cited inline as a comment.
+Guidance](data-freshness.md) `for:` table, cited inline as a comment.
 
 If you deploy via the [Helm chart](https://github.com/rknightion/meraki-dashboard-exporter/tree/main/charts/meraki-dashboard-exporter),
 set `prometheusRule.enabled: true` (requires the Prometheus Operator CRDs) to

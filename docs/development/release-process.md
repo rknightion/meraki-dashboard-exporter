@@ -55,10 +55,10 @@ You can also run the **Release Please** workflow manually from GitHub Actions (w
 
 ## Local and CI verification
 
-`just check` is the local source-tree gate and exactly what the CI `test` job
-enforces: ruff format check, ruff lint, mypy, generated-path drift, offline
-API-model conformance, and the test suite with the 90% line coverage
-floor. Run it before committing Python or documentation changes.
+`just check` is the local source-tree gate; its parts are the dependencies of the `check` recipe in
+the `justfile`. The CI `test` job runs it and then `just groma-check`, which fails when a module
+under `src/` is added or deleted without rescanning the architecture map. Run `just check` before
+committing Python or documentation changes.
 
 CI deliberately covers additional checks that are not part of `just check`:
 

@@ -2,9 +2,8 @@
 
 This directory is reserved for **real deployment and configuration examples** — the
 kind of thing an operator copies to get the exporter running (e.g. starter Prometheus
-alert rules, docker-compose snippets, Kubernetes manifests). It is intentionally empty
-right now; the first occupant is tracked by the starter-alert-rules work (config
-example: `examples/prometheus-rules.yaml`).
+alert rules, docker-compose snippets, Kubernetes manifests). Its first occupant is
+`prometheus-rules.yaml`, the starter Prometheus alert rules.
 
 It previously held `test_example_with_helpers.py`, a demo of the collector-test
 patterns (`BaseCollectorTest`, `MockAPIBuilder`, factories, `MetricAssertions`). That
@@ -16,11 +15,10 @@ collected by pytest anyway (`testpaths` in `pyproject.toml` only covers `tests/`
 `tests/unit/test_alerts_collector.py`, which exercises the same `AlertsCollector`
 against the current `tests.helpers.*` APIs.
 
-For the test-writing patterns that file used to demonstrate, see `tests/CLAUDE.md` and
+For the test-writing patterns that file used to demonstrate, see `tests/AGENTS.md` and
 `tests/unit/test_alerts_collector.py` for a live, currently-passing example.
 
-For actual configuration examples today (until this directory gains deploy artifacts
-of its own), see:
+For more configuration examples, see:
 - `.env.example` at the repo root
-- `docker-compose.yml` / `docker-compose.*.yml`
+- `docker-compose.yml`
 - `charts/meraki-dashboard-exporter/values.yaml`
