@@ -248,8 +248,11 @@ class TestStartupCollections:
 
         started = asyncio.Event()
         release = asyncio.Event()
+        wait_task: asyncio.Task[object] | None = None
 
         async def gated_wait() -> None:
+            nonlocal wait_task
+            wait_task = asyncio.current_task()
             started.set()
             await release.wait()
 
@@ -263,18 +266,18 @@ class TestStartupCollections:
         ):
             await exporter._startup_collections()
 
-        # The gated wait task has started and is still pending, tracked in the
-        # background-task set so shutdown can cancel it.
-        await asyncio.wait_for(started.wait(), timeout=2.0)
-        pending = [t for t in exporter._background_tasks if not t.done()]
-        assert pending, "wait task must be tracked in _background_tasks"
-
-        # Cleanup: release and drain.
-        release.set()
-        await asyncio.wait_for(
-            asyncio.gather(*exporter._background_tasks, return_exceptions=True),
-            timeout=2.0,
-        )
+        try:
+            await asyncio.wait_for(started.wait(), timeout=2.0)
+            assert wait_task is not None
+            assert not wait_task.done()
+            assert wait_task in exporter._background_tasks
+        finally:
+            # Also drain the wait task if a regression failed to track it.
+            release.set()
+            tasks = set(exporter._background_tasks)
+            if wait_task is not None:
+                tasks.add(wait_task)
+            await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=2.0)
 
 
 class TestLifespanCancelsWaitTask:

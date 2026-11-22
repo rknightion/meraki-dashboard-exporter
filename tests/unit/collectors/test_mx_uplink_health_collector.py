@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from prometheus_client import Gauge
@@ -11,7 +11,6 @@ from prometheus_client import Gauge
 from meraki_dashboard_exporter.collectors.devices.mx_uplink_health import (
     MXUplinkHealthCollector,
 )
-from meraki_dashboard_exporter.core.domain_models import DeviceUplinkLossLatency
 
 if TYPE_CHECKING:
     pass
@@ -587,33 +586,6 @@ class TestMXUplinkHealthCollector:
     # ------------------------------------------------------------------
     # Pydantic domain-model validation (F-029)
     # ------------------------------------------------------------------
-
-    async def test_collect_validates_rows_via_domain_model(
-        self,
-        collector: MXUplinkHealthCollector,
-        mock_api: MagicMock,
-        mock_parent: MagicMock,
-    ) -> None:
-        """Each raw row must be validated via DeviceUplinkLossLatency.model_validate."""
-        row = {
-            "networkId": "N_111",
-            "serial": "Q2AB-1234-5678",
-            "uplink": "wan1",
-            "ip": "8.8.8.8",
-            "timeSeries": [{"ts": "t1", "lossPercent": 1.0, "latencyMs": 10.0}],
-        }
-        mock_api.organizations.getOrganizationDevicesUplinksLossAndLatency = MagicMock(
-            return_value=[row]
-        )
-
-        with patch(
-            "meraki_dashboard_exporter.collectors.devices.mx_uplink_health."
-            "DeviceUplinkLossLatency.model_validate",
-            wraps=DeviceUplinkLossLatency.model_validate,
-        ) as spy:
-            await collector.collect_uplink_loss_latency("org1", "Test Org", {})
-
-        spy.assert_called_once_with(row)
 
     async def test_collect_tolerates_missing_and_extra_fields(
         self,

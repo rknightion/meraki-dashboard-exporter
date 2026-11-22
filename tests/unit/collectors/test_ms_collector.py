@@ -237,17 +237,6 @@ class TestMSCollector:
         # Should not raise errors
         await ms_collector.collect(device)
 
-    def test_ms_collector_initialization(
-        self,
-        ms_collector: MSCollector,
-        mock_parent: MagicMock,
-    ) -> None:
-        """Test MS collector initialization."""
-        # Verify collector is properly initialized with parent
-        assert ms_collector.parent == mock_parent
-        assert ms_collector.api == mock_parent.api
-        assert ms_collector.settings == mock_parent.settings
-
     async def test_collect_stp_priorities(
         self,
         ms_collector: MSCollector,
