@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -78,6 +79,36 @@ def test_staleness_joins_match_target_in_chart_and_mirror(alert: str, matching: 
     mirror = yaml.safe_load((REPO_ROOT / "grafana/alerts/alerting-rules.yaml").read_text())
     assert matching in _render()[alert]
     assert matching in _expressions(mirror, "groups")[alert]
+
+
+@pytest.mark.parametrize(
+    ("webhooks", "alert", "expected"),
+    [
+        (
+            "false",
+            "MerakiDeviceDown",
+            'meraki_device_up == 0 and on (job, instance, org_id, serial) meraki_device_status_info{status="offline"}',
+        ),
+        (
+            "true",
+            "MerakiDeviceDownFastPath",
+            'meraki_device_up == 0 unless on (job, instance, org_id, serial) meraki_device_status_info{status=~"alerting|dormant"}',
+        ),
+    ],
+)
+def test_device_down_expressions(webhooks: str, alert: str, expected: str) -> None:
+    """Rendered paths and static rules select the same device states."""
+    chart = _render("--set", f"prometheusRule.webhooksEnabled={webhooks}")[alert]
+    mirror = _expressions(
+        yaml.safe_load((REPO_ROOT / "grafana/alerts/alerting-rules.yaml").read_text()), "groups"
+    )[alert]
+    example = _expressions(
+        yaml.safe_load((REPO_ROOT / "examples/prometheus-rules.yaml").read_text())["spec"], "groups"
+    )[alert]
+    assert mirror.count('job="meraki_dashboard"') == 2
+    mirror = re.sub(r'job="meraki_dashboard",?', "", mirror).replace("{}", "")
+    for expression in (chart, mirror, example):
+        assert " ".join(expression.split()) == expected
 
 
 def test_mirror_liveness_uses_job_regex() -> None:
