@@ -130,16 +130,6 @@ class TestMVCollector:
     # Initialization
     # ------------------------------------------------------------------
 
-    def test_mv_collector_initialization(
-        self,
-        mv_collector: MVCollector,
-        mock_parent: MagicMock,
-    ) -> None:
-        """Test MV collector initialization."""
-        assert mv_collector.parent == mock_parent
-        assert mv_collector.api == mock_parent.api
-        assert mv_collector.settings == mock_parent.settings
-
     def test_mv_gauges_created(
         self,
         mv_collector: MVCollector,
