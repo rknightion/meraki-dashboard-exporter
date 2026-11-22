@@ -20,9 +20,6 @@ on:
         required: false
         type: string
         default: ""
-  # Build-only validation gate on the merge queue: the reusable builds both arches
-  # WITHOUT pushing (catches arch-specific Python wheel breakage before main — issue #221).
-  merge_group:
 
 # Minimal top-level default; write scopes granted per-job only.
 permissions:
