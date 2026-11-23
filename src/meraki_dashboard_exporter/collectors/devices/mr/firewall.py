@@ -70,7 +70,7 @@ class MRFirewallCollector:
         self.settings = parent.settings
         self._discoveries: dict[str, FanoutCursor] = {}
         self._rules: dict[str, FanoutCursor] = {}
-        self._pending_l7: dict[str, set[str]] = {}
+        self._pending_l7: dict[str, dict[str, float]] = {}
         self._ssids: dict[str, dict[str, list[WirelessSsid]]] = {}
         self._prefer_rules: dict[str, bool] = {}
         self._initialize_metrics()
@@ -179,8 +179,9 @@ class MRFirewallCollector:
             for ssid in ssids
         }
         rules.prune(by_key)
-        pending_l7 = self._pending_l7.setdefault(org_id, set())
-        pending_l7.intersection_update(by_key)
+        pending_l7 = self._pending_l7.setdefault(org_id, {})
+        for key in pending_l7.keys() - by_key.keys():
+            del pending_l7[key]
         blocked = {
             network_id
             for network_id in network_ids
@@ -239,9 +240,11 @@ class MRFirewallCollector:
                 }
                 try:
                     number = str(ssid.number)
-                    if key not in pending_l7:
+                    # Resume at L7 only while the emitted L3 is fresh, so a
+                    # persistent L7 failure cannot let healthy L3 series expire.
+                    if monotonic() - pending_l7.get(key, -math.inf) >= interval:
                         await self._collect_l3_rules(network_id, number, labels, ttl)
-                        pending_l7.add(key)
+                        pending_l7[key] = monotonic()
                     await self._collect_l7_rules(network_id, number, labels, ttl)
                 except Exception as exc:
                     self._track_item_error(exc)
@@ -252,7 +255,7 @@ class MRFirewallCollector:
                         ssid_number=ssid.number,
                     )
                 else:
-                    pending_l7.remove(key)
+                    del pending_l7[key]
                     rules.record_success(key, monotonic())
             elif discovery_queue:
                 network_id = discovery_queue.popleft()
@@ -276,7 +279,7 @@ class MRFirewallCollector:
                     new_keys = {json.dumps([network_id, ssid.number]): ssid for ssid in parsed}
                     for key in old_keys - new_keys.keys():
                         by_key.pop(key, None)
-                        pending_l7.discard(key)
+                        pending_l7.pop(key, None)
                         rules.last_attempt.pop(key, None)
                         rules.last_success.pop(key, None)
                     for key, ssid in new_keys.items():
