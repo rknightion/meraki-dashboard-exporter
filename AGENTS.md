@@ -141,7 +141,8 @@ without it locally, `gcr.io/gcp-runtimes/container-structure-test` over the dock
 equivalent.
 
 The publication Trivy gate is stricter still and runs only in `publish.yml`, never in CI: it fails
-the build on any HIGH or CRITICAL not accepted in `.trivyignore.yaml`. It blocks the image and chart
+the build on any HIGH or CRITICAL that has an available fix and is not accepted in
+`.trivyignore.yaml`. Findings with no available fix do not block (`trivy-ignore-unfixed`). It blocks the image and chart
 push while release-please still creates the tag and the GitHub release, so a release can exist with
 no artefact behind it. `scripts/validate_trivy_exceptions.py` validates an exception's shape, not
 whether its purls match anything in the current base image, so exceptions silently stop applying

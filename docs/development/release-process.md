@@ -30,7 +30,7 @@ Releases are automated with **release-please** and GitHub Actions.
 
    Before any image reaches GHCR, publication-scoped CodeQL rejects HIGH/CRITICAL findings, the
    committed Trivy exception file is validated, and each native OCI archive is scanned for
-   HIGH/CRITICAL vulnerabilities. Only the exact scanned architecture digests proceed to manifest
+   HIGH/CRITICAL vulnerabilities that have an available fix. Only the exact scanned architecture digests proceed to manifest
    creation, signing, provenance, SBOM generation, and Helm publication.
 
    Images go to `ghcr.io/<owner>/<repo>` with semver, branch, and PR tags; the
