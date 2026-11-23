@@ -35,15 +35,9 @@ class TestRealFirewallPath(BaseCollectorTest):
 
     collector_class = DeviceCollector
 
-    @pytest.mark.parametrize(("timeout", "sdk_latency"), [(30, 5), (240, 39)])
-    async def test_cycle_yields_before_cap_and_resumes_unattempted_networks(
-        self, settings, mock_api_builder, isolated_registry, monkeypatch, timeout, sdk_latency
-    ) -> None:
-        """Run the manager, device cycle and facade against a latency-controlled SDK."""
-        settings.collectors.collector_timeout = timeout
+    @staticmethod
+    def _device_manager(settings, mock_api_builder, allowed, monkeypatch):
         settings.collectors.enabled_collectors = {"device"}
-        settings.api.per_fetch_deadline_seconds = timeout // 3
-        allowed = [f"net-{n}" for n in range(6)]
         settings.network_filter.include_ids = allowed
         networks = ["excluded", *allowed]
         api = (
@@ -62,6 +56,17 @@ class TestRealFirewallPath(BaseCollectorTest):
         collector = manager.get_collector_by_class_name("DeviceCollector")
         assert isinstance(collector, DeviceCollector)
 
+        monkeypatch.setattr(manager.rate_limiter, "acquire", _no_pacing_delay)
+        return api, manager, collector
+
+    @pytest.fixture
+    async def sdk_clock(self, monkeypatch):
+        """Provide a virtual clock for the synchronous SDK executor.
+
+        Returns ``(pause_sdk, advance)``: ``pause_sdk(latency)`` elapses ``latency``
+        virtual seconds while an SDK call is pending, and ``advance(seconds)`` moves
+        the clock directly.
+        """
         # Keep the real facade timeouts and SDK executor; elapse virtual seconds
         # one timer turn at a time while the synchronous SDK call is pending.
         loop = asyncio.get_running_loop()
@@ -71,16 +76,17 @@ class TestRealFirewallPath(BaseCollectorTest):
         monkeypatch.setattr(
             "meraki_dashboard_exporter.collectors.devices.mr.firewall.monotonic", loop.time
         )
-        monkeypatch.setattr(manager.rate_limiter, "acquire", _no_pacing_delay)
-        latency = sdk_latency
 
-        def pause_sdk() -> None:
+        def advance(seconds: int) -> None:
+            nonlocal offset
+            offset += seconds
+
+        def pause_sdk(latency: int) -> None:
             complete = Event()
 
             def tick(remaining: int) -> None:
-                nonlocal offset
                 if remaining:
-                    offset += 1
+                    advance(1)
                     loop.call_soon(tick, remaining - 1)
                 else:
                     complete.set()
@@ -88,16 +94,39 @@ class TestRealFirewallPath(BaseCollectorTest):
             loop.call_soon_threadsafe(tick, latency)
             assert complete.wait(2), "virtual SDK clock stopped"
 
+        return pause_sdk, advance
+
+    @pytest.mark.parametrize(("timeout", "sdk_latency"), [(30, 5), (240, 39)])
+    async def test_cycle_yields_before_cap_and_resumes_unattempted_networks(
+        self,
+        settings,
+        mock_api_builder,
+        isolated_registry,
+        monkeypatch,
+        sdk_clock,
+        timeout,
+        sdk_latency,
+    ) -> None:
+        """Run the manager, device cycle and facade against a latency-controlled SDK."""
+        settings.collectors.collector_timeout = timeout
+        settings.api.per_fetch_deadline_seconds = timeout // 3
+        allowed = [f"net-{n}" for n in range(6)]
+        api, manager, collector = self._device_manager(
+            settings, mock_api_builder, allowed, monkeypatch
+        )
+        pause_sdk, advance = sdk_clock
+        latency = sdk_latency
+        loop = asyncio.get_running_loop()
         discovered: list[str] = []
         sibling_times: list[float] = []
 
         def discover(network):
             discovered.append(network)
-            pause_sdk()
+            pause_sdk(latency)
             return [{"number": 0, "name": "guest", "enabled": True}]
 
         def rules(network, number):
-            pause_sdk()
+            pause_sdk(latency)
             return {"rules": []}
 
         def ethernet(*args, **kwargs):
@@ -145,11 +174,52 @@ class TestRealFirewallPath(BaseCollectorTest):
 
         # An interrupted pair was not declared fresh; it can complete after the
         # incomplete-attempt spacing without rediscovering already-fresh networks.
-        offset += settings.scheduler.failure_retry_seconds + 1
+        advance(settings.scheduler.failure_retry_seconds + 1)
         await manager.run_collector_once(collector)
         assert health["total_successes"] == 3
         assert sorted(discovered) == sorted(allowed)
         assert all(collected_rules(network) == [0, 0] for network in allowed)
+
+    async def test_rule_pair_split_across_device_cycles(
+        self, settings, mock_api_builder, isolated_registry, monkeypatch, sdk_clock
+    ) -> None:
+        """Both fetches fit their own deadline, but never fit the same firewall window."""
+        settings.collectors.collector_timeout = 30
+        settings.api.per_fetch_deadline_seconds = 20
+        api, manager, collector = self._device_manager(
+            settings, mock_api_builder, ["net"], monkeypatch
+        )
+        pause_sdk, advance = sdk_clock
+        calls = []
+
+        def rules(kind, network, number):
+            calls.append((kind, network, number))
+            pause_sdk(13)
+            return {"rules": []}
+
+        api.wireless.getNetworkWirelessSsids.return_value = [{"number": 0, "enabled": True}]
+        api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules.side_effect = lambda n, s: rules(
+            "L3", n, s
+        )
+        api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules.side_effect = lambda n, s: rules(
+            "L7", n, s
+        )
+
+        def sample(kind):
+            return isolated_registry.get_sample_value(
+                "meraki_mr_ssid_firewall_rules",
+                {"org_id": "org", "network_id": "net", "ssid": "0", "rule_type": kind},
+            )
+
+        await manager.run_collector_once(collector)
+        assert calls == [("L3", "net", "0"), ("L7", "net", "0")]
+        assert (sample("L3"), sample("L7")) == (0, None)
+        calls.clear()
+        advance(settings.scheduler.failure_retry_seconds + 1)
+        await manager.run_collector_once(collector)
+        assert calls == [("L7", "net", "0")]
+        assert (sample("L3"), sample("L7")) == (0, 0)
+        assert manager.collector_health["DeviceCollector"]["total_successes"] == 2
 
     async def test_bounded_sweep_emits_each_enabled_ssid(
         self, collector, mock_api, settings, isolated_registry
@@ -558,6 +628,42 @@ class TestMRFirewallCollector:
         await firewall_collector.collect_ssid_firewall("org", "Org", networks)
         await firewall_collector.collect_ssid_firewall("org", "Org", networks)
         assert calls == ["discovery", "L3", "L7", "discovery"]
+
+    @pytest.mark.parametrize("removed", ["network", "ssid"])
+    async def test_reappearing_ssid_starts_from_l3(
+        self, firewall_collector, mock_api, mock_parent, monkeypatch, removed
+    ) -> None:
+        """A re-used SSID slot cannot inherit a missing SSID's partial pair."""
+        now = 100.0
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.collectors.devices.mr.firewall.monotonic", lambda: now
+        )
+        mock_parent._group_interval.return_value = 10
+        networks = [{"id": "net", "productTypes": ["wireless"]}]
+        discover = mock_api.wireless.getNetworkWirelessSsids
+        l3 = mock_api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules
+        l7 = mock_api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules
+        discover.return_value = self._ssids(enabled_numbers=[0])
+        l3.return_value = {"rules": []}
+        l7.side_effect = [TimeoutError(), {"rules": []}, {"rules": []}]
+        sweep = firewall_collector.collect_ssid_firewall
+        await sweep("org", "Org", networks)
+        assert (l3.call_count, l7.call_count) == (1, 1)
+        mock_parent._mark_group_ran.assert_not_called()
+
+        now += 11
+        discover.return_value = self._ssids(enabled_numbers=[], all_numbers=[0])
+        await sweep("org", "Org", [] if removed == "network" else networks)
+        assert (l3.call_count, l7.call_count) == (1, 1)
+
+        discover.return_value = self._ssids(enabled_numbers=[0])
+        now += 11
+        await sweep("org", "Org", networks)
+        assert (l3.call_count, l7.call_count) == (2, 2)
+        # A completed pair leaves no checkpoint for the next normal refresh either.
+        now += 11
+        await sweep("org", "Org", networks)
+        assert (l3.call_count, l7.call_count) == (3, 3)
 
     async def test_failed_items_do_not_starve_siblings_and_retry(
         self,

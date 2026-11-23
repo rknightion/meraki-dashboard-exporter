@@ -70,6 +70,7 @@ class MRFirewallCollector:
         self.settings = parent.settings
         self._discoveries: dict[str, FanoutCursor] = {}
         self._rules: dict[str, FanoutCursor] = {}
+        self._pending_l7: dict[str, set[str]] = {}
         self._ssids: dict[str, dict[str, list[WirelessSsid]]] = {}
         self._prefer_rules: dict[str, bool] = {}
         self._initialize_metrics()
@@ -164,7 +165,8 @@ class MRFirewallCollector:
         interval = float(self.parent._group_interval(group))
         retry = failure_retry_spacing(self.settings, interval)
         budget = per_attempt_call_budget(self.settings, getattr(self.parent, "rate_limiter", None))
-        # The shared one-item floor permits one atomic pair, but never an extra discovery.
+        # Reserve the full pair cost even when resuming at L7. The one-item floor
+        # permits one pair, but never an extra discovery.
         remaining = budget
         prefer_rules = self._prefer_rules.get(org_id, False)
         did_work = False
@@ -177,6 +179,8 @@ class MRFirewallCollector:
             for ssid in ssids
         }
         rules.prune(by_key)
+        pending_l7 = self._pending_l7.setdefault(org_id, set())
+        pending_l7.intersection_update(by_key)
         blocked = {
             network_id
             for network_id in network_ids
@@ -234,7 +238,11 @@ class MRFirewallCollector:
                     LabelName.SSID.value: ssid.name or str(ssid.number),
                 }
                 try:
-                    await self._collect_ssid_rules(network_id, str(ssid.number), labels, ttl)
+                    number = str(ssid.number)
+                    if key not in pending_l7:
+                        await self._collect_l3_rules(network_id, number, labels, ttl)
+                        pending_l7.add(key)
+                    await self._collect_l7_rules(network_id, number, labels, ttl)
                 except Exception as exc:
                     self._track_item_error(exc)
                     logger.exception(
@@ -244,6 +252,7 @@ class MRFirewallCollector:
                         ssid_number=ssid.number,
                     )
                 else:
+                    pending_l7.remove(key)
                     rules.record_success(key, monotonic())
             elif discovery_queue:
                 network_id = discovery_queue.popleft()
@@ -267,6 +276,7 @@ class MRFirewallCollector:
                     new_keys = {json.dumps([network_id, ssid.number]): ssid for ssid in parsed}
                     for key in old_keys - new_keys.keys():
                         by_key.pop(key, None)
+                        pending_l7.discard(key)
                         rules.last_attempt.pop(key, None)
                         rules.last_success.pop(key, None)
                     for key, ssid in new_keys.items():
@@ -332,14 +342,14 @@ class MRFirewallCollector:
         parsed = [WirelessSsid.model_validate(row) for row in data if row.get("enabled")]
         return [ssid for ssid in parsed if ssid.number is not None]
 
-    async def _collect_ssid_rules(
+    async def _collect_l3_rules(
         self,
         network_id: str,
         ssid_number: str,
         base_labels: dict[str, str],
         ttl: float | None,
     ) -> None:
-        """Fetch and emit L3+L7 firewall rule counts for a single SSID.
+        """Fetch and emit the L3 rule count and LAN access policy for a single SSID.
 
         Parameters
         ----------
@@ -380,6 +390,14 @@ class MRFirewallCollector:
                 ttl_seconds=ttl,
             )
 
+    async def _collect_l7_rules(
+        self,
+        network_id: str,
+        ssid_number: str,
+        base_labels: dict[str, str],
+        ttl: float | None,
+    ) -> None:
+        """Fetch and emit the L7 rule count for a single SSID."""
         l7_raw = await self._fetch_l7_rules(network_id, ssid_number)
         l7_data = validate_response_format(
             l7_raw,
