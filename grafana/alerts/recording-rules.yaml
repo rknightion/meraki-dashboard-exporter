@@ -6,8 +6,8 @@
 # sibling `alerting-rules.yaml` in this folder, which mirrors those). Recording rules pre-compute
 # expressions that are either expensive to run ad hoc (rate/histogram_quantile over cardinality-
 # heavy series) or express something not obvious from the raw metric names alone (a ratio, a
-# per-collector rate). Dashboards and alerts can both query the `meraki:...` names below instead
-# of re-deriving them.
+# per-collector rate). No shipped dashboard or alert queries these names; they are optional
+# conveniences for your own panels and alerts.
 #
 # JOB LABEL — same caveat as alerting-rules.yaml in this folder: this Grafana Cloud instance
 # writes every exporter metric under THREE distinct job labels (`meraki_dashboard` from the real
@@ -70,39 +70,5 @@ groups:
           histogram_quantile(0.95, sum by (collector, le)
             (rate(meraki_exporter_collector_duration_seconds_bucket{job="meraki_dashboard"}[5m])))
 
-  # ---------------------------------------------------------------------------------------------
-  # PLACEHOLDER — client-telemetry data-log → metric recording rules
-  # ---------------------------------------------------------------------------------------------
-  # DO NOT ACTIVATE YET. The OTel structured data-log channel (core/otel_data_logs.py) emits
-  # per-client events like `meraki.wireless.client.signal_quality` and
-  # `meraki.wireless.client.packet_loss` intended to land in Loki so LogQL-based recording rules
-  # (Mimir/Loki ruler `source: logs`) could turn them into aggregate metrics (e.g. p50/p95 signal
-  # quality per SSID) without violating the project's no-per-client-Prometheus-metric rule (see
-  # the repo CLAUDE.md fatal_implications — per-client cardinality routes to data-logs, not
-  # metrics, by design).
-  #
-  # Verified live 2026-07-03 that this pipeline is CURRENTLY BROKEN, not just "not yet built":
-  # `MRClientLogsCollector` is failing every run with
-  # `getOrganizationWirelessDevicesPacketLossByClient - 401 Unauthorized, {'errors': ['Invalid API
-  # key']}` (per repo memory: "data-logs #637 broken"). No `meraki.wireless.client.*` log lines
-  # were found in Loki at verification time — only the collector's own error-log events. Writing
-  # LogQL recording rules against a stream that doesn't exist yet would be unverifiable and
-  # actively misleading, so none are included here.
-  #
-  # ACTIVATE ONCE #637/#638 LAND: confirm the log stream first —
-  #   gcx logs query '{service_name="meraki-dashboard-exporter"} | json | event_name=~"meraki.wireless.client.*"' --since 1h -o raw
-  # — then add a `source: logs` rule group here, e.g.:
-  #
-  # - name: meraki-exporter-client-telemetry-PLACEHOLDER
-  #   rules:
-  #     - record: meraki:client_signal_quality:p50
-  #       expr: >-
-  #         quantile_over_time(0.5,
-  #           {service_name="meraki-dashboard-exporter"}
-  #             | json
-  #             | event_name="meraki.wireless.client.signal_quality"
-  #             | unwrap snr [5m]
-  #         )
-  #
-  # (exact LogQL fields TBD against the real event schema once the pipeline is fixed and emitting
-  # — do not copy the shape above verbatim without re-verifying field names live).
+  # Client data-log recording rules are not shipped; per-client events are emitted
+  # (see docs/observability/otel.md), so add a Loki ruler group here if you need aggregates.

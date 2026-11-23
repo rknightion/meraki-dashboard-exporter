@@ -114,24 +114,26 @@ async def test_resolve_hostname_invalid_ip(resolver, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_resolve_multiple_uses_resolver(monkeypatch, resolver):
-    """``resolve_multiple`` should delegate to :meth:`resolve_hostname`."""
+async def test_resolve_multiple_tracks_client_moves_before_resolving(resolver, monkeypatch):
+    """A moved client invalidates its old address before another client reuses it."""
+    import meraki_dashboard_exporter.services.dns_resolver as dns_mod
 
-    calls: list[str] = []
+    answers = {"192.0.2.1": "old.example", "192.0.2.2": "other.example"}
 
-    async def fake_resolve(ip: str, client_id: str | None = None) -> str:
-        calls.append(ip)
-        return ip.split(".", maxsplit=1)[0]
+    def fake_dns(ip: str):
+        return (answers[ip], [], [ip])
 
-    monkeypatch.setattr(resolver, "resolve_hostname", fake_resolve)
+    monkeypatch.setattr(dns_mod.socket, "gethostbyaddr", fake_dns)
+    assert await resolver.resolve_multiple([
+        ("c1", "192.0.2.1", None),
+        ("c2", "192.0.2.2", None),
+    ]) == {"192.0.2.1": "old", "192.0.2.2": "other"}
 
-    result = await resolver.resolve_multiple([
-        ("c1", "1.1.1.1", None),
-        ("c2", "2.2.2.2", None),
-    ])
-
-    assert calls == ["1.1.1.1", "2.2.2.2"]
-    assert result == {"1.1.1.1": "1", "2.2.2.2": "2"}
+    answers.update({"192.0.2.1": "reused.example", "192.0.2.3": "moved.example"})
+    assert await resolver.resolve_multiple([
+        ("c1", "192.0.2.3", None),
+        ("c2", "192.0.2.1", None),
+    ]) == {"192.0.2.3": "moved", "192.0.2.1": "reused"}
 
 
 @pytest.mark.asyncio

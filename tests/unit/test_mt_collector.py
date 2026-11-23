@@ -482,8 +482,6 @@ class TestMTCollector(BaseCollectorTest):
         mt_collector.api.sensor.getOrganizationSensorReadingsLatest.assert_called_once_with(
             "123456", total_pages="all", perPage=1000
         )
-        call_kwargs = mt_collector.api.sensor.getOrganizationSensorReadingsLatest.call_args.kwargs
-        assert "serials" not in call_kwargs
 
     async def test_fetch_sensor_readings_acquires_rate_limiter(self, mt_collector):
         """#553: MT sensor readings fetch counts against the org's rate-limit budget."""

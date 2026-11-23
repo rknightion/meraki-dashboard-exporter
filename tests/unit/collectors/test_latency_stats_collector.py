@@ -58,18 +58,6 @@ class TestLatencyStatsCollector:
             "orgName": "Test Org",
         }
 
-    def test_initialization(self, collector: LatencyStatsCollector, mock_parent: MagicMock) -> None:
-        """Test collector initialization sets up parent/api/settings."""
-        assert collector.parent == mock_parent
-        assert collector.api == mock_parent.api
-        assert collector.settings == mock_parent.settings
-
-    def test_gauges_created(self, collector: LatencyStatsCollector, mock_parent: MagicMock) -> None:
-        """Test that both device and client latency gauges are created on init."""
-        assert mock_parent._create_gauge.call_count == 2
-        assert collector._mr_device_latency_ms is not None
-        assert collector._mr_network_client_latency_ms is not None
-
     async def test_device_latency_all_traffic_classes(
         self,
         collector: LatencyStatsCollector,

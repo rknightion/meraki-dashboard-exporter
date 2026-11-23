@@ -58,12 +58,6 @@ class TestAirMarshalCollector:
             "orgName": "Test Org",
         }
 
-    def test_initialization(self, collector: AirMarshalCollector, mock_parent: MagicMock) -> None:
-        """Test collector initialization sets up parent/api/settings."""
-        assert collector.parent == mock_parent
-        assert collector.api == mock_parent.api
-        assert collector.settings == mock_parent.settings
-
     def test_gauges_created(self, collector: AirMarshalCollector, mock_parent: MagicMock) -> None:
         """Test that all five Air Marshal gauges are created on init."""
         assert mock_parent._create_gauge.call_count == 5

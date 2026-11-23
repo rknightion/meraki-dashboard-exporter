@@ -511,8 +511,8 @@ serviceMonitor:
   # -- Honor labels from the scrape target
   honorLabels: false
 
-# Prometheus Operator PrometheusRule: starter alert rules (#569). Mirrors the
-# curated set in examples/prometheus-rules.yaml - keep the two in sync by hand.
+# The template templates/prometheusrule.yaml is the source of truth for these rules.
+# examples/prometheus-rules.yaml and grafana/alerts/alerting-rules.yaml mirror it; change all three together.
 # See docs/data-freshness.md for the `for:` duration reasoning behind each rule.
 prometheusRule:
   # -- Enable PrometheusRule creation (requires Prometheus Operator)
