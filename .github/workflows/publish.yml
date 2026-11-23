@@ -30,6 +30,9 @@ jobs:
     runs-on: ubuntu-26.04
     permissions:
       contents: read
+    outputs:
+      app_version: ${{ steps.build_metadata.outputs.app_version || github.sha }}
+      sha: ${{ steps.build_metadata.outputs.sha || github.sha }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
@@ -41,6 +44,15 @@ jobs:
         with:
           ref: ${{ inputs.release_tag || github.sha }}
           persist-credentials: false
+
+      - name: Resolve tagged build metadata
+        id: build_metadata
+        if: ${{ inputs.release_tag != '' }}
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          echo "app_version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Validate vulnerability exceptions
         run: python3 scripts/validate_trivy_exceptions.py
@@ -75,8 +87,8 @@ jobs:
       helm-chart-path: charts/meraki-dashboard-exporter
       build-args: |
         PY_VERSION=3.14
-        APP_VERSION=${{ inputs.release_tag || github.sha }}
-        GIT_COMMIT=${{ github.sha }}
+        APP_VERSION=${{ needs.policy.outputs.app_version }}
+        GIT_COMMIT=${{ needs.policy.outputs.sha }}
       dockerhub-login: true
       trivy-ignore-file: .trivyignore.yaml
     secrets:
