@@ -91,6 +91,8 @@ jobs:
         GIT_COMMIT=${{ needs.policy.outputs.sha }}
       dockerhub-login: true
       trivy-ignore-file: .trivyignore.yaml
+      # Gate only on findings that have a fix available for the scanned distribution.
+      trivy-ignore-unfixed: true
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

@@ -45,7 +45,7 @@ Container publication has a stricter boundary than ordinary merge CI:
 1. The committed exception policy is validated, including every expiry date.
 2. Publication-scoped CodeQL analysis blocks at HIGH or CRITICAL security severity.
 3. Each native architecture is built as a local OCI archive and scanned by Trivy for HIGH and
-   CRITICAL vulnerabilities.
+   CRITICAL vulnerabilities that have an available fix.
 4. Only a successfully scanned archive is copied to GHCR, by its exact digest. The multi-arch
    manifest, signatures, provenance attestation, SBOMs, and optional Helm chart are created only
    after both architecture jobs pass.

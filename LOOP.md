@@ -39,8 +39,8 @@ The tracker working model is `~/repos/agent-docs/docs/github-tracker.md` (mainta
   shape is gated by `docker-build-test`: run `just ci` (`image-verify` requires `Config.User` to be
   `exporter`; `image-structure` needs `container-structure-test` or its container equivalent;
   `smoke` needs `/health` and `/metrics` to return 200). A green `just check` means nothing there.
-- The publish Trivy gate runs only in `publish.yml` and fails on any HIGH or CRITICAL not accepted
-  in `.trivyignore.yaml`. A release can exist with no artifact behind it, and exceptions silently
+- The publish Trivy gate runs only in `publish.yml` and fails on any HIGH or CRITICAL that has an
+  available fix and is not accepted in `.trivyignore.yaml`. Findings with no fix do not block. A release can exist with no artifact behind it, and exceptions silently
   stop applying when the base image's distro changes.
 - Generated artifacts are committed and overwritten silently: run `just gen` when metrics, config,
   endpoints, collectors, the settings schema or the chart config change.
