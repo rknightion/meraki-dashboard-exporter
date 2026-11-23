@@ -49,6 +49,12 @@ If you set either value, it now takes effect.
 
 ## Changes after 3.0.0
 
+### Tagged image build information
+
+Tagged images now report the release version without its leading `v` and the commit checked out
+for that tag in their build information. Image tags themselves are unchanged. Queries matching the
+previous version label with its `v` prefix need to use the version without it for new images.
+
 ### Per-collector cardinality setting removed
 
 The former `monitoring.max_cardinality_per_collector` setting never enforced a cap and has been
