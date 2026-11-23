@@ -2,17 +2,33 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
+import math
+from collections import deque
+from time import monotonic
 from typing import TYPE_CHECKING, Any, cast
 
-from ....core.api_facade import facade_for
-from ....core.async_utils import ManagedTaskGroup
+from ....core.api_facade import FacadeRateLimitExhaustedError, facade_for
 from ....core.constants import MRMetricName
 from ....core.domain_models import (
     WirelessSsid,
     WirelessSsidFirewallL3Rules,
     WirelessSsidFirewallL7Rules,
 )
-from ....core.error_handling import ErrorCategory, validate_response_format, with_error_handling
+from ....core.error_handling import (
+    ErrorCategory,
+    categorize_error,
+    validate_response_format,
+    with_error_handling,
+)
+from ....core.fanout_cursor import (
+    FanoutCursor,
+    _positive_number,
+    failure_retry_spacing,
+    per_attempt_call_budget,
+    sweep_ttl_seconds,
+)
 from ....core.logging import get_logger
 from ....core.logging_decorators import log_api_call
 from ....core.logging_helpers import LogContext
@@ -52,6 +68,11 @@ class MRFirewallCollector:
         self.parent = parent
         self.api = parent.api
         self.settings = parent.settings
+        self._discoveries: dict[str, FanoutCursor] = {}
+        self._rules: dict[str, FanoutCursor] = {}
+        self._pending_l7: dict[str, set[str]] = {}
+        self._ssids: dict[str, dict[str, list[WirelessSsid]]] = {}
+        self._prefer_rules: dict[str, bool] = {}
         self._initialize_metrics()
 
     def _initialize_metrics(self) -> None:
@@ -81,6 +102,7 @@ class MRFirewallCollector:
         operation="Collect MR SSID firewall rules",
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
+        apply_deadline=False,
     )
     async def collect_ssid_firewall(
         self,
@@ -102,111 +124,232 @@ class MRFirewallCollector:
             networks only.
 
         """
-        # Scheduler gate: skip the whole per-network fan-out when not due (#617).
-        if not self.parent._should_run_group(EndpointGroupName.MR_SSID_FIREWALL):
+        group = EndpointGroupName.MR_SSID_FIREWALL
+        scheduler = getattr(self.parent, "scheduler", None)
+        if scheduler is not None and scheduler.is_enabled(group) is False:
             return
 
-        wireless_networks = [n for n in networks if "wireless" in n.get("productTypes", [])]
+        cutoff = self.parent.ssid_firewall_cutoff
+        if cutoff is not None and asyncio.get_running_loop().time() >= cutoff:
+            return
+        window = asyncio.timeout_at(cutoff)
+        try:
+            async with window:
+                await self._sweep(org_id, networks, cutoff)
+        except TimeoutError:
+            if not window.expired():
+                raise
+            # Cancel only this sweep. Any interrupted item stays incomplete,
+            # ordered behind unattempted items, without counting as an API error.
+            logger.debug("Deferring SSID firewall work at device cycle cutoff", org_id=org_id)
 
-        async with ManagedTaskGroup(
-            name="mr_ssid_firewall_networks",
-            max_concurrency=self.settings.api.concurrency_limit,
-        ) as group:
-            for network in wireless_networks:
-                network_id = network.get("id", "")
-                network_name = network.get("name", network_id)
-                if not network_id:
-                    continue
-                await group.create_task(
-                    self.collect_for_network(org_id, org_name, network_id, network_name),
-                    name=f"ssid_firewall_{network_id}",
+    async def _sweep(
+        self, org_id: str, networks: list[dict[str, Any]], cutoff: float | None
+    ) -> None:
+        """Process due discoveries and rule pairs until the call or time budget ends."""
+        group = EndpointGroupName.MR_SSID_FIREWALL
+        network_ids = list(
+            dict.fromkeys(
+                n["id"] for n in networks if n.get("id") and "wireless" in n.get("productTypes", [])
+            )
+        )
+        network_set = set(network_ids)
+        discoveries = self._discoveries.setdefault(org_id, FanoutCursor())
+        rules = self._rules.setdefault(org_id, FanoutCursor())
+        cached = self._ssids.setdefault(org_id, {})
+        discoveries.prune(network_ids)
+        for network_id in list(cached):
+            if network_id not in network_set:
+                del cached[network_id]
+
+        interval = float(self.parent._group_interval(group))
+        retry = failure_retry_spacing(self.settings, interval)
+        budget = per_attempt_call_budget(self.settings, getattr(self.parent, "rate_limiter", None))
+        # Reserve the full pair cost even when resuming at L7. The one-item floor
+        # permits one pair, but never an extra discovery.
+        remaining = budget
+        prefer_rules = self._prefer_rules.get(org_id, False)
+        did_work = False
+        cadence_reader = getattr(self.parent, "collector_cadence_seconds", None)
+        cadence = _positive_number(cadence_reader() if callable(cadence_reader) else None) or 0.0
+
+        by_key = {
+            json.dumps([network_id, ssid.number]): (network_id, ssid)
+            for network_id, ssids in cached.items()
+            for ssid in ssids
+        }
+        rules.prune(by_key)
+        pending_l7 = self._pending_l7.setdefault(org_id, set())
+        pending_l7.intersection_update(by_key)
+        blocked = {
+            network_id
+            for network_id in network_ids
+            if discoveries.last_attempt.get(network_id, -math.inf)
+            > discoveries.last_success.get(network_id, -math.inf)
+        }
+        now = monotonic()
+        due_discovery = discoveries.select(
+            network_ids, interval=interval, retry_spacing=retry, limit=len(network_ids), now=now
+        )
+        due_rules = rules.select(
+            list(by_key), interval=interval, retry_spacing=retry, limit=len(by_key), now=now
+        )
+        # Retryable failures go behind work not yet attempted. Plan each fleet
+        # queue once; refreshes only inspect their own network's SSIDs.
+        for cursor, due in ((discoveries, due_discovery), (rules, due_rules)):
+            due.sort(
+                key=lambda key: max(
+                    cursor.last_success.get(key, -math.inf), cursor.last_attempt.get(key, -math.inf)
                 )
+            )
+        discovery_queue = deque(due_discovery)
+        rule_queue = deque(key for key in due_rules if by_key[key][0] not in blocked)
+        queued_rules = set(rule_queue)
+        clock = asyncio.get_running_loop().time
 
-        # Mark ran after the per-network fan-out completes (#617), mirroring
-        # ms_stack.py's collect_for_org gate-once/mark-once pattern.
-        self.parent._mark_group_ran(EndpointGroupName.MR_SSID_FIREWALL)
+        while remaining > 0:
+            # Do not admit another item even if the timeout callback has not run yet.
+            if cutoff is not None and clock() >= cutoff:
+                break
+            while rule_queue and (
+                rule_queue[0] not in by_key or by_key[rule_queue[0]][0] in blocked
+            ):
+                queued_rules.discard(rule_queue.popleft())
+            # A one-call floor can accommodate one pair, only as the whole attempt.
+            pair_fits = remaining >= 2 or (budget == 1 and remaining == 1)
+            if rule_queue and pair_fits and (prefer_rules or not discovery_queue):
+                key = rule_queue.popleft()
+                queued_rules.discard(key)
+                network_id, ssid = by_key[key]
+                rules.record_attempt(key, monotonic())
+                self._prefer_rules[org_id] = prefer_rules = False
+                remaining -= 2
+                did_work = True
+                ttl = sweep_ttl_seconds(
+                    self.parent._group_ttl_seconds(group),
+                    interval,
+                    len(network_ids) + 2 * (len(by_key) + 15 * (len(network_ids) - len(cached))),
+                    max(1, budget - budget % 2),
+                    cadence,
+                )
+                labels = {
+                    LabelName.ORG_ID.value: org_id,
+                    LabelName.NETWORK_ID.value: network_id,
+                    LabelName.SSID.value: ssid.name or str(ssid.number),
+                }
+                try:
+                    number = str(ssid.number)
+                    if key not in pending_l7:
+                        await self._collect_l3_rules(network_id, number, labels, ttl)
+                        pending_l7.add(key)
+                    await self._collect_l7_rules(network_id, number, labels, ttl)
+                except Exception as exc:
+                    self._track_item_error(exc)
+                    logger.exception(
+                        "Failed to collect SSID firewall rules",
+                        org_id=org_id,
+                        network_id=network_id,
+                        ssid_number=ssid.number,
+                    )
+                else:
+                    pending_l7.remove(key)
+                    rules.record_success(key, monotonic())
+            elif discovery_queue:
+                network_id = discovery_queue.popleft()
+                discoveries.record_attempt(network_id, monotonic())
+                self._prefer_rules[org_id] = prefer_rules = True
+                remaining -= 1
+                did_work = True
+                try:
+                    parsed = await self._discover_ssids(org_id=org_id, network_id=network_id)
+                except Exception as exc:
+                    self._track_item_error(exc)
+                    blocked.add(network_id)
+                    logger.exception(
+                        "Failed to discover SSIDs", org_id=org_id, network_id=network_id
+                    )
+                else:
+                    old_keys = {
+                        json.dumps([network_id, ssid.number]) for ssid in cached.get(network_id, [])
+                    }
+                    cached[network_id] = parsed
+                    new_keys = {json.dumps([network_id, ssid.number]): ssid for ssid in parsed}
+                    for key in old_keys - new_keys.keys():
+                        by_key.pop(key, None)
+                        pending_l7.discard(key)
+                        rules.last_attempt.pop(key, None)
+                        rules.last_success.pop(key, None)
+                    for key, ssid in new_keys.items():
+                        by_key[key] = (network_id, ssid)
+                    blocked.discard(network_id)
+                    discoveries.record_success(network_id, monotonic())
+                    for key in rules.select(
+                        list(new_keys),
+                        interval=interval,
+                        retry_spacing=retry,
+                        limit=len(new_keys),
+                        now=monotonic(),
+                    ):
+                        if key not in queued_rules:
+                            rule_queue.append(key)
+                            queued_rules.add(key)
+            else:
+                break
+
+        keys = [
+            json.dumps([network_id, ssid.number])
+            for network_id, ssids in cached.items()
+            for ssid in ssids
+        ]
+        now = monotonic()
+        if (
+            (did_work or not network_ids)
+            and discoveries.all_fresh(network_ids, interval, now)
+            and rules.all_fresh(keys, interval, now)
+        ):
+            self.parent._mark_group_ran(group)
+
+    def _track_item_error(self, exc: Exception) -> None:
+        """Record a swallowed item failure against the owning collector."""
+        category = (
+            ErrorCategory.API_RATE_LIMIT
+            if isinstance(exc, FacadeRateLimitExhaustedError)
+            else categorize_error(exc)
+        )
+        if category is ErrorCategory.UNKNOWN:
+            category = ErrorCategory.API_CLIENT_ERROR
+        self.parent._track_error(category)
 
     @log_api_call("getNetworkWirelessSsids")
-    @with_error_handling(
-        operation="Collect MR SSID firewall rules for network",
-        continue_on_error=True,
-        error_category=ErrorCategory.API_CLIENT_ERROR,
-    )
-    async def collect_for_network(
-        self,
-        org_id: str,
-        org_name: str,
-        network_id: str,
-        network_name: str,
-    ) -> None:
-        """Collect firewall rule counts for every enabled SSID on one network.
-
-        Parameters
-        ----------
-        org_id : str
-            Organization ID.
-        org_name : str
-            Organization name.
-        network_id : str
-            Network ID for the wireless network.
-        network_name : str
-            Human-readable network name (unused in labels; ID-only, #534).
-
-        """
-        # Per-network fetch inside the collect_ssid_firewall fan-out; the group
-        # gate lives on collect_ssid_firewall (once per cycle).
-        ttl = self.parent._group_ttl_seconds(EndpointGroupName.MR_SSID_FIREWALL)
-
+    async def _discover_ssids(self, org_id: str, network_id: str) -> list[WirelessSsid]:
+        """Fetch validated, enabled, numbered SSIDs for one network."""
         with LogContext(org_id=org_id, network_id=network_id):
-            raw_ssids = await facade_for(self).call(
-                "getNetworkWirelessSsids",
-                self.api.wireless.getNetworkWirelessSsids,
-                network_id,
-            )
-        ssids_data = validate_response_format(
-            raw_ssids,
-            expected_type=list,
-            operation="getNetworkWirelessSsids",
-        )
-
-        # Only fetch firewall rules for *enabled* SSIDs (mandatory, not an
-        # optimization): call volume here is networks x enabled-SSIDs x 2, so
-        # skipping disabled SSIDs (up to 15/network) keeps this bounded.
-        enabled_ssids = [
-            WirelessSsid.model_validate(raw_ssid)
-            for raw_ssid in ssids_data
-            if raw_ssid.get("enabled")
-        ]
-
-        for ssid in enabled_ssids:
-            if ssid.number is None:
-                continue
-
-            ssid_name = ssid.name or str(ssid.number)
-            base_labels = {
-                LabelName.ORG_ID.value: org_id,
-                LabelName.NETWORK_ID.value: network_id,
-                LabelName.SSID.value: ssid_name,
-            }
-
             try:
-                await self._collect_ssid_rules(network_id, str(ssid.number), base_labels, ttl)
-            except Exception:
-                logger.exception(
-                    "Failed to collect SSID firewall rules",
-                    org_id=org_id,
-                    network_id=network_id,
-                    ssid_number=ssid.number,
+                raw = await facade_for(self).call(
+                    "getNetworkWirelessSsids", self.api.wireless.getNetworkWirelessSsids, network_id
                 )
+            except Exception as exc:
+                # Discovery is optional on these networks. Consume the structured
+                # status here, before the API decorator can log 402 as an error.
+                status = getattr(exc, "status", None)
+                if not isinstance(status, int) or status not in {402, 404}:
+                    raise
+                logger.debug("SSID discovery not available", status=status)
+                return []
+        data = validate_response_format(
+            raw, expected_type=list, operation="getNetworkWirelessSsids"
+        )
+        parsed = [WirelessSsid.model_validate(row) for row in data if row.get("enabled")]
+        return [ssid for ssid in parsed if ssid.number is not None]
 
-    async def _collect_ssid_rules(
+    async def _collect_l3_rules(
         self,
         network_id: str,
         ssid_number: str,
         base_labels: dict[str, str],
         ttl: float | None,
     ) -> None:
-        """Fetch and emit L3+L7 firewall rule counts for a single SSID.
+        """Fetch and emit the L3 rule count and LAN access policy for a single SSID.
 
         Parameters
         ----------
@@ -247,6 +390,14 @@ class MRFirewallCollector:
                 ttl_seconds=ttl,
             )
 
+    async def _collect_l7_rules(
+        self,
+        network_id: str,
+        ssid_number: str,
+        base_labels: dict[str, str],
+        ttl: float | None,
+    ) -> None:
+        """Fetch and emit the L7 rule count for a single SSID."""
         l7_raw = await self._fetch_l7_rules(network_id, ssid_number)
         l7_data = validate_response_format(
             l7_raw,
