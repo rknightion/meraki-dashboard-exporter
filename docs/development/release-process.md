@@ -37,6 +37,23 @@ Releases are automated with **release-please** and GitHub Actions.
    chart is published to `ghcr.io/<owner>/charts/<chart-name>`. See
    [Security](../security.md) for how to verify image signatures.
 
+## Recovering a failed publish
+
+A release can exist even when its image or chart publication fails. The release notes are marked
+and the release is set to prerelease; check the workflow run as well, since the flagging job can
+itself fail or be cancelled. First check whether the Docker Hub token has expired and renew it if
+needed. Then inspect the failed publication job and correct its cause.
+
+Use **Re-run failed jobs** on the Release Please run, never **Re-run all jobs**. Re-running all
+jobs runs release-please again; it sees the existing release, skips the release publish, and runs
+edge instead. If the run can no longer be rerun, dispatch the `publish` workflow with `release_tag`
+set to the release tag. Both routes build the tag's tree: a fix to tagged code, such as the
+Dockerfile or Trivy exceptions, needs a new patch release instead.
+
+After verifying that both artefacts exist, remove the marked notice block from the release notes
+and run `gh release edit <tag> --prerelease=false --latest`. A retry does not clear the flag or
+notice automatically.
+
 ## Manual Trigger
 
 You can also run the **Release Please** workflow manually from GitHub Actions (workflow_dispatch) to open or refresh the release PR.
