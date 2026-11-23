@@ -164,19 +164,26 @@ class MXFirewallCollector(SubCollectorMixin):
                 self.api.appliance.getNetworkApplianceSettings,
                 network_id,
             )
-        except APIError as e:
+            data = validate_response_format(
+                response,
+                expected_type=dict,
+                operation="getNetworkApplianceSettings",
+            )
+            mode = ApplianceSettings.model_validate(data).deploymentMode
+        except Exception as e:
+            # Any failed read (API error, exhausted 429, timeout, bad body shape)
+            # keeps the last known mode so the VLAN/static-route calls are still
+            # attempted. Clear the window so the next VLAN pass retries the read
+            # instead of waiting out the 24h interval. Log the type only: an
+            # exception message can carry request detail.
+            self._last_appliance_settings_collection.pop(network_id, None)
             logger.debug(
                 "Appliance settings unavailable; VLAN/static-route calls not gated",
                 network_id=network_id,
-                status=e.status,
+                status=getattr(e, "status", None),
+                error_type=type(e).__name__,
             )
             return self._deployment_modes.get(network_id)
-        data = validate_response_format(
-            response,
-            expected_type=dict,
-            operation="getNetworkApplianceSettings",
-        )
-        mode = ApplianceSettings.model_validate(data).deploymentMode
         if mode:
             self._deployment_modes[network_id] = mode
         return self._deployment_modes.get(network_id)
