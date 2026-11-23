@@ -484,6 +484,60 @@ class TestRealFirewallPath(BaseCollectorTest):
             == 0
         )
 
+    async def test_l3_refreshes_while_l7_keeps_failing(
+        self, collector, mock_api, settings, isolated_registry, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A failing L7 endpoint must not stop healthy L3 series from refreshing."""
+        now = [100.0]
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.collectors.devices.mr.firewall.monotonic", lambda: now[0]
+        )
+        settings.api.per_fetch_deadline_seconds = 20
+        settings.api.rate_limit_requests_per_second = 2
+        settings.api.rate_limit_shared_fraction = 1
+        networks = [{"id": "net", "productTypes": ["wireless"]}]
+        calls: list[str] = []
+
+        mock_api.wireless.getNetworkWirelessSsids.return_value = [
+            {"number": 0, "name": "corp", "enabled": True}
+        ]
+
+        def l3(network, number):
+            calls.append("L3")
+            return {"rules": [], "allowLanAccess": True}
+
+        def l7(network, number):
+            calls.append("L7")
+            raise ValueError("l7 offline")
+
+        mock_api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules.side_effect = l3
+        mock_api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules.side_effect = l7
+        firewall = collector.mr_collector.firewall
+        interval = float(firewall.parent._group_interval(EndpointGroupName.MR_SSID_FIREWALL))
+
+        await firewall.collect_ssid_firewall("org", "Org", networks)
+        assert calls == ["L3", "L7"]
+        calls.clear()
+
+        # A retry soon after the failure resumes at L7 without repeating L3.
+        now[0] += settings.scheduler.failure_retry_seconds + 1
+        assert now[0] - 100.0 < interval
+        await firewall.collect_ssid_firewall("org", "Org", networks)
+        assert calls == ["L7"]
+        calls.clear()
+
+        # Once the checkpointed L3 is older than the sweep interval, L3 refreshes
+        # again before L7 so its series do not expire behind the L7 failure.
+        now[0] += interval + 1
+        await firewall.collect_ssid_firewall("org", "Org", networks)
+        assert calls == ["L3", "L7"]
+        calls.clear()
+
+        # The refreshed L3 checkpoint resumes at L7 again on the next retry.
+        now[0] += settings.scheduler.failure_retry_seconds + 1
+        await firewall.collect_ssid_firewall("org", "Org", networks)
+        assert calls == ["L7"]
+
 
 def _make_gauge(name: str, description: str, labelnames: list[str]) -> Gauge:
     """Create a real Prometheus Gauge using the enum value as the metric name."""
