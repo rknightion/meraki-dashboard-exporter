@@ -41,7 +41,7 @@ unattended on the release PR.
 - `publish.yml` validates the expiring Trivy exception policy
   (`scripts/validate_trivy_exceptions.py`, `.trivyignore.yaml`) and runs publication-scoped
   HIGH-severity CodeQL before wrapping the shared `container-publish.yml`, passing
-  `helm-chart-path: charts/meraki-dashboard-exporter` and `build-args: PY_VERSION=3.14`.
+  `helm-chart-path: charts/meraki-dashboard-exporter` and `build-args: PY_VERSION=3.15`.
 - `api-drift.yml` fetches the live Meraki spec, runs `apidrift`, then `tufin/oasdiff breaking` over
   the reduced specs. `actions/report-drift` upserts a labelled tracking issue when the report
   fingerprint changes and then **always fails the job** - drift is a hard-fail signal once reported.

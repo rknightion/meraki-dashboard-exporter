@@ -11,7 +11,7 @@ facts is edited here; changes to the rest go to that repository.
 ## This repository
 
 <!-- vended:repo-facts:begin -->
-meraki-dashboard-exporter is a Python 3.14 project managed with `uv`. `just setup` installs the pinned
+meraki-dashboard-exporter is a Python 3.15 project managed with `uv`. `just setup` installs the pinned
 Python and the locked dependencies; `just --list` shows every task. Tests run against a mocked
 Meraki API, so `just check` needs no Meraki account or API key. A change that depends on a real
 response shape cannot be proved that way: the vendored OpenAPI spec is wrong for some endpoints, so

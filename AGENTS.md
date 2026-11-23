@@ -160,7 +160,7 @@ Commits are Conventional Commits: release-please and Renovate parse the subject.
 ## Cursor Cloud specific instructions
 
 Cursor runs `just cloud-bootstrap </dev/null` on the pinned image. The recipe
-prepares the locked Python 3.14 environment, bytecode cache and the Helm binary
+prepares the locked Python 3.15 environment, bytecode cache and the Helm binary
 that pytest uses through `.venv/bin`. It also prepares the Groma scanner with the
 Node version selected by `.node-version`. The standalone Codex and Claude
 provisioner remains a separate end-user entry point.

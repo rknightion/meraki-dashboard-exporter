@@ -6,7 +6,7 @@
 set -euo pipefail
 
 readonly JUST_VERSION="1.58.0"
-readonly PYTHON_VERSION="3.14.7"
+readonly PYTHON_VERSION="3.15.2"
 readonly UV_VERSION="0.12.9"
 readonly USER_BIN="${HOME}/.local/bin"
 
