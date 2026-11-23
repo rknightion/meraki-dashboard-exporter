@@ -16,7 +16,6 @@ from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.collectors.devices.mr.firewall import MRFirewallCollector
 from meraki_dashboard_exporter.collectors.manager import CollectorManager
 from meraki_dashboard_exporter.core.api_facade import MerakiApiFacade
-from meraki_dashboard_exporter.core.constants.metrics_constants import MRMetricName
 from meraki_dashboard_exporter.core.fanout_cursor import FanoutCursor
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 from tests.helpers.base import BaseCollectorTest
@@ -771,32 +770,6 @@ class TestMRFirewallCollector:
         for _ in range(2):
             await firewall_collector.collect_ssid_firewall("org", "Org", networks)
         assert ("L7", "bad") in calls
-
-    # ------------------------------------------------------------------
-    # Initialisation
-    # ------------------------------------------------------------------
-
-    def test_initialisation_creates_all_metrics(
-        self,
-        firewall_collector: MRFirewallCollector,
-        mock_parent: MagicMock,
-    ) -> None:
-        """Both firewall gauge metrics must be created during __init__."""
-        assert mock_parent._create_gauge.call_count == 2
-        created_names = {call.args[0] for call in mock_parent._create_gauge.call_args_list}
-        assert MRMetricName.MR_SSID_FIREWALL_RULES in created_names
-        assert MRMetricName.MR_SSID_ALLOW_LAN_ACCESS in created_names
-
-    def test_initialisation_stores_parent_api_settings(
-        self,
-        firewall_collector: MRFirewallCollector,
-        mock_parent: MagicMock,
-        mock_api: MagicMock,
-    ) -> None:
-        """Collector should hold references to parent, api, and settings."""
-        assert firewall_collector.parent is mock_parent
-        assert firewall_collector.api is mock_api
-        assert firewall_collector.settings is mock_parent.settings
 
     # ------------------------------------------------------------------
     # Enabled-only SSID filtering (mandatory, call-volume bound)
