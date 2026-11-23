@@ -93,6 +93,37 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
+  flag-unpublished-release:
+    needs: [release-please, docker-release, prepend-release-warning]
+    if: ${{ always() && needs.release-please.outputs.release_created == 'true' && needs.docker-release.result != 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Flag failed publication in release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          current_body=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body)
+          build_notes() {
+            if [[ "$current_body" == *'<!-- artefacts-not-published:start -->'* ]]; then
+              printf '%s' "$current_body"
+            else
+              cat <<'EOF'
+          <!-- artefacts-not-published:start -->
+          > [!CAUTION]
+          > The image and Helm chart for this version are not yet published. Do not deploy this release until publication is verified.
+          <!-- artefacts-not-published:end -->
+
+          EOF
+              printf '%s' "$current_body"
+            fi
+          }
+          build_notes | gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file -
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease
+
   # Edge build on every non-release push to main: publishes :main multi-arch image
   # + a main-snapshot Helm chart (replaces the removed docker-build.yml push:main path).
   # release_created gates this vs docker-release, so they never both run on one push.
