@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.29
-ARG PY_VERSION=3.14
+ARG PY_VERSION=3.15
 
 # --------------------------------------------------------------------------- #
 # Builder stage - uses official Alpine image to compile wheels with uv
@@ -8,11 +8,11 @@ ARG PY_VERSION=3.14
 # manager natively tracks `FROM image:${ARG}@sha256:digest` (expands the ARG default to
 # resolve the tag, then keeps the digest in sync with that tag) — no custom regex manager
 # needed. The uv `COPY --from` pin below rides on the same built-in manager (#661).
-# Pinned digest resolves to python:3.14-alpine3.23 (3.14.7-alpine3.23 on Alpine
-# 3.23.6, multi-arch index incl. linux/amd64 + linux/arm64). Alpine avoids shipping
+# Pinned digest resolves to python:3.15-alpine3.23 (3.15.2-alpine3.23 on Alpine
+# 3.23.8, multi-arch index incl. linux/amd64 + linux/arm64). Alpine avoids shipping
 # Debian's libsystemd0/libudev1 runtime packages; their source package is affected by
 # CVE-2026-16742 and Debian 13 has no fixed version.
-FROM python:${PY_VERSION}-alpine3.23@sha256:f6a7dec95e6205059dccfcb07faca3ca38729ea35df01231caf1d127bacedec8 AS builder
+FROM python:${PY_VERSION}-alpine3.23@sha256:32f06114a111c2467804d06194c5584f16804a78cfaf427fb1fcbb0b3391d0f1 AS builder
 
 # Install system deps with cache mounts for faster rebuilds
 RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
@@ -56,13 +56,13 @@ RUN python -m compileall -q meraki_dashboard_exporter
 # --------------------------------------------------------------------------- #
 # Same digest pin as the builder stage above (#562) — both stages must resolve to the
 # identical base image.
-FROM python:${PY_VERSION}-alpine3.23@sha256:f6a7dec95e6205059dccfcb07faca3ca38729ea35df01231caf1d127bacedec8 AS runtime
+FROM python:${PY_VERSION}-alpine3.23@sha256:32f06114a111c2467804d06194c5584f16804a78cfaf427fb1fcbb0b3391d0f1 AS runtime
 
 # Install runtime dependencies and create non-root user.
 #
 # `apk upgrade` runs FIRST and is deliberate, despite the digest pin above. Alpine
 # publishes package fixes into the 3.23 repository continuously, but the upstream
-# `python:3.14-alpine3.23` image is only rebuilt periodically, so between those
+# `python:3.15-alpine3.23` image is only rebuilt periodically, so between those
 # rebuilds the pinned base carries packages with published fixes already available.
 # Trivy gates publication on HIGH/CRITICAL, so that window does not merely warn --
 # it blocks every image and chart the release pipeline would push, including a

@@ -6,7 +6,7 @@ export COMPOSE_DOCKER_CLI_BUILD := "1"
 
 image_name := "meraki-dashboard-exporter"
 registry := "ghcr.io/rknightion"
-py_version := "3.14"
+py_version := "3.15"
 # renovate: datasource=npm depName=groma.md
 groma_version := "0.7.8"
 # renovate: datasource=git-refs depName=https://github.com/rknightion/fleet-review currentValue=main
