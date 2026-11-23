@@ -10,6 +10,7 @@ from prometheus_client import Gauge
 
 from meraki_dashboard_exporter.collectors.devices.mx_firewall import MXFirewallCollector
 from meraki_dashboard_exporter.core.constants.metrics_constants import MXMetricName
+from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 
 if TYPE_CHECKING:
     pass
@@ -28,6 +29,9 @@ class TestMXFirewallCollector:
         """Create a mock Meraki DashboardAPI client."""
         api = MagicMock()
         api.appliance = MagicMock()
+        api.appliance.getNetworkApplianceSettings = MagicMock(
+            return_value={"deploymentMode": "routed"}
+        )
         return api
 
     @pytest.fixture
@@ -1890,6 +1894,212 @@ class TestMXFirewallCollector:
         mock_parent._set_metric.assert_not_called()
         assert mock_api.appliance.getNetworkApplianceVlans.call_count == 1
         assert mock_api.appliance.getNetworkApplianceStaticRoutes.call_count == 1
+
+    async def test_vlan_config_skipped_for_passthrough_appliance(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A passthrough appliance has no VLANs or static routes: neither is requested."""
+        mock_api.appliance.getNetworkApplianceSettings = MagicMock(
+            return_value={"deploymentMode": "passthrough"}
+        )
+        mock_api.appliance.getNetworkApplianceVlans = MagicMock(return_value=[])
+        mock_api.appliance.getNetworkApplianceStaticRoutes = MagicMock(return_value=[])
+
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+
+        mock_api.appliance.getNetworkApplianceVlans.assert_not_called()
+        mock_api.appliance.getNetworkApplianceStaticRoutes.assert_not_called()
+        mock_parent._set_metric.assert_not_called()
+
+    async def test_deployment_mode_read_once_per_settings_interval(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The deployment mode is cached for the mx_appliance_settings interval."""
+        intervals = {
+            EndpointGroupName.MX_VLAN_CONFIG: 0,
+            EndpointGroupName.MX_APPLIANCE_SETTINGS: 86400,
+        }
+        mock_parent._group_interval = MagicMock(side_effect=lambda g: intervals[g])
+        mock_api.appliance.getNetworkApplianceVlans = MagicMock(return_value=[])
+        mock_api.appliance.getNetworkApplianceStaticRoutes = MagicMock(return_value=[])
+
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+
+        assert mock_api.appliance.getNetworkApplianceSettings.call_count == 1
+        assert mock_api.appliance.getNetworkApplianceVlans.call_count == 2
+
+    async def test_deployment_mode_error_falls_back_to_collecting(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An unreadable deployment mode must not stop VLAN/static-route collection."""
+        from meraki.exceptions import APIError
+
+        response = MagicMock()
+        response.status_code = 403
+        response.reason = "Forbidden"
+        response.json.return_value = {"errors": ["Forbidden"]}
+        mock_api.appliance.getNetworkApplianceSettings = MagicMock(
+            side_effect=APIError(
+                {"tags": ["appliance"], "operation": "getNetworkApplianceSettings"}, response
+            )
+        )
+        mock_api.appliance.getNetworkApplianceVlans = MagicMock(return_value=[{"id": "1"}])
+        mock_api.appliance.getNetworkApplianceStaticRoutes = MagicMock(return_value=[])
+
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+
+        calls = {c[0][0]: c[0][2] for c in mock_parent._set_metric.call_args_list}
+        assert calls[firewall_collector._vlans_total] == 1.0
+        assert calls[firewall_collector._static_routes_total] == 0.0
+
+    @staticmethod
+    def _settings_failure(kind: str, mock_parent: MagicMock) -> dict[str, object]:
+        """Return the ``getNetworkApplianceSettings`` mock kwargs for one failure shape."""
+        from meraki.exceptions import APIError
+
+        if kind == "errors_key_body":
+            return {"return_value": {"errors": ["Internal error"]}}
+        if kind == "non_dict_body":
+            return {"return_value": ["not", "a", "dict"]}
+        if kind == "wrong_typed_mode":
+            return {"return_value": {"deploymentMode": 5}}
+        if kind == "timeout":
+            return {"side_effect": TimeoutError("settings read timed out")}
+        assert kind == "rate_limit_exhausted"
+        # No facade retries left, so the first 429 is the terminal outcome.
+        mock_parent.settings.api.max_retries = 0
+        response = MagicMock()
+        response.status_code = 429
+        response.reason = "Too Many Requests"
+        response.json.return_value = {"errors": ["Too Many Requests"]}
+        return {
+            "side_effect": APIError(
+                {"tags": ["appliance"], "operation": "getNetworkApplianceSettings"}, response
+            )
+        }
+
+    @pytest.mark.parametrize(
+        "kind",
+        ["errors_key_body", "rate_limit_exhausted", "timeout", "non_dict_body", "wrong_typed_mode"],
+    )
+    async def test_unreadable_deployment_mode_still_collects_vlans_and_routes(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        kind: str,
+    ) -> None:
+        """Any failed deployment-mode read falls back to attempting both calls."""
+        mock_api.appliance.getNetworkApplianceSettings = MagicMock(
+            **self._settings_failure(kind, mock_parent)
+        )
+        mock_api.appliance.getNetworkApplianceVlans = MagicMock(return_value=[{"id": "1"}])
+        mock_api.appliance.getNetworkApplianceStaticRoutes = MagicMock(
+            return_value=[{"id": "r1", "enabled": True}, {"id": "r2", "enabled": False}]
+        )
+
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+
+        calls = {c[0][0]: c[0][2] for c in mock_parent._set_metric.call_args_list}
+        assert calls[firewall_collector._vlans_total] == 1.0
+        assert calls[firewall_collector._static_routes_total] == 2.0
+        assert calls[firewall_collector._static_routes_enabled] == 1.0
+
+    @pytest.mark.parametrize("kind", ["timeout", "errors_key_body"])
+    async def test_failed_deployment_mode_read_is_retried_on_next_vlan_pass(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        kind: str,
+    ) -> None:
+        """A failed read must not hold the 24h settings window for that network."""
+        intervals = {
+            EndpointGroupName.MX_VLAN_CONFIG: 0,
+            EndpointGroupName.MX_APPLIANCE_SETTINGS: 86400,
+        }
+        mock_parent._group_interval = MagicMock(side_effect=lambda g: intervals[g])
+        mock_api.appliance.getNetworkApplianceSettings = MagicMock(
+            **self._settings_failure(kind, mock_parent)
+        )
+        mock_api.appliance.getNetworkApplianceVlans = MagicMock(return_value=[])
+        mock_api.appliance.getNetworkApplianceStaticRoutes = MagicMock(return_value=[])
+
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+        assert mock_api.appliance.getNetworkApplianceVlans.call_count == 1
+
+        # The next pass reads again, now successfully, and gates on what it learned.
+        mock_api.appliance.getNetworkApplianceSettings = MagicMock(
+            return_value={"deploymentMode": "passthrough"}
+        )
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+
+        assert mock_api.appliance.getNetworkApplianceSettings.call_count == 1
+        assert mock_api.appliance.getNetworkApplianceVlans.call_count == 1
+        assert mock_api.appliance.getNetworkApplianceStaticRoutes.call_count == 1
+
+    @pytest.mark.parametrize("kind", ["timeout", "errors_key_body", "wrong_typed_mode"])
+    async def test_failed_refresh_keeps_known_passthrough_skip(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        kind: str,
+    ) -> None:
+        """A failed refresh keeps the last known mode, so passthrough still skips both calls."""
+        intervals = {
+            EndpointGroupName.MX_VLAN_CONFIG: 0,
+            EndpointGroupName.MX_APPLIANCE_SETTINGS: 0,
+        }
+        mock_parent._group_interval = MagicMock(side_effect=lambda g: intervals[g])
+        mock_api.appliance.getNetworkApplianceSettings = MagicMock(
+            return_value={"deploymentMode": "passthrough"}
+        )
+        mock_api.appliance.getNetworkApplianceVlans = MagicMock(return_value=[])
+        mock_api.appliance.getNetworkApplianceStaticRoutes = MagicMock(return_value=[])
+
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+
+        mock_api.appliance.getNetworkApplianceSettings = MagicMock(
+            **self._settings_failure(kind, mock_parent)
+        )
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+
+        assert mock_api.appliance.getNetworkApplianceSettings.call_count == 1
+        mock_api.appliance.getNetworkApplianceVlans.assert_not_called()
+        mock_api.appliance.getNetworkApplianceStaticRoutes.assert_not_called()
+        mock_parent._set_metric.assert_not_called()
+
+    async def test_deployment_mode_read_failure_logs_type_only(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        force_debug_log_capture: None,
+    ) -> None:
+        """The debug line carries the exception type, never its message."""
+        from structlog.testing import capture_logs
+
+        mock_api.appliance.getNetworkApplianceSettings = MagicMock(
+            side_effect=TimeoutError("sensitive-detail-in-message")
+        )
+
+        with capture_logs() as logs:
+            mode = await firewall_collector._deployment_mode("N_1")
+
+        assert mode is None
+        events = [e for e in logs if e.get("network_id") == "N_1" and e["log_level"] == "debug"]
+        assert [e["error_type"] for e in events] == ["TimeoutError"]
+        assert "sensitive-detail-in-message" not in repr(logs)
 
     async def test_vlan_config_failure_waits_for_interval(
         self,

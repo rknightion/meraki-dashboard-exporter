@@ -82,6 +82,7 @@ EXPECTED_GROUP_NAMES = [
     "mx_vpn_config",
     "mx_nat_config",
     "mx_vlan_config",
+    "mx_appliance_settings",
     "mr_ssid_firewall",
     "mr_rf_profiles",
     "ms_dhcp_security",

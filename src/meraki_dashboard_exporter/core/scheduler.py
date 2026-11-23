@@ -133,6 +133,7 @@ class EndpointGroupName(StrEnum):
     MX_VPN_CONFIG = "mx_vpn_config"
     MX_NAT_CONFIG = "mx_nat_config"
     MX_VLAN_CONFIG = "mx_vlan_config"
+    MX_APPLIANCE_SETTINGS = "mx_appliance_settings"
     MR_SSID_FIREWALL = "mr_ssid_firewall"
     MR_RF_PROFILES = "mr_rf_profiles"
     MS_DHCP_SECURITY = "ms_dhcp_security"
