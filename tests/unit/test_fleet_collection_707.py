@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from collections.abc import Callable
 from unittest.mock import AsyncMock, MagicMock
@@ -74,7 +75,9 @@ def fleet_settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
     settings = Settings()
     settings.api.max_retries = 1
-    settings.api.per_fetch_deadline_seconds = 2.0
+    # Wall-clock and covering limiter and executor-queue waits, so it must exceed any
+    # scheduling stall on a loaded runner. The one test about the deadline sets its own.
+    settings.api.per_fetch_deadline_seconds = 20.0
     return settings
 
 
@@ -240,6 +243,7 @@ async def test_fanout_records_429_timeout_and_partial_failure_without_fabricatin
 
 
 async def test_two_overlapping_collection_runs_share_inventory_but_not_network_metrics(
+    monkeypatch: pytest.MonkeyPatch,
     fleet_settings: Settings,
     isolated_probe_registry: CollectorRegistry,
 ) -> None:
@@ -250,15 +254,55 @@ async def test_two_overlapping_collection_runs_share_inventory_but_not_network_m
         return fleet.clients_by_network[network_id]
 
     api, network_count = _fleet_api(clients)
+    inventory = OrganizationInventory(api, fleet_settings)
     collector = FleetInventoryProbe(
         api=api,
         settings=fleet_settings,
         registry=isolated_probe_registry,
-        inventory=OrganizationInventory(api, fleet_settings),
+        inventory=inventory,
     )
+
+    # Hold each inventory fetch open until both runs have entered that read, so the
+    # second run always meets an in-flight fetch instead of a cache the first filled.
+    overlapped: list[bool] = []
+
+    def hold_until_both_enter(method_name: str, sdk_method: MagicMock) -> None:
+        both_entered = threading.Event()
+        entries = 0
+        read = getattr(inventory, method_name)
+        response = sdk_method.return_value
+
+        async def counted_read(*args: object, **kwargs: object) -> object:
+            nonlocal entries
+            entries += 1
+            if entries == 2:
+                both_entered.set()
+            return await read(*args, **kwargs)
+
+        def held_fetch(*_: object, **__: object) -> object:
+            overlapped.append(both_entered.wait(timeout=10))
+            return response
+
+        monkeypatch.setattr(inventory, method_name, counted_read)
+        sdk_method.side_effect = held_fetch
+
+    hold_until_both_enter("get_organizations", api.organizations.getOrganizations)
+    hold_until_both_enter("get_networks", api.organizations.getOrganizationNetworks)
 
     await asyncio.gather(collector.collect(), collector.collect())
 
+    assert overlapped == [True, True]
     api.organizations.getOrganizations.assert_called_once_with(total_pages="all")
     api.organizations.getOrganizationNetworks.assert_called_once()
     assert api.networks.getNetworkClients.call_count == network_count * 2
+    samples = [
+        sample
+        for metric in isolated_probe_registry.collect()
+        if metric.name == "test_fleet_network_client_rows"
+        for sample in metric.samples
+    ]
+    assert len(samples) == network_count
+    assert {sample.labels["network_id"] for sample in samples} == {
+        str(network["id"]) for networks in fleet.networks_by_org.values() for network in networks
+    }
+    assert {sample.value for sample in samples} == {10.0}
