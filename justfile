@@ -25,7 +25,7 @@ default:
 # install the pinned Python and the locked dev dependencies into .venv
 setup:
     uv python install {{ py_version }}
-    uv sync --all-extras --locked
+    uv sync --all-extras --locked --python {{ py_version }}
 
 # prepare locked dependencies and local check tools for Cursor Cloud
 [group('dev')]
