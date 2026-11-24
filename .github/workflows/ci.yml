@@ -160,7 +160,7 @@ jobs:
   helm-lint-kubeconform:
     permissions:
       contents: read
-    uses: rknightion/.github/.github/workflows/helm-validate.yml@40b04a8393537f0aaf610e9286a5d4af44f98455 # v1.32.2
+    uses: rknightion/.github/.github/workflows/helm-validate.yml@7ed87713176ccae972b0143071b0196ff370d804 # v1.32.3
     with:
       # This chart renders CRD kinds (ServiceMonitor + PrometheusRule) that kubeconform has no
       # built-in schema for. Give it the schema rather than reaching for
@@ -186,7 +186,7 @@ jobs:
       contents: read
       issues: read
       pull-requests: read
-    uses: rknightion/.github/.github/workflows/ac-evidence.yml@40b04a8393537f0aaf610e9286a5d4af44f98455 # v1.32.2
+    uses: rknightion/.github/.github/workflows/ac-evidence.yml@7ed87713176ccae972b0143071b0196ff370d804 # v1.32.3
 
   # The lines a pull request adds carry no identifier, email address, public address or credential
   # shape. Pull requests only, for the same reason. Check run: `privacy-sweep / Privacy sweep`.
@@ -194,7 +194,7 @@ jobs:
     if: github.event_name == 'pull_request'
     permissions:
       contents: read
-    uses: rknightion/.github/.github/workflows/privacy-sweep.yml@40b04a8393537f0aaf610e9286a5d4af44f98455 # v1.32.2
+    uses: rknightion/.github/.github/workflows/privacy-sweep.yml@7ed87713176ccae972b0143071b0196ff370d804 # v1.32.3
 
   # zizmor fails a pull request on any finding (enforce); push runs upload SARIF instead.
   zizmor:
@@ -202,7 +202,7 @@ jobs:
       contents: read
       security-events: write
       actions: read
-    uses: rknightion/.github/.github/workflows/zizmor.yml@40b04a8393537f0aaf610e9286a5d4af44f98455 # v1.32.2
+    uses: rknightion/.github/.github/workflows/zizmor.yml@7ed87713176ccae972b0143071b0196ff370d804 # v1.32.3
     with:
       enforce: true
 
