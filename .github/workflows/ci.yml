@@ -4,9 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
-    # `edited` re-runs CI when the pull request body changes, so the acceptance evidence check reads
-    # the new table. The pull request jobs below run on every one of these types.
-    types: [opened, edited, reopened, synchronize, ready_for_review]
+    # The acceptance-evidence check reads the pull request body, so it runs in pr-metadata.yml;
+    # a body edit does not re-run this workflow.
+    types: [opened, reopened, synchronize, ready_for_review]
   workflow_dispatch:
   schedule:
     - cron: '0 6 * * 1'  # Weekly on Monday at 6am UTC
@@ -176,18 +176,6 @@ jobs:
       lint-args: --set meraki.apiKey=dummy
       permutations: --set meraki.apiKey=dummy
 
-  # A pull request that closes an issue shows evidence for each of its acceptance criteria. Checks
-  # only pull requests with a closing keyword (enforce-all-prs: false), because this repository takes
-  # outside and bot pull requests. The reusable fails on any event but pull_request, so it runs on
-  # pull requests only. Check run: `ac-evidence / Acceptance evidence`.
-  ac-evidence:
-    if: github.event_name == 'pull_request'
-    permissions:
-      contents: read
-      issues: read
-      pull-requests: read
-    uses: rknightion/.github/.github/workflows/ac-evidence.yml@7ed87713176ccae972b0143071b0196ff370d804 # v1.32.3
-
   # The lines a pull request adds carry no identifier, email address, public address or credential
   # shape. Pull requests only, for the same reason. Check run: `privacy-sweep / Privacy sweep`.
   privacy-sweep:
@@ -211,7 +199,7 @@ jobs:
     name: ci-success
     runs-on: ubuntu-latest
     if: always()
-    needs: [test, docker-build-test, helm-lint-kubeconform, ac-evidence, privacy-sweep, zizmor]
+    needs: [test, docker-build-test, helm-lint-kubeconform, privacy-sweep, zizmor]
     permissions:
       pull-requests: read
     steps:
@@ -256,12 +244,11 @@ jobs:
       - name: Fail if a pull request check did not run
         if: ${{ always() && github.event_name == 'pull_request' }}
         env:
-          AC_EVIDENCE: ${{ needs.ac-evidence.result }}
           PRIVACY_SWEEP: ${{ needs.privacy-sweep.result }}
           BACKLOG_FREEZE: ${{ steps.backlog-freeze.outcome }}
         run: |
-          if [[ "$AC_EVIDENCE" != "success" || "$PRIVACY_SWEEP" != "success" || "$BACKLOG_FREEZE" != "success" ]]; then
-            echo "ac-evidence: ${AC_EVIDENCE}, privacy-sweep: ${PRIVACY_SWEEP}, backlog-freeze: ${BACKLOG_FREEZE}; all must pass on a pull request"
+          if [[ "$PRIVACY_SWEEP" != "success" || "$BACKLOG_FREEZE" != "success" ]]; then
+            echo "privacy-sweep: ${PRIVACY_SWEEP}, backlog-freeze: ${BACKLOG_FREEZE}; all must pass on a pull request"
             exit 1
           fi
       - name: All required jobs passed
