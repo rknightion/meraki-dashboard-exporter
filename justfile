@@ -27,14 +27,6 @@ setup:
     uv python install {{ py_version }}
     uv sync --all-extras --locked --python {{ py_version }}
 
-# prepare locked dependencies and local check tools for Cursor Cloud
-[group('dev')]
-cloud-bootstrap:
-    UV_PYTHON={{ py_version }} UV_PROJECT_ENVIRONMENT=.venv UV_COMPILE_BYTECODE=1 just setup
-    bash .cursor/install-helm.sh
-    if ! fnm exec --using=.node-version -- node --version >/dev/null 2>&1; then fnm install "$(cat .node-version)"; fi
-    fnm exec --using=.node-version -- npx -y "groma.md@{{ groma_version }}" plugin install
-
 # format Python sources and this justfile in place
 [group('check')]
 fmt:
