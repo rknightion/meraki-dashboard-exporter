@@ -63,7 +63,7 @@ jobs:
       packages: read
       actions: read
       security-events: write
-    uses: rknightion/.github/.github/workflows/codeql.yml@7ed87713176ccae972b0143071b0196ff370d804 # v1.32.3
+    uses: rknightion/.github/.github/workflows/codeql.yml@0bb3cc94c03a011b4ba8c86d9716898211de2d2b # v1.32.4
     with:
       languages: '[{"language":"python","build-mode":"none"},{"language":"actions","build-mode":"none"}]'
       ref: ${{ inputs.release_tag || github.sha }}
@@ -78,7 +78,7 @@ jobs:
       id-token: write
       attestations: write
       security-events: write
-    uses: rknightion/.github/.github/workflows/container-publish.yml@7ed87713176ccae972b0143071b0196ff370d804 # v1.32.3
+    uses: rknightion/.github/.github/workflows/container-publish.yml@0bb3cc94c03a011b4ba8c86d9716898211de2d2b # v1.32.4
     with:
       release-tag: ${{ inputs.release_tag }}
       # A release candidate (vX.Y.Z-rc.N) pushes only its own tag; :main and
