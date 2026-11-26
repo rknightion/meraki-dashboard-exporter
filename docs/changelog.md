@@ -5,6 +5,44 @@ description: Review Meraki Dashboard Exporter releases, including new collectors
 
 # Changelog
 
+## [4.0.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v3.0.0...v4.0.0) (2026-11-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* slim the runtime image and improve collector correctness
+
+### Features
+
+* add dashboard scrape selection and retire scan exceptions ([7d94d04](https://github.com/rknightion/meraki-dashboard-exporter/commit/7d94d047c9fa4b5ce2005977e5c168965e8cb3e5)), closes [#959](https://github.com/rknightion/meraki-dashboard-exporter/issues/959) [#957](https://github.com/rknightion/meraki-dashboard-exporter/issues/957) [#1019](https://github.com/rknightion/meraki-dashboard-exporter/issues/1019) [#876](https://github.com/rknightion/meraki-dashboard-exporter/issues/876)
+* add MT reading timestamps and fix seven collector, scheduler and API-facade bugs ([#1091](https://github.com/rknightion/meraki-dashboard-exporter/issues/1091)) ([edbd4c6](https://github.com/rknightion/meraki-dashboard-exporter/commit/edbd4c6cba8dedb961088ef4a1eb8446bfe9a8c5)), closes [#974](https://github.com/rknightion/meraki-dashboard-exporter/issues/974) [#970](https://github.com/rknightion/meraki-dashboard-exporter/issues/970) [#978](https://github.com/rknightion/meraki-dashboard-exporter/issues/978) [#990](https://github.com/rknightion/meraki-dashboard-exporter/issues/990) [#999](https://github.com/rknightion/meraki-dashboard-exporter/issues/999) [#993](https://github.com/rknightion/meraki-dashboard-exporter/issues/993) [#994](https://github.com/rknightion/meraki-dashboard-exporter/issues/994) [#1009](https://github.com/rknightion/meraki-dashboard-exporter/issues/1009)
+* **mr:** resume oversized signal-quality fan-outs where they stopped ([#1092](https://github.com/rknightion/meraki-dashboard-exporter/issues/1092)) ([c70c871](https://github.com/rknightion/meraki-dashboard-exporter/commit/c70c871a7abfbabe4c7da908900a9dddf175bf85)), closes [#996](https://github.com/rknightion/meraki-dashboard-exporter/issues/996)
+* slim the runtime image and improve collector correctness ([2bf6047](https://github.com/rknightion/meraki-dashboard-exporter/commit/2bf60472896897537f0196b5e62e29b9eab5bfea)), closes [#960](https://github.com/rknightion/meraki-dashboard-exporter/issues/960) [#1100](https://github.com/rknightion/meraki-dashboard-exporter/issues/1100) [#1101](https://github.com/rknightion/meraki-dashboard-exporter/issues/1101) [#1010](https://github.com/rknightion/meraki-dashboard-exporter/issues/1010) [#1046](https://github.com/rknightion/meraki-dashboard-exporter/issues/1046) [#1099](https://github.com/rknightion/meraki-dashboard-exporter/issues/1099) [#1001](https://github.com/rknightion/meraki-dashboard-exporter/issues/1001) [#1002](https://github.com/rknightion/meraki-dashboard-exporter/issues/1002)
+
+
+### Bug Fixes
+
+* **alerts:** align static rules with chart ([cc81a17](https://github.com/rknightion/meraki-dashboard-exporter/commit/cc81a17a924c18e15e7eab86baab521a8ecbea8e)), closes [#1015](https://github.com/rknightion/meraki-dashboard-exporter/issues/1015)
+* **alerts:** scope device down alerts by status and source ([98eb0ee](https://github.com/rknightion/meraki-dashboard-exporter/commit/98eb0ee2fb816ab48a90449ea78a9da502e29746)), closes [#1014](https://github.com/rknightion/meraki-dashboard-exporter/issues/1014)
+* **batch:** bound batch fan-outs by api.concurrency_limit ([#1090](https://github.com/rknightion/meraki-dashboard-exporter/issues/1090)) ([92b4a2f](https://github.com/rknightion/meraki-dashboard-exporter/commit/92b4a2f2286705e879c35f6d66aca17323044656)), closes [#1000](https://github.com/rknightion/meraki-dashboard-exporter/issues/1000)
+* **build:** make just setup use the pinned python ([#1140](https://github.com/rknightion/meraki-dashboard-exporter/issues/1140)) ([26fd36e](https://github.com/rknightion/meraki-dashboard-exporter/commit/26fd36e442d22458d2e54d1f3cccc6481fcfe763))
+* **ci:** flag releases whose publish failed ([#1132](https://github.com/rknightion/meraki-dashboard-exporter/issues/1132)) ([9091ef1](https://github.com/rknightion/meraki-dashboard-exporter/commit/9091ef10c7983f29030a27bd7b3cd97636a30c4f))
+* **ci:** stamp tagged images with their version and commit ([#1131](https://github.com/rknightion/meraki-dashboard-exporter/issues/1131)) ([ee318c0](https://github.com/rknightion/meraki-dashboard-exporter/commit/ee318c07d7368c1ff4dbb030e4e5fcac056b08ad))
+* correct eight collector, scheduler, inventory and webhook bugs ([#1085](https://github.com/rknightion/meraki-dashboard-exporter/issues/1085)) ([20536c8](https://github.com/rknightion/meraki-dashboard-exporter/commit/20536c804c2ffc33a251f59acdd0c94c122c3c78)), closes [#973](https://github.com/rknightion/meraki-dashboard-exporter/issues/973) [#971](https://github.com/rknightion/meraki-dashboard-exporter/issues/971) [#1005](https://github.com/rknightion/meraki-dashboard-exporter/issues/1005) [#976](https://github.com/rknightion/meraki-dashboard-exporter/issues/976) [#988](https://github.com/rknightion/meraki-dashboard-exporter/issues/988) [#1004](https://github.com/rknightion/meraki-dashboard-exporter/issues/1004) [#980](https://github.com/rknightion/meraki-dashboard-exporter/issues/980) [#992](https://github.com/rknightion/meraki-dashboard-exporter/issues/992)
+* correct four device, MR data-log and org count bugs ([#1093](https://github.com/rknightion/meraki-dashboard-exporter/issues/1093)) ([3579a96](https://github.com/rknightion/meraki-dashboard-exporter/commit/3579a96b5dcee3bc9bc884e66b505f58b3c57466)), closes [#975](https://github.com/rknightion/meraki-dashboard-exporter/issues/975) [#989](https://github.com/rknightion/meraki-dashboard-exporter/issues/989) [#981](https://github.com/rknightion/meraki-dashboard-exporter/issues/981) [#991](https://github.com/rknightion/meraki-dashboard-exporter/issues/991)
+* **device:** expire superseded device status info and MS port info series on rename ([#1097](https://github.com/rknightion/meraki-dashboard-exporter/issues/1097)) ([5b4f3da](https://github.com/rknightion/meraki-dashboard-exporter/commit/5b4f3da9e74388dccacd1fec64ca882fedd62b23)), closes [#998](https://github.com/rknightion/meraki-dashboard-exporter/issues/998)
+* keep the cached org name on a failed refresh and prune the MR packet cache ([#1095](https://github.com/rknightion/meraki-dashboard-exporter/issues/1095)) ([2c227c9](https://github.com/rknightion/meraki-dashboard-exporter/commit/2c227c9263edf12e000dbf7fd060ed962e3b4bda)), closes [#1006](https://github.com/rknightion/meraki-dashboard-exporter/issues/1006) [#979](https://github.com/rknightion/meraki-dashboard-exporter/issues/979)
+* **mr:** keep refreshing firewall l3 rules while l7 fails ([#1135](https://github.com/rknightion/meraki-dashboard-exporter/issues/1135)) ([0f7f2cb](https://github.com/rknightion/meraki-dashboard-exporter/commit/0f7f2cb572693e8ee36660402b87624492a3a26c))
+* **ms:** fall back to per-switch port collection only when the org endpoint is absent ([#1096](https://github.com/rknightion/meraki-dashboard-exporter/issues/1096)) ([4f6f363](https://github.com/rknightion/meraki-dashboard-exporter/commit/4f6f36364c707dbb824d24a8aa375ab5acfd1891)), closes [#997](https://github.com/rknightion/meraki-dashboard-exporter/issues/997)
+* **mx:** skip VLAN and static-route calls on passthrough appliances ([#1137](https://github.com/rknightion/meraki-dashboard-exporter/issues/1137)) ([62fede7](https://github.com/rknightion/meraki-dashboard-exporter/commit/62fede7ea98f5c5761436377e766ad4757da29f3))
+* restore meraki tracing and check api model coverage ([9bddf67](https://github.com/rknightion/meraki-dashboard-exporter/commit/9bddf6777a6f878f36a7d95324619673aab9b45b)), closes [#1011](https://github.com/rknightion/meraki-dashboard-exporter/issues/1011) [#982](https://github.com/rknightion/meraki-dashboard-exporter/issues/982) [#961](https://github.com/rknightion/meraki-dashboard-exporter/issues/961) [#1024](https://github.com/rknightion/meraki-dashboard-exporter/issues/1024)
+* resume ssid firewall collection across cycles ([#1113](https://github.com/rknightion/meraki-dashboard-exporter/issues/1113)) ([b825a8c](https://github.com/rknightion/meraki-dashboard-exporter/commit/b825a8cede67776b129472dd3040f3f6722017d3))
+
+
+### Dependencies
+
+* move the runtime and toolchain to python 3.15 ([#1141](https://github.com/rknightion/meraki-dashboard-exporter/issues/1141)) ([8e9f6af](https://github.com/rknightion/meraki-dashboard-exporter/commit/8e9f6af1e7149024afd72b2943070961ae574d67))
+
 ## [3.0.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.3.1...v3.0.0) (2026-11-20)
 
 
