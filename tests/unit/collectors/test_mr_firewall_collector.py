@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import time
+from inspect import signature
 from threading import Event
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
+from meraki.api.wireless import Wireless
 from prometheus_client import Gauge
 from structlog.testing import capture_logs
 
@@ -220,36 +222,77 @@ class TestRealFirewallPath(BaseCollectorTest):
         assert (sample("L3"), sample("L7")) == (0, 0)
         assert manager.collector_health["DeviceCollector"]["total_successes"] == 2
 
-    async def test_bounded_sweep_emits_each_enabled_ssid(
-        self, collector, mock_api, settings, isolated_registry
+    @pytest.mark.parametrize(
+        ("call_budget", "passes"), [(3, 12), (30, 1)], ids=["bounded", "ample"]
+    )
+    async def test_sweep_fetches_and_emits_each_enabled_ssid(
+        self, collector, mock_api, settings, isolated_registry, call_budget, passes
     ) -> None:
-        """A budget smaller than the fleet yields every enabled SSID's real metric."""
+        """Complete the wireless fleet within budget, without fetching disabled SSIDs."""
+        # Half of the two-second deadline gives one second of the configured API rate.
         settings.api.per_fetch_deadline_seconds = 2
-        settings.api.rate_limit_requests_per_second = 3
+        settings.api.rate_limit_requests_per_second = call_budget
         settings.api.rate_limit_shared_fraction = 1
-        networks = [{"id": f"net-{n}", "productTypes": ["wireless"]} for n in range(4)]
-        calls: list[tuple[str, str]] = []
+        rows = {
+            "net-0": [(0, True), (1, True), (2, True), (3, False)],
+            "net-1": [(0, True)],
+            "net-2": [],
+            "net-3": [(0, False), (1, True)],
+        }
+        networks = [{"id": network, "productTypes": ["wireless"]} for network in rows] + [
+            {"id": "wired", "productTypes": ["switch"]}
+        ]
+        calls: list[tuple[str, str, str]] = []
 
-        def discover(network):
-            calls.append(("discovery", network))
-            count = {"net-0": 3, "net-1": 1, "net-2": 0, "net-3": 1}[network]
-            return [{"number": n, "name": f"ssid-{n}", "enabled": True} for n in range(count)]
+        def discover(network: str):
+            calls.append(("discovery", network, ""))
+            return [
+                {"number": n, "name": f"ssid-{n}", "enabled": enabled}
+                for n, enabled in rows.get(network, ())
+            ]
 
-        def l3(network, number):
-            calls.append(("L3", network))
+        def l3(network: str, number: str):
+            calls.append(("L3", network, number))
             return {"rules": [], "allowLanAccess": True}
 
-        def l7(network, number):
-            calls.append(("L7", network))
+        def l7(network: str, number: str):
+            calls.append(("L7", network, number))
             return {"rules": []}
 
-        mock_api.wireless.getNetworkWirelessSsids.side_effect = discover
-        mock_api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules.side_effect = l3
-        mock_api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules.side_effect = l7
-        for _ in range(12):
+        def sdk_call(method, respond):
+            # Bind as the installed SDK would, without invoking it or requiring positional calls.
+            sdk_signature = signature(method)
+
+            def call(*args, **kwargs):
+                bound = sdk_signature.bind(None, *args, **kwargs)
+                return respond(*bound.args[1:], **bound.kwargs)
+
+            return call
+
+        for method, respond in (
+            (Wireless.getNetworkWirelessSsids, discover),
+            (Wireless.getNetworkWirelessSsidFirewallL3FirewallRules, l3),
+            (Wireless.getNetworkWirelessSsidFirewallL7FirewallRules, l7),
+        ):
+            getattr(mock_api.wireless, method.__name__).side_effect = sdk_call(method, respond)
+        for _ in range(passes):
             before = len(calls)
             await collector.mr_collector.firewall.collect_ssid_firewall("org", "Org", networks)
-            assert len(calls) - before <= 3
+            assert len(calls) - before <= call_budget
+
+        expected_rules = {
+            (kind, network, str(number))
+            for network, number in [
+                ("net-0", 0),
+                ("net-0", 1),
+                ("net-0", 2),
+                ("net-1", 0),
+                ("net-3", 1),
+            ]
+            for kind in ("L3", "L7")
+        }
+        expected_discoveries = [("discovery", network, "") for network in rows]
+        assert sorted(calls) == sorted([*expected_discoveries, *expected_rules])
         samples = {
             (sample.labels["network_id"], sample.labels["ssid"], sample.labels["rule_type"])
             for metric in isolated_registry.collect()
@@ -257,15 +300,7 @@ class TestRealFirewallPath(BaseCollectorTest):
             for sample in metric.samples
         }
         assert samples == {
-            (network, ssid, kind)
-            for network, ssid in [
-                ("net-0", "ssid-0"),
-                ("net-0", "ssid-1"),
-                ("net-0", "ssid-2"),
-                ("net-1", "ssid-0"),
-                ("net-3", "ssid-0"),
-            ]
-            for kind in ("L3", "L7")
+            (network, f"ssid-{number}", kind) for kind, network, number in expected_rules
         }
 
     @pytest.mark.parametrize(
@@ -584,54 +619,6 @@ class TestMRFirewallCollector:
             {"number": n, "name": f"SSID {n}", "enabled": n in enabled_numbers} for n in numbers
         ]
 
-    async def test_budgeted_sweep_resumes_across_networks_and_ssids(
-        self, firewall_collector: MRFirewallCollector, mock_api: MagicMock, mock_parent: MagicMock
-    ) -> None:
-        """A small raw-call budget still reaches each enabled SSID over successive wakes."""
-        mock_parent.settings.api.per_fetch_deadline_seconds = 2
-        mock_parent.settings.api.rate_limit_requests_per_second = 3
-        mock_parent.settings.api.rate_limit_shared_fraction = 1
-        mock_parent._group_interval.return_value = 900
-        networks = [{"id": f"net-{n}", "productTypes": ["wireless"]} for n in range(4)] + [
-            {"id": "wired", "productTypes": ["switch"]}
-        ]
-        rows = {
-            "net-0": self._ssids(enabled_numbers=[0, 1, 2], all_numbers=[0, 1, 2, 3]),
-            "net-1": self._ssids(enabled_numbers=[0]),
-            "net-2": [],
-            "net-3": self._ssids(enabled_numbers=[1], all_numbers=[0, 1]),
-        }
-        calls: list[tuple[str, str, str]] = []
-
-        def discover(network: str) -> list[dict]:
-            calls.append(("discovery", network, ""))
-            return rows[network]
-
-        def rules(kind: str, network: str, number: str) -> dict:
-            calls.append((kind, network, number))
-            return {"rules": []}
-
-        mock_api.wireless.getNetworkWirelessSsids.side_effect = discover
-        mock_api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules.side_effect = (
-            lambda network, number: rules("L3", network, number)
-        )
-        mock_api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules.side_effect = (
-            lambda network, number: rules("L7", network, number)
-        )
-        for _ in range(12):
-            before = len(calls)
-            await firewall_collector.collect_ssid_firewall("org", "Org", networks)
-            assert len(calls) - before <= 3
-
-        assert {(network, number) for kind, network, number in calls if kind == "L7"} == {
-            ("net-0", "0"),
-            ("net-0", "1"),
-            ("net-0", "2"),
-            ("net-1", "0"),
-            ("net-3", "1"),
-        }
-        assert {network for kind, network, _ in calls if kind == "discovery"} == set(rows)
-
     async def test_one_call_floor_and_refresh_disabled_ssid(
         self,
         firewall_collector: MRFirewallCollector,
@@ -770,36 +757,6 @@ class TestMRFirewallCollector:
         for _ in range(2):
             await firewall_collector.collect_ssid_firewall("org", "Org", networks)
         assert ("L7", "bad") in calls
-
-    # ------------------------------------------------------------------
-    # Enabled-only SSID filtering (mandatory, call-volume bound)
-    # ------------------------------------------------------------------
-
-    async def test_only_enabled_ssids_fetch_firewall_rules(
-        self,
-        firewall_collector: MRFirewallCollector,
-        mock_api: MagicMock,
-        mock_parent: MagicMock,
-    ) -> None:
-        """Disabled SSIDs must not trigger L3/L7 firewall-rule fetches."""
-        mock_api.wireless.getNetworkWirelessSsids = MagicMock(
-            return_value=self._ssids(enabled_numbers=[0], all_numbers=[0, 1, 2])
-        )
-        mock_api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules = MagicMock(
-            return_value={"rules": [], "allowLanAccess": True}
-        )
-        mock_api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules = MagicMock(
-            return_value={"rules": []}
-        )
-
-        await firewall_collector.collect_ssid_firewall(
-            "org1", "Test Org", [{"id": "N_1", "productTypes": ["wireless"]}]
-        )
-
-        assert mock_api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules.call_count == 1
-        assert mock_api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules.call_count == 1
-        l3_call = mock_api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules.call_args
-        assert l3_call.args == ("N_1", "0")
 
     # ------------------------------------------------------------------
     # L3 rule count / default-rule exclusion
@@ -1037,32 +994,6 @@ class TestMRFirewallCollector:
     # Org-level fan-out (collect_ssid_firewall)
     # ------------------------------------------------------------------
 
-    async def test_collect_ssid_firewall_skips_non_wireless_networks(
-        self,
-        firewall_collector: MRFirewallCollector,
-        mock_api: MagicMock,
-        mock_parent: MagicMock,
-    ) -> None:
-        """Only networks with 'wireless' in productTypes are fetched."""
-        networks = [
-            {"id": "net_wireless", "name": "WiFi", "productTypes": ["wireless"]},
-            {"id": "net_switch", "name": "Switching", "productTypes": ["switch"]},
-        ]
-        mock_api.wireless.getNetworkWirelessSsids = MagicMock(
-            return_value=self._ssids(enabled_numbers=[0])
-        )
-        mock_api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules = MagicMock(
-            return_value={"rules": []}
-        )
-        mock_api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules = MagicMock(
-            return_value={"rules": []}
-        )
-
-        await firewall_collector.collect_ssid_firewall("org1", "Test Org", networks)
-
-        assert mock_api.wireless.getNetworkWirelessSsids.call_count == 1
-        mock_api.wireless.getNetworkWirelessSsids.assert_called_once_with("net_wireless")
-
     async def test_collect_ssid_firewall_gate_closed_skips_fetch(
         self,
         firewall_collector: MRFirewallCollector,
@@ -1099,35 +1030,6 @@ class TestMRFirewallCollector:
         await firewall_collector.collect_ssid_firewall("org1", "Test Org", networks)
 
         mock_parent._mark_group_ran.assert_called_once_with(EndpointGroupName.MR_SSID_FIREWALL)
-
-    async def test_collect_ssid_firewall_fans_out_multiple_networks(
-        self,
-        firewall_collector: MRFirewallCollector,
-        mock_api: MagicMock,
-        mock_parent: MagicMock,
-    ) -> None:
-        """Every wireless network is fetched (bounded by settings.api.concurrency_limit)."""
-        networks = [
-            {"id": "net1", "name": "N1", "productTypes": ["wireless"]},
-            {"id": "net2", "name": "N2", "productTypes": ["wireless"]},
-        ]
-        mock_api.wireless.getNetworkWirelessSsids = MagicMock(
-            return_value=self._ssids(enabled_numbers=[0])
-        )
-        mock_api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules = MagicMock(
-            return_value={"rules": []}
-        )
-        mock_api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules = MagicMock(
-            return_value={"rules": []}
-        )
-
-        await firewall_collector.collect_ssid_firewall("org1", "Test Org", networks)
-
-        assert mock_api.wireless.getNetworkWirelessSsids.call_count == 2
-        called_network_ids = {
-            c.args[0] for c in mock_api.wireless.getNetworkWirelessSsids.call_args_list
-        }
-        assert called_network_ids == {"net1", "net2"}
 
     # ------------------------------------------------------------------
     # Domain-model validation (F-023 style)

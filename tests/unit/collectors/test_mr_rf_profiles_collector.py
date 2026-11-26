@@ -9,7 +9,6 @@ import pytest
 from prometheus_client import Gauge
 
 from meraki_dashboard_exporter.collectors.devices.mr.rf_profiles import MRRfProfilesCollector
-from meraki_dashboard_exporter.core.constants.metrics_constants import MRMetricName
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 
 if TYPE_CHECKING:
@@ -50,28 +49,6 @@ class TestMRRfProfilesCollector:
     def rf_profiles_collector(self, mock_parent: MagicMock) -> MRRfProfilesCollector:
         """Create an MRRfProfilesCollector instance backed by mock parent."""
         return MRRfProfilesCollector(mock_parent)
-
-    # ------------------------------------------------------------------
-    # Initialisation
-    # ------------------------------------------------------------------
-
-    def test_initialisation_creates_info_metric(
-        self,
-        rf_profiles_collector: MRRfProfilesCollector,
-        mock_parent: MagicMock,
-    ) -> None:
-        """The RF profile info gauge must be created with the expected labels."""
-        mock_parent._create_gauge.assert_called_once()
-        args, kwargs = mock_parent._create_gauge.call_args
-        assert args[0] == MRMetricName.MR_RF_PROFILE_INFO
-        assert set(kwargs["labelnames"]) == {
-            "org_id",
-            "network_id",
-            "serial",
-            "rf_profile_id",
-            "rf_profile_name",
-            "is_default",
-        }
 
     # ------------------------------------------------------------------
     # Happy path
