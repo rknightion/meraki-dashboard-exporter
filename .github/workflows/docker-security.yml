@@ -1,7 +1,6 @@
 name: Docker Security
+# Advisory scans only; publish.yml still gates release images.
 on:
-  push:
-    branches: [main]
   schedule:
     - cron: '49 5 * * 3'
   workflow_dispatch:
