@@ -10,7 +10,7 @@ py_version := "3.15"
 # renovate: datasource=npm depName=groma.md
 groma_version := "0.7.8"
 # renovate: datasource=git-refs depName=https://github.com/rknightion/fleet-review currentValue=main
-fleet_review_rev := "b1d3093c73ea3372782cfc82a500b5f915539821" # pragma: allowlist secret
+fleet_review_rev := "df6736a699c8480e8afb6bf114ab7e8414f57547" # pragma: allowlist secret
 meraki_spec_url := "https://raw.githubusercontent.com/meraki/openapi/master/openapi/spec3.json"
 
 # Every path a scripts/generate_*.py writes. `gen-check` diffs exactly these.
