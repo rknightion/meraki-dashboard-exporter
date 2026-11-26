@@ -23,6 +23,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     # Fork PRs don't receive repo secrets, so CODECOV_TOKEN/CODACY_PROJECT_TOKEN are empty on
     # them. codecov-action soft-fails on a missing token, but codacy-coverage-reporter-action
     # hard-errors (its uploader script requires a non-empty token), which would otherwise fail
@@ -86,6 +87,7 @@ jobs:
 
   docker-build-test:
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
@@ -198,6 +200,7 @@ jobs:
   ci-success:
     name: ci-success
     runs-on: ubuntu-latest
+    timeout-minutes: 6 # Leave time for job setup and the five-minute backlog check.
     if: always()
     needs: [test, docker-build-test, helm-lint-kubeconform, privacy-sweep, zizmor]
     permissions:
