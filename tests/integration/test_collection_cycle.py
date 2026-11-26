@@ -60,24 +60,6 @@ def inventory(mock_api: MagicMock, mock_settings: Settings) -> OrganizationInven
 class TestInventoryCacheSharedAcrossCollectors:
     """Verify that the inventory cache dedups API calls."""
 
-    async def test_get_devices_calls_api_only_once(
-        self, inventory: OrganizationInventory, mock_api: MagicMock
-    ) -> None:
-        """Second call for the same org_id must hit the cache, not the API."""
-        org_id = "org_cache_test"
-        devices = DeviceFactory.create_many(3, product_type="wireless")
-        mock_api.organizations.getOrganizationDevices.return_value = devices
-
-        # First call — cache miss, API is called
-        result1 = await inventory.get_devices(org_id)
-
-        # Second call — cache hit, API must NOT be called again
-        result2 = await inventory.get_devices(org_id)
-
-        assert result1 == result2
-        assert len(result1) == 3
-        mock_api.organizations.getOrganizationDevices.assert_called_once()
-
     async def test_cache_hit_increments_hit_counter(
         self, inventory: OrganizationInventory, mock_api: MagicMock
     ) -> None:

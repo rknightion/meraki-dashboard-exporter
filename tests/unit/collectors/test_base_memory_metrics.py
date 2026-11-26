@@ -11,12 +11,16 @@ devices as possible, minimizing the number of pages fetched per cycle (#548).
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 from prometheus_client import Gauge
 
+from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.collectors.devices.mg import MGCollector
+from meraki_dashboard_exporter.core.metric_expiration import MetricExpirationManager
+from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
+from tests.helpers.base import BaseCollectorTest
 
 
 class TestCollectMemoryMetricsPagination:
@@ -68,8 +72,10 @@ class TestCollectMemoryMetricsPagination:
         )
 
 
-class TestCollectMemoryMetricsRows:
-    """Exercise memory rows through the collector's metric delegation."""
+class TestCollectMemoryMetricsRows(BaseCollectorTest):
+    """Exercise memory rows through the device collector."""
+
+    collector_class = DeviceCollector
 
     @pytest.fixture
     def mock_parent(self) -> MagicMock:
@@ -121,10 +127,62 @@ class TestCollectMemoryMetricsRows:
         parent.api.organizations.getOrganizationDevicesSystemMemoryUsageHistoryByInterval.return_value = rows
         await MGCollector(parent).collect_memory_metrics("org-1", "Org One")
 
-    async def test_memory_row_emits_four_values_in_bytes(self, mock_parent: MagicMock) -> None:
-        """Convert memory values and retain labels and TTL."""
-        await self.collect(mock_parent, [self.row()])
-        assert mock_parent._set_metric_value.call_args_list == self.expected("S1")
+    @pytest.mark.parametrize("memory_ttl", [600.0, 1200.0], ids=["short", "long"])
+    async def test_memory_row_expires_on_device_memory_ttl(
+        self, collector, mock_api, settings, isolated_registry, memory_ttl
+    ) -> None:
+        """A complete row stays exposed for the memory group's TTL, not availability's."""
+        group_ttls = {
+            EndpointGroupName.DEVICE_AVAILABILITY: 150.0,
+            EndpointGroupName.DEVICE_MEMORY: memory_ttl,
+        }
+        scheduler = MagicMock()
+        scheduler.should_run.return_value = True
+        scheduler.ttl_seconds_for.side_effect = lambda group: group_ttls.get(group, 60.0)
+        expiration = MetricExpirationManager(settings)
+        expiration.set_ttl_resolver(lambda _: 45.0)
+        collector.scheduler = scheduler
+        collector.expiration_manager = expiration
+        memory_fetch = (
+            mock_api.organizations.getOrganizationDevicesSystemMemoryUsageHistoryByInterval
+        )
+        memory_fetch.return_value = [self.row()]
+
+        labels = {
+            "org_id": "org-1",
+            "network_id": "N_1",
+            "serial": "S1",
+            "model": "MR56",
+            "device_type": "MR",
+        }
+        expected = [
+            ("meraki_device_memory_free_bytes", {**labels, "stat": "min"}, 1048576),
+            ("meraki_device_memory_total_bytes", labels, 4194304),
+            ("meraki_device_memory_usage_percent", labels, 50.0),
+            ("meraki_device_memory_used_bytes", {**labels, "stat": "max"}, 2097152),
+        ]
+
+        def samples() -> list[tuple[str, dict[str, str], float]]:
+            return sorted(
+                (
+                    (sample.name, sample.labels, sample.value)
+                    for family in isolated_registry.collect()
+                    for sample in family.samples
+                    if sample.name.startswith("meraki_device_memory_")
+                ),
+                key=lambda sample: sample[0],
+            )
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time") as clock:
+            clock.time.return_value = 5_000.0
+            await collector.ms_collector.collect_memory_metrics("org-1", "Org One")
+            assert samples() == expected
+            clock.time.return_value += memory_ttl - 1
+            await expiration._cleanup_expired_metrics()
+            assert samples() == expected
+            clock.time.return_value += 2.0
+            await expiration._cleanup_expired_metrics()
+            assert samples() == []
 
     async def test_row_outside_network_filter_emits_nothing(self, mock_parent: MagicMock) -> None:
         """Filter both disallowed and absent network IDs."""
