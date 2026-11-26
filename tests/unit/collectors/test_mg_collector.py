@@ -82,6 +82,18 @@ class TestMGCollector:
         await mg_collector.collect(device)
         mg_collector.parent._device_up.labels.assert_not_called()
 
+    def test_mg_gauges_created_on_init(
+        self,
+        mg_collector: MGCollector,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Test that all MG gauges are created on init."""
+        mock_parent._create_gauge.assert_called()
+        assert mg_collector._mg_uplink_status_info is not None
+        assert mg_collector._mg_uplink_signal_rsrp is not None
+        assert mg_collector._mg_uplink_signal_rsrq is not None
+        assert mg_collector._mg_uplink_roaming is not None
+
     async def test_collect_uplink_statuses_basic(
         self,
         mg_collector: MGCollector,

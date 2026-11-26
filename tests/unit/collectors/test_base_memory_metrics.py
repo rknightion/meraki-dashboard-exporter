@@ -127,13 +127,14 @@ class TestCollectMemoryMetricsRows(BaseCollectorTest):
         parent.api.organizations.getOrganizationDevicesSystemMemoryUsageHistoryByInterval.return_value = rows
         await MGCollector(parent).collect_memory_metrics("org-1", "Org One")
 
+    @pytest.mark.parametrize("memory_ttl", [600.0, 1200.0], ids=["short", "long"])
     async def test_memory_row_expires_on_device_memory_ttl(
-        self, collector, mock_api, settings, isolated_registry
+        self, collector, mock_api, settings, isolated_registry, memory_ttl
     ) -> None:
         """A complete row stays exposed for the memory group's TTL, not availability's."""
         group_ttls = {
             EndpointGroupName.DEVICE_AVAILABILITY: 150.0,
-            EndpointGroupName.DEVICE_MEMORY: 600.0,
+            EndpointGroupName.DEVICE_MEMORY: memory_ttl,
         }
         scheduler = MagicMock()
         scheduler.should_run.return_value = True
@@ -176,7 +177,7 @@ class TestCollectMemoryMetricsRows(BaseCollectorTest):
             clock.time.return_value = 5_000.0
             await collector.ms_collector.collect_memory_metrics("org-1", "Org One")
             assert samples() == expected
-            clock.time.return_value += 599.0
+            clock.time.return_value += memory_ttl - 1
             await expiration._cleanup_expired_metrics()
             assert samples() == expected
             clock.time.return_value += 2.0

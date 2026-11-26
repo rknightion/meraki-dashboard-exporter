@@ -109,15 +109,19 @@ class TestMXMetricExpiry(BaseCollectorTest):
 
     collector_class = DeviceCollector
 
-    @pytest.fixture
-    def expiration(self, collector, settings):
-        """Install distinct TTLs for the endpoint groups and for the fallback."""
-        group_ttls = {
+    @pytest.fixture(params=[600.0, 1200.0], ids=["short", "long"])
+    def group_ttls(self, request):
+        """Distinguish the two groups and prove they follow a changing scheduler TTL."""
+        return {
             EndpointGroupName.MX_DHCP_SUBNETS: 120.0,
             EndpointGroupName.MX_UPLINK_STATUS: 180.0,
-            EndpointGroupName.MX_PERFORMANCE: 600.0,
-            EndpointGroupName.MX_UPLINKS_OVERVIEW: 900.0,
+            EndpointGroupName.MX_PERFORMANCE: request.param,
+            EndpointGroupName.MX_UPLINKS_OVERVIEW: request.param + 300.0,
         }
+
+    @pytest.fixture
+    def expiration(self, collector, settings, group_ttls):
+        """Connect the fixture scheduler to the real expiration manager."""
         scheduler = MagicMock()
         scheduler.should_run.return_value = True
         scheduler.interval_for.return_value = 60.0
@@ -136,7 +140,7 @@ class TestMXMetricExpiry(BaseCollectorTest):
             yield clock.time
 
     async def test_mx_performance_expires_on_group_ttl(
-        self, collector, mock_api, isolated_registry, expiration, clock
+        self, collector, mock_api, isolated_registry, expiration, clock, group_ttls
     ) -> None:
         """Keep the score until the performance group's TTL, then remove it."""
         mock_api.appliance.getDeviceAppliancePerformance.return_value = {"perfScore": 87}
@@ -161,7 +165,7 @@ class TestMXMetricExpiry(BaseCollectorTest):
             )
 
         assert score() == 87.0
-        clock.return_value += 599.0
+        clock.return_value += group_ttls[EndpointGroupName.MX_PERFORMANCE] - 1
         await expiration._cleanup_expired_metrics()
         assert score() == 87.0
         clock.return_value += 2.0
@@ -169,7 +173,7 @@ class TestMXMetricExpiry(BaseCollectorTest):
         assert score() is None
 
     async def test_mx_uplinks_overview_expires_on_group_ttl(
-        self, collector, mock_api, isolated_registry, expiration, clock
+        self, collector, mock_api, isolated_registry, expiration, clock, group_ttls
     ) -> None:
         """Keep every overview count until the overview group's TTL, then remove them."""
         mock_api.appliance.getOrganizationApplianceUplinksStatusesOverview.return_value = {
@@ -194,7 +198,7 @@ class TestMXMetricExpiry(BaseCollectorTest):
             "notConnected": 0.0,
         }
         assert counts() == expected
-        clock.return_value += 899.0
+        clock.return_value += group_ttls[EndpointGroupName.MX_UPLINKS_OVERVIEW] - 1
         await expiration._cleanup_expired_metrics()
         assert counts() == expected
         clock.return_value += 2.0
