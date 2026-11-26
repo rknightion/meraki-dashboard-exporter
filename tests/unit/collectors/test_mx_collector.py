@@ -11,6 +11,7 @@ from prometheus_client import Gauge
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.collectors.devices.mx import MXCollector
 from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+from meraki_dashboard_exporter.core.metric_expiration import MetricExpirationManager
 from meraki_dashboard_exporter.core.network_filter import NetworkFilter
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 from tests.helpers.base import BaseCollectorTest
@@ -103,6 +104,104 @@ class TestMXSignalScrape(BaseCollectorTest):
         )
 
 
+class TestMXMetricExpiry(BaseCollectorTest):
+    """Exercise scheduler-selected TTLs on real Prometheus series."""
+
+    collector_class = DeviceCollector
+
+    @pytest.fixture
+    def expiration(self, collector, settings):
+        """Install distinct TTLs for the endpoint groups and for the fallback."""
+        group_ttls = {
+            EndpointGroupName.MX_DHCP_SUBNETS: 120.0,
+            EndpointGroupName.MX_UPLINK_STATUS: 180.0,
+            EndpointGroupName.MX_PERFORMANCE: 600.0,
+            EndpointGroupName.MX_UPLINKS_OVERVIEW: 900.0,
+        }
+        scheduler = MagicMock()
+        scheduler.should_run.return_value = True
+        scheduler.interval_for.return_value = 60.0
+        scheduler.ttl_seconds_for.side_effect = lambda group: group_ttls.get(group, 60.0)
+        expiration = MetricExpirationManager(settings)
+        expiration.set_ttl_resolver(lambda _: 45.0)
+        collector.scheduler = scheduler
+        collector.expiration_manager = expiration
+        return expiration
+
+    @pytest.fixture
+    def clock(self):
+        """Advance only the expiration manager's clock, without waiting."""
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time") as clock:
+            clock.time.return_value = 5_000.0
+            yield clock.time
+
+    async def test_mx_performance_expires_on_group_ttl(
+        self, collector, mock_api, isolated_registry, expiration, clock
+    ) -> None:
+        """Keep the score until the performance group's TTL, then remove it."""
+        mock_api.appliance.getDeviceAppliancePerformance.return_value = {"perfScore": 87}
+        mock_api.appliance.getDeviceApplianceDhcpSubnets.return_value = []
+        await collector.mx_collector.collect({
+            "serial": "S_mx",
+            "model": "MX68",
+            "orgId": "org1",
+            "networkId": "N_1",
+        })
+
+        def score() -> float | None:
+            return isolated_registry.get_sample_value(
+                "meraki_mx_performance_score",
+                {
+                    "serial": "S_mx",
+                    "model": "MX68",
+                    "device_type": "MX",
+                    "org_id": "org1",
+                    "network_id": "N_1",
+                },
+            )
+
+        assert score() == 87.0
+        clock.return_value += 599.0
+        await expiration._cleanup_expired_metrics()
+        assert score() == 87.0
+        clock.return_value += 2.0
+        await expiration._cleanup_expired_metrics()
+        assert score() is None
+
+    async def test_mx_uplinks_overview_expires_on_group_ttl(
+        self, collector, mock_api, isolated_registry, expiration, clock
+    ) -> None:
+        """Keep every overview count until the overview group's TTL, then remove them."""
+        mock_api.appliance.getOrganizationApplianceUplinksStatusesOverview.return_value = {
+            "counts": {"byStatus": {"active": 1}}
+        }
+        await collector.mx_collector.collect_uplink_status_overview("org1", "Test Org")
+
+        def counts() -> dict[str, float]:
+            return {
+                sample.labels["status"]: sample.value
+                for family in isolated_registry.collect()
+                for sample in family.samples
+                if sample.name == "meraki_mx_uplinks_by_status"
+                and sample.labels["org_id"] == "org1"
+            }
+
+        expected = {
+            "active": 1.0,
+            "ready": 0.0,
+            "failed": 0.0,
+            "connecting": 0.0,
+            "notConnected": 0.0,
+        }
+        assert counts() == expected
+        clock.return_value += 899.0
+        await expiration._cleanup_expired_metrics()
+        assert counts() == expected
+        clock.return_value += 2.0
+        await expiration._cleanup_expired_metrics()
+        assert counts() == {}
+
+
 class TestMXCollector:
     """Test MX collector functionality."""
 
@@ -173,22 +272,6 @@ class TestMXCollector:
         assert mx_collector.parent == mock_parent
         assert mx_collector.api == mock_parent.api
         assert mx_collector.settings == mock_parent.settings
-
-    def test_mx_uplink_info_metric_created(
-        self,
-        mx_collector: MXCollector,
-        mock_parent: MagicMock,
-    ) -> None:
-        """Test that the MX uplink info gauge metric is created on init.
-
-        MXCollector now delegates gauge creation to DeviceCollector for its own
-        metrics and also instantiates sub-collectors (VPN, Firewall) that each
-        create their own gauges via the same delegation path, so _create_gauge
-        is called multiple times on initialisation.
-        """
-        # At least the uplink info gauge must be created
-        mock_parent._create_gauge.assert_called()
-        assert mx_collector._mx_uplink_info is not None
 
     async def test_collect_uplink_statuses_basic(
         self,
@@ -881,22 +964,6 @@ class TestMXCollector:
 
         assert mock_api.appliance.getDeviceAppliancePerformance.call_count == 2
 
-    async def test_mx_performance_threads_group_ttl(
-        self,
-        mx_collector: MXCollector,
-        mock_api: MagicMock,
-        mock_parent: MagicMock,
-    ) -> None:
-        """The perf-score _set_metric carries the mx_performance group's TTL."""
-        mock_parent._group_ttl_seconds = MagicMock(return_value=1800.0)
-        mock_api.appliance.getDeviceAppliancePerformance = MagicMock(return_value={"perfScore": 87})
-
-        await mx_collector.collect({"serial": "Q2AB-1234-5678", "model": "MX68", "orgId": "org1"})
-
-        _, kwargs = mock_parent._set_metric.call_args
-        assert kwargs["ttl_seconds"] == 1800.0
-        mock_parent._group_ttl_seconds.assert_called_with(EndpointGroupName.MX_PERFORMANCE)
-
     async def test_uplink_statuses_gate_closed_skips_fetch(
         self,
         mx_collector: MXCollector,
@@ -1255,24 +1322,6 @@ class TestMXCollector:
         await mx_collector.collect_uplink_status_overview("org1", "Test Org")
 
         mock_parent._mark_group_ran.assert_called_once_with(EndpointGroupName.MX_UPLINKS_OVERVIEW)
-
-    async def test_collect_uplink_status_overview_threads_group_ttl(
-        self,
-        mx_collector: MXCollector,
-        mock_api: MagicMock,
-        mock_parent: MagicMock,
-    ) -> None:
-        """The overview _set_metric calls carry the mx_uplinks_overview group's TTL."""
-        mock_parent._group_ttl_seconds = MagicMock(return_value=1800.0)
-        mock_api.appliance.getOrganizationApplianceUplinksStatusesOverview = MagicMock(
-            return_value={"counts": {"byStatus": {"active": 1}}}
-        )
-
-        await mx_collector.collect_uplink_status_overview("org1", "Test Org")
-
-        for call in mock_parent._set_metric.call_args_list:
-            assert call.kwargs["ttl_seconds"] == 1800.0
-        mock_parent._group_ttl_seconds.assert_called_with(EndpointGroupName.MX_UPLINKS_OVERVIEW)
 
     async def test_collect_uplink_status_overview_missing_counts_emits_zeros(
         self,

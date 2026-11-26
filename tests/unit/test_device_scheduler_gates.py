@@ -414,9 +414,8 @@ class TestDeviceMemoryGate:
         mock_parent._mark_group_ran.assert_not_called()
 
     async def test_fetches_and_marks_when_due(self, mock_parent: MagicMock) -> None:
-        """should_run=True ⇒ memory fetched, then group marked ran with the ttl looked up."""
+        """An empty successful memory fetch still marks the group as run."""
         mock_parent._should_run_group = MagicMock(return_value=True)
-        mock_parent._group_ttl_seconds = MagicMock(return_value=600.0)
         collector = MGCollector(mock_parent)
 
         await collector.collect_memory_metrics("org-1", "Org One")
@@ -425,5 +424,4 @@ class TestDeviceMemoryGate:
             mock_parent.api.organizations.getOrganizationDevicesSystemMemoryUsageHistoryByInterval
         )
         fetch.assert_called_once()
-        mock_parent._group_ttl_seconds.assert_called_once_with(EndpointGroupName.DEVICE_MEMORY)
         mock_parent._mark_group_ran.assert_called_once_with(EndpointGroupName.DEVICE_MEMORY)

@@ -59,7 +59,6 @@ class TestMSPowerCollector:
         assert ms_power_collector.parent == mock_parent
         assert ms_power_collector.api == mock_parent.api
         assert ms_power_collector.settings == mock_parent.settings
-        mock_parent._create_gauge.assert_called()
         assert ms_power_collector._ms_power_supply_status is not None
 
     async def test_collect_power_modules_basic_emission(

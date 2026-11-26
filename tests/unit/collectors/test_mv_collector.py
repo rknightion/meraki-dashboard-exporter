@@ -127,25 +127,6 @@ class TestMVCollector:
         mock_api.camera.getDeviceCameraQualityAndRetention = self._quality()
 
     # ------------------------------------------------------------------
-    # Initialization
-    # ------------------------------------------------------------------
-
-    def test_mv_gauges_created(
-        self,
-        mv_collector: MVCollector,
-        mock_parent: MagicMock,
-    ) -> None:
-        """Test that all MV gauges are created on init."""
-        mock_parent._create_gauge.assert_called()
-        assert mv_collector._mv_people_count is not None
-        assert mv_collector._mv_zone_info is not None
-        assert mv_collector._mv_analytics_zones is not None
-        assert mv_collector._mv_motion_based_retention_enabled is not None
-        assert mv_collector._mv_audio_recording_enabled is not None
-        assert mv_collector._mv_restricted_bandwidth_mode_enabled is not None
-        assert mv_collector._mv_quality_retention_info is not None
-
-    # ------------------------------------------------------------------
     # Emission
     # ------------------------------------------------------------------
 

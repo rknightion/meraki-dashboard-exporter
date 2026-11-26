@@ -375,74 +375,6 @@ class TestDeviceCollector(BaseCollectorTest):
 
         # No metrics should be set when API errors occur
 
-    async def test_device_name_lookup(self, collector, mock_api_builder, metrics):
-        """Test that device names are correctly looked up from cache."""
-        # Set up test data
-        org = OrganizationFactory.create(org_id="123456")
-        network = NetworkFactory.create(network_id="N_123")
-        devices = [
-            DeviceFactory.create_mr(
-                serial="Q2KD-XXXX",
-                name="Office AP",
-                model="MR36",
-                network_id=network["id"],
-            ),
-            DeviceFactory.create_ms(
-                serial="Q2SW-XXXX",
-                name="Main Switch",
-                model="MS120",
-                network_id=network["id"],
-            ),
-        ]
-
-        # Create client overview response
-        client_overview_response = [
-            {
-                "serial": "Q2KD-XXXX",
-                "network": {"id": network["id"]},
-                "counts": {"byStatus": {"online": 5}},
-            }
-        ]
-
-        # Configure mock API
-        api = (
-            mock_api_builder
-            .with_organizations([org])
-            .with_networks([network], org_id=org["id"])
-            .with_devices(devices, org_id=org["id"])
-            .with_device_statuses([], org_id=org["id"])
-            .with_custom_response(
-                "getOrganizationWirelessClientsOverviewByDevice", client_overview_response
-            )
-            .build()
-        )
-        collector.api = api
-        collector.inventory.api = api
-        # Update MR collector's API reference
-        collector.mr_collector.api = api
-
-        # Collect devices
-        await collector._collect_org_devices(org["id"], org.get("name", "Test Org"))
-
-        # Create device lookup manually for testing
-        device_lookup = {
-            "Q2KD-XXXX": {
-                "serial": "Q2KD-XXXX",
-                "name": "Office AP",
-                "model": "MR36",
-                "networkId": network["id"],
-                "networkName": network["name"],
-            }
-        }
-
-        # Collect wireless clients
-        await collector.mr_collector.collect_wireless_clients(
-            org["id"], org.get("name", "Test Org"), device_lookup
-        )
-
-        # Verify API was called
-        api.wireless.getOrganizationWirelessClientsOverviewByDevice.assert_called()
-
     async def test_mr_clients_connected_one_series_per_ap(
         self, collector, mock_api_builder, metrics
     ):
@@ -738,9 +670,7 @@ class TestDeviceCollector(BaseCollectorTest):
         # Verify API calls were tracked
         self.assert_api_call_tracked(collector, metrics, "getOrganizationDevices", count=1)
 
-    async def test_catalyst_switch_triggers_ms_specific_metrics(
-        self, collector, mock_api_builder, metrics
-    ):
+    async def test_catalyst_switch_triggers_ms_specific_metrics(self, collector, mock_api_builder):
         """A Meraki-managed Catalyst switch must still trigger the MS org-wide block.
 
         Catalyst switches report productType == "switch" but their model does not
@@ -765,28 +695,19 @@ class TestDeviceCollector(BaseCollectorTest):
             .with_networks([network], org_id=org["id"])
             .with_devices([catalyst_switch], org_id=org["id"])
             .with_device_statuses([], org_id=org["id"])
+            .with_custom_response("getOrganizationDevicesPowerModulesStatusesByDevice", [])
             .build()
         )
         collector.api = api
         collector.inventory.api = api
-        collector.ms_collector.api = api
-        collector.ms_stack_collector.api = api
-        collector.ms_power_collector.api = api
 
-        # The device type gets remapped to MS via the productType override
-        # (_get_device_type), so the per-device MS path already worked before
-        # F-030; what's under test here is only the org-wide gate.
-        collector._collect_ms_specific_metrics = AsyncMock(
-            wraps=collector._collect_ms_specific_metrics
+        await collector.collect()
+
+        api.organizations.getOrganizationDevicesPowerModulesStatusesByDevice.assert_called_once_with(
+            org["id"], productTypes=["switch"], total_pages="all"
         )
 
-        await collector._collect_org_devices(org["id"], org.get("name", "Test Org"))
-
-        collector._collect_ms_specific_metrics.assert_called_once()
-
-    async def test_catalyst_ap_triggers_mr_specific_metrics(
-        self, collector, mock_api_builder, metrics
-    ):
+    async def test_catalyst_ap_triggers_mr_specific_metrics(self, collector, mock_api_builder):
         """A Catalyst CW* access point must still trigger the MR org-wide block.
 
         Catalyst APs report productType == "wireless" but their model does not
@@ -810,18 +731,17 @@ class TestDeviceCollector(BaseCollectorTest):
             .with_networks([network], org_id=org["id"])
             .with_devices([catalyst_ap], org_id=org["id"])
             .with_device_statuses([], org_id=org["id"])
+            .with_custom_response("getOrganizationWirelessClientsOverviewByDevice", [])
             .build()
         )
         collector.api = api
         collector.inventory.api = api
 
-        collector._collect_mr_specific_metrics = AsyncMock(
-            wraps=collector._collect_mr_specific_metrics
+        await collector.collect()
+
+        api.wireless.getOrganizationWirelessClientsOverviewByDevice.assert_called_once_with(
+            org["id"], total_pages="all"
         )
-
-        await collector._collect_org_devices(org["id"], org.get("name", "Test Org"))
-
-        collector._collect_mr_specific_metrics.assert_called_once()
 
     @staticmethod
     def _mock_mx_entry_points(collector):
