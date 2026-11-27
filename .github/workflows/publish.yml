@@ -63,7 +63,7 @@ jobs:
       packages: read
       actions: read
       security-events: write
-    uses: rknightion/.github/.github/workflows/codeql.yml@9278035a95cca2de3e202817e536fc7f9fc774fc # v1.34.0
+    uses: rknightion/.github/.github/workflows/codeql.yml@a6e7f83c8fd233841120fc14c0412124a445c306 # v1.35.0
     with:
       languages: '[{"language":"python","build-mode":"none"},{"language":"actions","build-mode":"none"}]'
       ref: ${{ inputs.release_tag || github.sha }}
@@ -78,7 +78,7 @@ jobs:
       id-token: write
       attestations: write
       security-events: write
-    uses: rknightion/.github/.github/workflows/container-publish.yml@9278035a95cca2de3e202817e536fc7f9fc774fc # v1.34.0
+    uses: rknightion/.github/.github/workflows/container-publish.yml@a6e7f83c8fd233841120fc14c0412124a445c306 # v1.35.0
     with:
       release-tag: ${{ inputs.release_tag }}
       checkout-ref: ${{ inputs.release_tag == '' && github.sha || '' }}
