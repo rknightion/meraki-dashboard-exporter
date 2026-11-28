@@ -8,7 +8,7 @@ image_name := "meraki-dashboard-exporter"
 registry := "ghcr.io/rknightion"
 py_version := "3.15"
 # renovate: datasource=npm depName=groma.md
-groma_version := "0.7.8"
+groma_version := "0.8.0"
 # renovate: datasource=git-refs depName=https://github.com/rknightion/fleet-review currentValue=main
 fleet_review_rev := "a47e34a9a10a99715733d2d1818ecf89d20bc348" # pragma: allowlist secret
 meraki_spec_url := "https://raw.githubusercontent.com/meraki/openapi/master/openapi/spec3.json"
