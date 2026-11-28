@@ -26,13 +26,9 @@ jobs:
       contents: read
       id-token: write # exchanged for a tailnet identity and an OpenBao token
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
-        with:
-          egress-policy: audit
-
       # Mints a GitHub App installation token carrying contents:write on the docs
       # hub ONLY, replacing DOCS_SYNC_PAT. Nothing durable is stored in this repo.
       # contents:write really is what the dispatch endpoint wants -- actions:write

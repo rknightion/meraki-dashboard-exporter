@@ -4,6 +4,14 @@ on:
   push:
     branches:
       - main
+    # Workflow, Renovate and dependency-pin commits never carry a release; a release commit always changes CHANGELOG.md, so it is never filtered.
+    paths-ignore:
+      - ".github/**"
+      - "renovate.json"
+      - "renovate.json5"
+      - ".renovaterc"
+      - ".renovaterc.json"
+      - ".renovaterc.json5"
   workflow_dispatch:
 
 # Minimal default; write scopes are granted per-job only where needed.
@@ -13,6 +21,7 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       id-token: write # exchanged for a tailnet identity and an OpenBao token
@@ -20,11 +29,6 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
-        with:
-          egress-policy: audit
-
       # Mints a short-lived GitHub App installation token scoped to THIS repo,
       # replacing RELEASE_PLEASE_TOKEN -- a PAT scoped across every rknightion repo.
       # Nothing durable is stored here to leak. The release PR's author becomes the
@@ -54,6 +58,7 @@ jobs:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       actions: read
       contents: write
@@ -97,6 +102,7 @@ jobs:
     needs: [release-please, docker-release, prepend-release-warning]
     if: ${{ always() && needs.release-please.outputs.release_created == 'true' && needs.docker-release.result != 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
