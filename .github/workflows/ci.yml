@@ -21,7 +21,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Fast paths (rknightion/.github docs/changes/README.md): a Renovate pull request that only moves
+  # hub reusable workflow pins, a release-please pull request or a vend-sync pull request skips the
+  # application suites gated on `needs.changes.outputs.app` below. Lint, security checks and
+  # ci-success always run. No `if:`: on any event but a pull request it answers app 'true'.
+  changes:
+    permissions:
+      contents: read
+    uses: rknightion/.github/.github/workflows/changes.yml@c2c3d98e29e9f340620d8ef396a8e6dcb45bda68 # v1.37.0
+    with:
+      version-files: |
+        # release-please's extra-file (the chart's x-release-please-version appVersion line) and the
+        # python strategy's pyproject.toml, plus uv.lock that release-please-lock.yml re-locks. The
+        # classifier reads the last two as more than marker lines, and it knows only a root
+        # CHANGELOG.md, not docs/changelog.md, so a release pull request here still runs everything.
+        charts/meraki-dashboard-exporter/Chart.yaml
+        pyproject.toml
+        uv.lock
+      vended-paths: |
+        .agents/skills/**
+        .claude/skills/**
+        CONTRIBUTING.md
+        AGENTS.md
+        .github/pull_request_template.md
+        .github/privacy/sweep
+        .github/privacy/identifier-patterns.txt
+        .grafana/Dockerfile
+        .vended.json
+
   test:
+    needs: [changes]
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # Fork PRs don't receive repo secrets, so CODECOV_TOKEN/CODACY_PROJECT_TOKEN are empty on
@@ -81,6 +111,8 @@ jobs:
           coverage-reports: coverage.xml
 
   docker-build-test:
+    needs: [changes]
+    if: needs.changes.outputs.app == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 5
     strategy:
@@ -150,9 +182,13 @@ jobs:
   # being silently skipped. The render is core-API-only — serviceMonitor.enabled
   # defaults to false — so nothing here needs a CRD schema.
   helm-lint-kubeconform:
+    needs: [changes]
+    if: >-
+      needs.changes.outputs.app == 'true'
+      || contains(needs.changes.outputs.hub_workflows, '"helm-validate.yml"')
     permissions:
       contents: read
-    uses: rknightion/.github/.github/workflows/helm-validate.yml@a6e7f83c8fd233841120fc14c0412124a445c306 # v1.35.0
+    uses: rknightion/.github/.github/workflows/helm-validate.yml@c2c3d98e29e9f340620d8ef396a8e6dcb45bda68 # v1.37.0
     with:
       # This chart renders CRD kinds (ServiceMonitor + PrometheusRule) that kubeconform has no
       # built-in schema for. Give it the schema rather than reaching for
@@ -174,7 +210,7 @@ jobs:
     if: github.event_name == 'pull_request'
     permissions:
       contents: read
-    uses: rknightion/.github/.github/workflows/privacy-sweep.yml@a6e7f83c8fd233841120fc14c0412124a445c306 # v1.35.0
+    uses: rknightion/.github/.github/workflows/privacy-sweep.yml@c2c3d98e29e9f340620d8ef396a8e6dcb45bda68 # v1.37.0
 
   # zizmor fails a pull request on any finding (enforce); push runs upload SARIF instead.
   zizmor:
@@ -182,7 +218,7 @@ jobs:
       contents: read
       security-events: write
       actions: read
-    uses: rknightion/.github/.github/workflows/zizmor.yml@a6e7f83c8fd233841120fc14c0412124a445c306 # v1.35.0
+    uses: rknightion/.github/.github/workflows/zizmor.yml@c2c3d98e29e9f340620d8ef396a8e6dcb45bda68 # v1.37.0
     with:
       enforce: true
 
@@ -192,7 +228,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6 # Leave time for job setup and the five-minute backlog check.
     if: always()
-    needs: [test, docker-build-test, helm-lint-kubeconform, privacy-sweep, zizmor]
+    needs: [changes, test, docker-build-test, helm-lint-kubeconform, privacy-sweep, zizmor]
     permissions:
       pull-requests: read
     steps:
@@ -203,6 +239,24 @@ jobs:
         run: |
           echo "A required job failed or was cancelled: ${RESULTS}"
           exit 1
+      # A skipped job reports success. It counts as a pass only when changes succeeded and said the
+      # application suites need not run (rknightion/.github docs/changes/README.md).
+      - name: Fail if an application suite was skipped without a verdict
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          APP: ${{ needs.changes.outputs.app }}
+          SUITES: ${{ needs.test.result }} ${{ needs.docker-build-test.result }} ${{ needs.helm-lint-kubeconform.result }}
+        run: |
+          if [[ "$CHANGES" != success || ( "$APP" != true && "$APP" != false ) ]]; then
+            echo "::error::changes gave no verdict (result $CHANGES, app '$APP')"
+            exit 1
+          fi
+          for result in $SUITES; do
+            if [[ "$APP" == true && "$result" != success ]]; then
+              echo "::error::the application suites had to run, and one ended $result"
+              exit 1
+            fi
+          done
       # Read the frozen backlog's file list without checking out the pull request.
       - name: Refuse additions and changes under backlog/
         id: backlog-freeze
